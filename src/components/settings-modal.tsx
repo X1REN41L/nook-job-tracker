@@ -74,11 +74,12 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, importProgre
               <button
                 key={id}
                 aria-current={category === id ? "page" : undefined}
-                className={`rounded-nook-sm px-3 py-2 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${id === "backup" ? "mt-auto" : ""} ${category === id ? "border border-forest bg-forest text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                className={`grid h-9 w-full grid-cols-[16px_minmax(0,1fr)] items-center gap-2 rounded-nook-sm border px-3 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${id === "backup" ? "mt-auto" : ""} ${category === id ? "border-forest bg-forest text-cream" : "border-transparent text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
                 onClick={() => setCategory(id)}
                 type="button"
               >
-                <span className={`flex items-center gap-2 ${id === "shortcuts" ? "whitespace-nowrap" : ""}`}><Icon aria-hidden="true" size={15} strokeWidth={1.75} />{label}</span>
+                <Icon aria-hidden="true" size={15} strokeWidth={1.75} />
+                <span className="-mr-px min-w-0 leading-tight">{label}</span>
               </button>
             ))}
           </nav>
