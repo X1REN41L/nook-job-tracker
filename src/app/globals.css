@@ -1,0 +1,310 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Nook design tokens.
+ * Tailwind v4 reads the --color-*, --font-*, --radius-*, --shadow-* names
+ * inside @theme and auto-generates utilities from them (bg-cream,
+ * text-ink-soft, rounded-nook, shadow-nook-lift, font-serif, ...).
+ * Because each utility compiles down to `var(--color-cream)` rather than
+ * a literal hex value, overriding the variable under `.dark` below is
+ * enough to re-theme every utility for dark mode with no `dark:` prefixes
+ * needed on individual elements.
+ */
+@theme {
+  --color-cream: #FAF6EE;
+  --color-cream-2: #F1EADA;
+  --color-paper: #FFFEFB;
+  --color-ink: #2B2620;
+  --color-ink-soft: #6B6255;
+  --color-line: #E6DCC8;
+
+  --color-forest: #3F5D4E;
+  --color-forest-deep: #2E463A;
+  --color-forest-tint: #E4EBE4;
+
+  --color-clay: #C1694F;
+  --color-clay-tint: #F5E1D9;
+
+  --color-gold: #C99A3E;
+  --color-gold-tint: #F6ECD6;
+
+  --color-rose: #B15C57;
+  --color-rose-tint: #F3E1DE;
+
+  --color-sage: #8A9E6C;
+  --color-sage-tint: #EBEEDF;
+
+  --color-neutral-dim: #9C9284;
+  --color-neutral-dim-tint: #EDE8DF;
+
+  --radius-nook-sm: 10px;
+  --radius-nook: 14px;
+  --radius-nook-lg: 18px;
+
+  --shadow-nook: 0 1px 2px rgba(43, 38, 32, 0.06), 0 6px 20px rgba(43, 38, 32, 0.07);
+  --shadow-nook-lift: 0 4px 10px rgba(43, 38, 32, 0.1), 0 14px 32px rgba(43, 38, 32, 0.14);
+
+  --font-serif: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-karla), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root.light { color-scheme: light; }
+:root.dark { color-scheme: dark; }
+
+/* Dark-mode overrides for every token above. Utilities using these tokens
+   (bg-cream, text-ink, border-line, bg-gold-tint, shadow-nook, ...) pick
+   these up automatically wherever `.dark` is an ancestor. */
+.dark {
+  --color-cream: #1E1B17;
+  --color-cream-2: #171412;
+  --color-paper: #26221D;
+  --color-ink: #EFE7D8;
+  --color-ink-soft: #B2A793;
+  --color-line: #3A342B;
+
+  --color-forest: #7FA98E;
+  --color-forest-deep: #A9CBB4;
+  --color-forest-tint: #253028;
+
+  --color-clay: #E39872;
+  --color-clay-tint: #372820;
+
+  --color-gold: #E0BB6C;
+  --color-gold-tint: #362D1C;
+
+  --color-rose: #E0948C;
+  --color-rose-tint: #372423;
+
+  --color-sage: #A9BF8C;
+  --color-sage-tint: #2A3324;
+
+  --color-neutral-dim: #A69C8C;
+  --color-neutral-dim-tint: #2E2A22;
+
+  --shadow-nook: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
+  --shadow-nook-lift: 0 4px 10px rgba(0, 0, 0, 0.35), 0 14px 32px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-serif);
+}
+
+::selection {
+  background: var(--color-gold-tint);
+}
+
+/* App chrome behaves like a native shell while editable/copyable content
+   explicitly opts back into selection. */
+.select-none-ui {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.select-none-ui :where(input, textarea, select, .select-text-content) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Keep enabled controls discoverably interactive without changing draggable
+   cards, which intentionally use grab/grabbing cursors. */
+button:not(:disabled):not(.cursor-grab):not(.cursor-grabbing),
+[role="button"]:not(:disabled):not(.cursor-grab):not(.cursor-grabbing),
+select:not(:disabled),
+a[href] {
+  cursor: pointer;
+}
+
+body.nook-dragging,
+body.nook-dragging * {
+  cursor: grabbing !important;
+}
+
+.app-workspace {
+  --sidebar-motion-duration: 220ms;
+  --sidebar-motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sidebar-panel {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  z-index: 20;
+  width: min(320px, calc(100vw - 48px));
+  transition: transform var(--sidebar-motion-duration) var(--sidebar-motion-easing);
+  will-change: transform;
+}
+
+.sidebar-collapsed .sidebar-panel {
+  transform: translateX(calc(100% - 40px));
+}
+
+.sidebar-content {
+  min-width: 320px;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+    visibility 0s linear 0s;
+}
+
+.sidebar-collapsed .sidebar-content {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+    visibility 0s linear var(--sidebar-motion-duration);
+}
+
+.sidebar-edge-tab {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, visibility 140ms ease;
+}
+
+.sidebar-collapsed .sidebar-edge-tab {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Keep the final board column clear of the sidebar's edge, in either state. */
+.board-scroll {
+  /* Matches the sidebar header/list px-4.5 rhythm (18px). */
+  --board-side-padding: 1.125rem;
+}
+
+/* Flex overflow can omit a scroll container's end padding from scrollWidth.
+   The negative margin cancels the board's final gap so the visible end
+   clearance matches the same side padding as the start. */
+.board-columns::after {
+  content: "";
+  flex: 0 0 var(--board-side-padding);
+  margin-left: -1rem;
+}
+
+@media (min-width: 768px) {
+  .app-workspace {
+    --sidebar-width: 320px;
+    grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+    transition: grid-template-columns var(--sidebar-motion-duration) var(--sidebar-motion-easing);
+    will-change: grid-template-columns;
+  }
+
+  .app-workspace.sidebar-collapsed {
+    --sidebar-width: 40px;
+  }
+
+  .sidebar-panel {
+    position: relative;
+    width: auto;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Keep the collapsed rail in its own 40px column instead of covering the
+     board, preserving the same side padding on narrow screens too. */
+  .app-workspace.sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr) 40px;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-nook-sm border border-line bg-cream px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft focus:border-forest focus:ring-2 focus:ring-forest-tint;
+  }
+
+  .card {
+    @apply rounded-nook border border-line bg-paper shadow-nook transition-shadow hover:shadow-nook-lift;
+  }
+
+  .kanban-card-focus:focus-visible {
+    outline: none;
+    border-color: var(--color-forest);
+    box-shadow: 0 0 0 2px var(--color-forest-tint), var(--shadow-nook);
+  }
+
+  .btn-primary {
+    @apply rounded-nook-sm bg-forest px-4 py-2 text-sm font-medium text-cream transition hover:bg-forest-deep disabled:opacity-60;
+  }
+
+  .btn-ghost {
+    @apply rounded-nook-sm border border-line px-4 py-2 text-sm font-medium text-ink transition hover:bg-cream-2 disabled:opacity-60;
+  }
+
+  .btn-danger {
+    @apply rounded-nook-sm border border-rose px-4 py-2 text-sm font-medium text-rose transition hover:bg-rose-tint disabled:opacity-60;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  .status-dot {
+    @apply inline-block h-2 w-2 shrink-0 rounded-full;
+  }
+
+  .icon-btn {
+    @apply flex h-9 w-9 items-center justify-center rounded-nook-sm border border-line bg-paper text-ink-soft transition hover:bg-cream-2 hover:text-ink;
+  }
+}
+
+.nook-toast-wrap {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 100;
+  pointer-events: none;
+}
+.nook-toast-wrap.nook-toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.nook-toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--color-ink);
+  color: var(--color-cream);
+  padding: 11px 18px;
+  border-radius: var(--radius-nook-sm);
+  box-shadow: var(--shadow-nook-lift);
+  font-size: 13.5px;
+  max-width: calc(100vw - 32px);
+  overflow-wrap: anywhere;
+}
+.nook-toast-action {
+  flex: 0 0 auto;
+  border-left: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+  padding-left: 14px;
+  color: inherit;
+  font-weight: 700;
+}
+.dark .nook-toast {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="reduced"]) *, :root:not([data-motion="reduced"]) *::before, :root:not([data-motion="reduced"]) *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
+  :root:not([data-motion="reduced"]) { scroll-behavior: auto !important; }
+}
+:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
+:root[data-motion="reduced"] { scroll-behavior: auto !important; }

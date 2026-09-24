@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Application {
+  id          String             @id @default(cuid())
+  company     String
+  role        String
+  status      Status             @default(APPLIED)
+  archived    Boolean            @default(false)
+  source      String?
+  appliedDate DateTime
+  interviewDate DateTime?
+  interviewDatePromptDismissed Boolean @default(false)
+  lastUpdated DateTime           @updatedAt
+  notes       String?
+  jobUrl      String?
+  events      ApplicationEvent[]
+  createdAt   DateTime           @default(now())
+
+  @@index([status])
+}
+
+model ApplicationEvent {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          EventType
+  detail        String?
+  emailSnippet  String?
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId, createdAt])
+}
+
+model UndoSnapshot {
+  token String @id
+  applicationId String
+  payload String
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+enum Status {
+  APPLIED
+  ONLINE_ASSESSMENT
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+enum EventType {
+  STATUS_CHANGE
+  NOTE_ADDED
+}

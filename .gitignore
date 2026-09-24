@@ -1,0 +1,60 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next.js
+/.next/
+/out/
+
+# production build
+/build
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# env files (keep .env.example tracked)
+.env
+.env*.local
+.env.production
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# prisma / sqlite
+prisma/dev.db
+prisma/dev.db-journal
+*.db
+*.db-journal
+
+# editor swap / IDE files
+*.swp
+*.swn
+*.swo
+*~
+.vscode/
+.idea/
+
+# local tooling output
+/graphify-out/
+
+# audit files
+/AUDIT.md
