@@ -149,7 +149,7 @@ test("traps focus in Add, Edit, Delete, and Settings modals in forward and rever
     settingsDialog.getByRole("button", { name: "Close settings" }),
     settingsDialog.getByRole("button", { name: "General", exact: true }),
     settingsDialog.getByRole("button", { name: "Board", exact: true }),
-    settingsDialog.getByRole("button", { name: "Keyboard Shortcuts", exact: true }),
+    settingsDialog.getByRole("button", { name: "Shortcuts", exact: true }),
     settingsDialog.getByRole("button", { name: "Backup & Restore", exact: true }),
     settingsDialog.getByRole("button", { name: "Use system theme" }),
     settingsDialog.getByRole("button", { name: "Use light theme" }),
@@ -239,7 +239,7 @@ test("opens Settings only with Cmd/Ctrl+Shift+, and suppresses it in editable fi
 
   await page.keyboard.press(`${modifier}+Shift+,`);
   await expect(settingsDialog).toBeVisible();
-  await settingsDialog.getByRole("button", { name: "Keyboard Shortcuts", exact: true }).click();
+  await settingsDialog.getByRole("button", { name: "Shortcuts", exact: true }).click();
   await expect(settingsDialog.getByText(modifier === "Meta" ? "⌘ ⇧ ," : "Ctrl + Shift + ,", { exact: true })).toBeVisible();
   await settingsDialog.getByRole("button", { name: "Close settings" }).click();
 

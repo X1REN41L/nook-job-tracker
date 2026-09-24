@@ -20,7 +20,7 @@ export function ShortcutOverlay({ isMac, onClose, returnFocusRef }: {
       <section ref={dialogRef} aria-labelledby="shortcut-dialog-title" aria-modal="true" className="w-full max-w-md rounded-nook-lg border border-line bg-paper p-5 text-ink shadow-nook-lift outline-none" role="dialog" tabIndex={-1}>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-serif text-xl font-semibold" id="shortcut-dialog-title">Keyboard shortcuts</h2>
+            <h2 className="font-serif text-xl font-semibold" id="shortcut-dialog-title">Keyboard Shortcuts</h2>
           </div>
           <button ref={closeRef} aria-label="Close" className="icon-btn shrink-0" onClick={onClose} type="button">
             <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">

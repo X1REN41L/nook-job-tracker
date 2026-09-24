@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 import { useTheme } from "next-themes";
+import { Columns3, DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
 
 import { ShortcutList } from "@/components/shortcut-list";
 import { BoardSettings } from "@/components/board-settings";
@@ -12,12 +13,12 @@ import { DEFAULT_BOARD_KEY, DEFAULT_BOARD_STATUSES, MOTION_KEY, getDefaultBoard,
 
 type SettingsCategory = "general" | "board" | "shortcuts" | "backup";
 
-const SETTINGS_CATEGORIES: Array<{ id: SettingsCategory; label: string }> = [
-  { id: "general", label: "General" },
-  { id: "board", label: "Board" },
-  { id: "shortcuts", label: "Keyboard Shortcuts" },
-  { id: "backup", label: "Backup & Restore" },
-];
+const SETTINGS_CATEGORIES = [
+  { id: "general", label: "General", Icon: SlidersHorizontal },
+  { id: "board", label: "Board", Icon: Columns3 },
+  { id: "shortcuts", label: "Shortcuts", Icon: Keyboard },
+  { id: "backup", label: "Backup & Restore", Icon: DatabaseBackup },
+] satisfies Array<{ id: SettingsCategory; label: string; Icon: typeof SlidersHorizontal }>;
 const subscribeToMount = () => () => {};
 
 export function SettingsModal({ isMac, onClose, onExport, onImport, importProgress, returnFocusRef, suspendFocusTrap }: {
@@ -69,7 +70,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, importProgre
 
         <div className="grid min-h-0 flex-1 grid-cols-[150px_minmax(0,1fr)] sm:grid-cols-[190px_minmax(0,1fr)]">
           <nav aria-label="Settings categories" className="flex min-h-0 flex-col border-r border-line bg-cream p-2.5">
-            {SETTINGS_CATEGORIES.map(({ id, label }) => (
+            {SETTINGS_CATEGORIES.map(({ id, label, Icon }) => (
               <button
                 key={id}
                 aria-current={category === id ? "page" : undefined}
@@ -77,7 +78,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, importProgre
                 onClick={() => setCategory(id)}
                 type="button"
               >
-                {label}
+                <span className={`flex items-center gap-2 ${id === "shortcuts" ? "whitespace-nowrap" : ""}`}><Icon aria-hidden="true" size={15} strokeWidth={1.75} />{label}</span>
               </button>
             ))}
           </nav>
