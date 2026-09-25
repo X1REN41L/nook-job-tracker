@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page, type APIRequestContext, test } from "@playwright/test";
 
+import { sameOriginMutationHeaders } from "./api-helpers";
+
 type ApplicationInput = {
   company: string;
   role: string;
@@ -28,11 +30,11 @@ function applicationInput(status: ApplicationInput["status"], label = "keyboard"
 }
 
 async function createApplication(request: APIRequestContext, input: ApplicationInput) {
-  const response = await request.post("/api/applications", { data: input });
+  const response = await request.post("/api/applications", { data: input, headers: sameOriginMutationHeaders });
   expect(response.status()).toBe(201);
   const body = await response.json();
   ownedIds.push(body.application.id);
-  return body.application as { id: string; company: string; role: string };
+  return body.application as { id: string; company: string; role: string; revision: number };
 }
 
 async function openDashboard(page: Page) {
@@ -114,7 +116,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ request }) => {
-  await Promise.all(ownedIds.map((id) => request.delete(`/api/applications/${id}`)));
+  await Promise.all(ownedIds.map((id) => request.delete(`/api/applications/${id}`, { headers: sameOriginMutationHeaders })));
 });
 
 test("traps focus in Add, Edit, Delete, and Settings modals in forward and reverse visual order", async ({ page, request }) => {
@@ -275,7 +277,7 @@ test("opens Settings only with Cmd/Ctrl+Shift+, and suppresses it in editable fi
 test("tabs through every dashboard, Kanban, sidebar, and archived control in visual order", async ({ page, request }) => {
   const active = await createApplication(request, applicationInput("APPLIED", "dashboard-active"));
   const archived = await createApplication(request, applicationInput("APPLIED", "dashboard-archived"));
-  await request.patch(`/api/applications/${archived.id}`, { data: { archived: true } });
+  await request.patch(`/api/applications/${archived.id}`, { data: { revision: archived.revision, archived: true }, headers: sameOriginMutationHeaders });
   await openDashboard(page);
   await expect(page.getByRole("button", { name: /^Archived\s+\d+$/ })).toHaveAttribute("aria-expanded", "true");
 

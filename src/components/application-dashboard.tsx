@@ -80,6 +80,7 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
   const [applications, setApplications] = useState(initialApplications);
   const [form, setForm] = useState<JobFormState>(blankForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingRevision, setEditingRevision] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ApplicationRecord | null>(null);
   const [pendingInterviewDate, setPendingInterviewDate] = useState<ApplicationRecord | null>(null);
@@ -98,7 +99,7 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
   const sidebarCollapsed = useSyncExternalStore(subscribeToSidebarPreference, getSidebarPreference, () => false);
   const archivedExpanded = useSyncExternalStore(subscribeToArchivedPreference, getArchivedPreference, () => false);
-  const { toast, showToast, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
+  const { toast, deleteRecovery, undoing, showToast, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange, undoDeleteRecovery } = useToastUndo({ onUndo: restoreLatestChange });
   const { importProgress, hasPendingImport, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport } = useApplicationBackup({
     applications,
     insertApplications,
@@ -164,12 +165,13 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
   function updateField<K extends keyof JobFormState>(field: K, value: JobFormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
   }
-  function resetForm() { setForm(blankForm()); setEditingId(null); setPendingDuplicate(null); setError(""); }
+  function resetForm() { setForm(blankForm()); setEditingId(null); setEditingRevision(null); setPendingDuplicate(null); setError(""); }
   function openAddModal() { resetForm(); setForm({ ...blankForm(), status: getDefaultBoard() }); setIsModalOpen(true); }
   function closeModal() { setIsModalOpen(false); resetForm(); }
   function startEdit(application: ApplicationRecord) {
     setPendingDuplicate(null);
     setEditingId(application.id);
+    setEditingRevision(application.revision);
     setForm({ company: application.company, role: application.role, status: application.status, source: application.source ?? "", appliedDate: application.appliedDate.slice(0, 10), interviewDate: application.interviewDate?.slice(0, 10) ?? "", notes: application.notes ?? "", jobUrl: application.jobUrl ?? "" });
     setError("");
     setIsModalOpen(true);
@@ -194,10 +196,23 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
     submissionInFlight.current = true;
     setSaving(true);
     try {
+      const expectedRevision = targetEditingId
+        ? editingRevision ?? applications.find((item) => item.id === targetEditingId)?.revision
+        : undefined;
+      if (targetEditingId && expectedRevision === undefined) throw new Error("Could not find the application version to update");
       const response = await fetch(targetEditingId ? `/api/applications/${targetEditingId}` : "/api/applications", {
-        method: targetEditingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(candidate),
+        method: targetEditingId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(targetEditingId ? { ...candidate, revision: expectedRevision } : candidate),
       });
       const body = await response.json();
+      if (response.status === 409 && targetEditingId && body.application) {
+        const latest = body.application as ApplicationRecord;
+        setApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+        setEditingRevision(latest.revision);
+        setError("This application changed while you were editing. The latest saved version is loaded, and your form is still open with your changes. Review them, then save again to apply them.");
+        return false;
+      }
       if (!response.ok) throw new Error(body.error ?? "Could not save the application");
       const previous = targetEditingId ? applications.find((item) => item.id === targetEditingId) : undefined;
       setApplications((current) => {
@@ -262,12 +277,21 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
     setError("");
     setDeleting(true);
     try {
-      const response = await fetch(`/api/applications/${deletedApplication.id}?undoable=1`, { method: "DELETE" });
+      const response = await fetch(`/api/applications/${deletedApplication.id}?undoable=1`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Could not delete the application");
       setApplications((current) => current.filter((item) => item.id !== deletedApplication.id));
       if (editingId === deletedApplication.id) resetForm();
-      showToast(`Deleted ${deletedApplication.company}`, { kind: "delete", applicationId: deletedApplication.id, token: body.token });
+      showToast(`Deleted ${deletedApplication.company}`, {
+        kind: "delete",
+        applicationId: deletedApplication.id,
+        token: body.token,
+        expiresAt: body.expiresAt,
+        company: deletedApplication.company,
+      });
       setPendingDelete(null);
       reopenModalAfterDelete.current = false;
       requestAnimationFrame(() => sidebarHeadingRef.current?.focus());
@@ -299,8 +323,9 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(status === previousStatus && archived !== previousArchived
-          ? { archived }
+          ? { revision: application.revision, archived }
           : {
+              revision: application.revision,
               status,
               ...(archived !== previousArchived && { archived }),
               ...(restoration && {
@@ -310,6 +335,12 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
             }),
       });
       const body = await response.json();
+      if (response.status === 409 && body.application) {
+        const latest = body.application as ApplicationRecord;
+        setApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+        setError("This application changed elsewhere. The latest saved version has been loaded; try your action again.");
+        return;
+      }
       if (!response.ok) throw new Error(body.error ?? "Could not update the application status");
       setApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
       if (offerUndo) {
@@ -353,11 +384,19 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          revision: pendingInterviewDate.revision,
           status: Status.INTERVIEW,
           ...(skip ? { interviewDatePromptDismissed: true } : { interviewDate: interviewDateDraft }),
         }),
       });
       const body = await response.json();
+      if (response.status === 409 && body.application) {
+        const latest = body.application as ApplicationRecord;
+        setApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+        setPendingInterviewDate(latest);
+        setInterviewDateError("This application changed elsewhere. The latest version has been loaded; your date is still here. Review it and save again.");
+        return;
+      }
       if (!response.ok) throw new Error(body.error ?? "Could not update the interview date");
       setApplications((current) => current.map((item) => item.id === pendingInterviewDate.id ? body.application : item));
       setPendingInterviewDate(null);
@@ -456,7 +495,7 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
     shortcutsOpen,
     settingsOpen,
     dragActive: activeId !== null,
-    canUndo: Boolean(toast?.undo),
+    canUndo: Boolean(toast?.undo || deleteRecovery),
     onResumeUndoToastOnTab: resumeUndoToastOnTab,
     onCloseShortcuts: () => setShortcutsOpen(false),
     onCloseSettings: () => setSettingsOpen(false),
@@ -508,6 +547,21 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
           </button>
         </div>
       </header>
+
+      {deleteRecovery && (
+        <aside aria-label="Deletion recovery" className="mx-7 mt-3 flex shrink-0 items-center justify-between gap-4 rounded-nook border border-forest/30 bg-forest-tint px-4 py-2.5 text-sm text-ink">
+          <span className="min-w-0 truncate">Deleted {deleteRecovery.company}. You can still restore it.</span>
+          <button
+            aria-label={`Restore ${deleteRecovery.company}`}
+            className="shrink-0 rounded-nook-sm border border-forest px-3 py-1.5 font-semibold text-forest transition hover:bg-forest hover:text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-forest-tint disabled:opacity-60"
+            disabled={undoing}
+            onClick={(event) => void undoDeleteRecovery(event.detail === 0)}
+            type="button"
+          >
+            Restore
+          </button>
+        </aside>
+      )}
 
       {error && !isModalOpen && (
         <p className="mx-7 mt-4 rounded-nook border border-rose bg-rose-tint p-3 text-sm text-ink" role="alert">
@@ -664,7 +718,7 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
           >
             <span>{toast.message}</span>
             {toast.undo && (
-              <button className="nook-toast-action" onClick={(event) => void undoLatestChange(event.detail === 0)} type="button">
+              <button className="nook-toast-action" disabled={undoing} onClick={(event) => void undoLatestChange(event.detail === 0)} type="button">
                 Undo
               </button>
             )}

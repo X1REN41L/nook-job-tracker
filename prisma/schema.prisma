@@ -13,6 +13,7 @@ model Application {
   role        String
   status      Status             @default(APPLIED)
   archived    Boolean            @default(false)
+  revision    Int                @default(0)
   source      String?
   appliedDate DateTime
   interviewDate DateTime?

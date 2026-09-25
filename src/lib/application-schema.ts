@@ -69,7 +69,14 @@ export const applicationInputSchema = z.object({
   jobUrl: optionalUrl,
 });
 
+const applicationRevisionSchema = z.number().int().nonnegative();
+
+export const applicationEditSchema = applicationInputSchema.extend({
+  revision: applicationRevisionSchema,
+}).strict();
+
 export const applicationStatusSchema = z.object({
+  revision: applicationRevisionSchema,
   status: z.enum(Status),
   archived: z.boolean().optional(),
   interviewDate: patchInterviewDateSchema,
@@ -77,6 +84,7 @@ export const applicationStatusSchema = z.object({
 });
 
 export const applicationArchiveSchema = z.object({
+  revision: applicationRevisionSchema,
   archived: z.boolean(),
 }).strict();
 

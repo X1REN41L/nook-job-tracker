@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import type { JobFormState } from "@/components/job-modal";
 import { currentLocalDate } from "@/lib/application-date";
-import { backupSnapshotSchema, type BackupSnapshot } from "@/lib/backup-snapshot";
+import { BACKUP_FILE_TOO_LARGE_ERROR, MAX_BACKUP_FILE_BYTES } from "@/lib/backup-limits";
+import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { applyBackupSettings, readBackupSettings } from "@/lib/backup-settings";
 import { normalizeDuplicateText, type DuplicateMatch } from "@/lib/duplicate-match";
 import { ImportDuplicateIndex } from "@/lib/import-duplicate-index";
@@ -44,12 +45,16 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
 
   async function importApplications(file: File) {
     if (importInFlight.current) return null;
+    if (file.size > MAX_BACKUP_FILE_BYTES) return BACKUP_FILE_TOO_LARGE_ERROR;
     importInFlight.current = true;
-    let contents: unknown;
-    try { contents = JSON.parse(await file.text()); }
-    catch { importInFlight.current = false; return "Choose a valid JSON backup file."; }
-    const parsed = backupSnapshotSchema.safeParse(contents);
-    if (!parsed.success) { importInFlight.current = false; return "Unsupported or invalid Nook version 2 backup."; }
+    setImportProgress({ current: 0, total: 1 });
+    const validation = await validateBackupFile(file);
+    if (!validation.ok) {
+      setImportProgress(null);
+      importInFlight.current = false;
+      return validation.error;
+    }
+    setImportProgress(null);
     const groups = new Map<string, CompanyGroup>();
     for (const item of applications) {
       const key = normalizeDuplicateText(item.company);
@@ -57,7 +62,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
       group.add(item);
       groups.set(key, group);
     }
-    const backup = contents as BackupSnapshot;
+    const backup = validation.backup;
     void continueImport({ records: backup.applications, index: 0, groups, ids: new Set(applications.map((item) => item.id)), settings: backup.settings });
     return null;
   }
@@ -86,7 +91,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
           return;
         }
         if (!next.ids.has(record.id)) {
-          group.add(record as ApplicationRecord);
+          group.add({ ...record, revision: 0 } as ApplicationRecord);
           next.groups.set(key, group);
           next.ids.add(record.id);
         }
@@ -124,4 +129,28 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
   }
   function abandonImport() { setPendingImport(null); importInFlight.current = false; }
   return { importProgress, hasPendingImport: pendingImport !== null, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport };
+}
+
+type BackupWorkerResponse =
+  | { ok: true; backup: BackupSnapshot }
+  | { ok: false; error: string };
+
+function validateBackupFile(file: File): Promise<BackupWorkerResponse> {
+  return new Promise((resolve) => {
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL("../workers/backup-import.worker.ts", import.meta.url), { type: "module" });
+    } catch {
+      resolve({ ok: false, error: "Could not start backup validation. Please try again." });
+      return;
+    }
+
+    const finish = (result: BackupWorkerResponse) => {
+      worker.terminate();
+      resolve(result);
+    };
+    worker.onmessage = (event: MessageEvent<BackupWorkerResponse>) => finish(event.data);
+    worker.onerror = () => finish({ ok: false, error: "Could not read or validate the backup file." });
+    worker.postMessage(file);
+  });
 }

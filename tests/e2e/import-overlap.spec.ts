@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { sameOriginMutationHeaders } from "./api-helpers";
+
 test("ignores a file selected during an import and accepts it after completion", async ({ page, request }) => {
   const first = { company: `Overlap first ${Date.now()}`, role: "Import overlap", status: "APPLIED", appliedDate: "2026-09-22" };
   const second = { company: `Overlap second ${Date.now()}`, role: "Import overlap", status: "APPLIED", appliedDate: "2026-09-22" };
@@ -56,6 +58,6 @@ test("ignores a file selected during an import and accepts it after completion",
     expect(posted).toEqual([first.company, second.company]);
   } finally {
     releaseFirst();
-    await Promise.all(savedIds.map((id) => request.delete(`/api/applications/${id}`)));
+    await Promise.all(savedIds.map((id) => request.delete(`/api/applications/${id}`, { headers: sameOriginMutationHeaders })));
   }
 });

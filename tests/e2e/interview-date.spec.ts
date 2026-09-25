@@ -1,5 +1,7 @@
 import { expect, type APIRequestContext, type Locator, type Page, test } from "@playwright/test";
 
+import { sameOriginMutationHeaders } from "./api-helpers";
+
 type ApplicationInput = {
   company: string;
   role: string;
@@ -24,9 +26,9 @@ function applicationInput(status: ApplicationInput["status"], interviewDate?: st
 }
 
 async function createApplication(request: APIRequestContext, input: ApplicationInput) {
-  const response = await request.post("/api/applications", { data: input });
+  const response = await request.post("/api/applications", { data: input, headers: sameOriginMutationHeaders });
   expect(response.status()).toBe(201);
-  const application = (await response.json()).application as { id: string; company: string; role: string };
+  const application = (await response.json()).application as { id: string; company: string; role: string; revision: number };
   ownedIds.push(application.id);
   return application;
 }
@@ -68,7 +70,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ request }) => {
-  await Promise.all(ownedIds.map((id) => request.delete(`/api/applications/${id}`)));
+  await Promise.all(ownedIds.map((id) => request.delete(`/api/applications/${id}`, { headers: sameOriginMutationHeaders })));
 });
 
 test("restores an interview date and prompt dismissal flag when undoing a drag", async ({ page, request }) => {
@@ -77,7 +79,8 @@ test("restores an interview date and prompt dismissal flag when undoing a drag",
 
   const moved = await move(page, application, "Online assessment");
   expect(moved.status()).toBe(200);
-  expect((await moved.json()).application.status).toBe("ONLINE_ASSESSMENT");
+  const movedApplication = (await moved.json()).application;
+  expect(movedApplication.status).toBe("ONLINE_ASSESSMENT");
   const undoResponse = page.waitForResponse((response) =>
     response.request().method() === "PATCH" && response.url().endsWith(`/api/applications/${application.id}`),
   );
@@ -86,6 +89,7 @@ test("restores an interview date and prompt dismissal flag when undoing a drag",
 
   expect(response.status()).toBe(200);
   expect(JSON.parse(response.request().postData() ?? "{}")).toEqual({
+    revision: movedApplication.revision,
     status: "INTERVIEW",
     interviewDate: "2026-10-05",
     interviewDatePromptDismissed: false,

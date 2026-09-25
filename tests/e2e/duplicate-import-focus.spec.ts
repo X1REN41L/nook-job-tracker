@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { sameOriginMutationHeaders } from "./api-helpers";
+
 test("duplicate import gives the warning dialog focus while Settings stays open", async ({ page, request }) => {
   const application = {
     company: `Focus import ${Date.now()}`,
@@ -11,7 +13,7 @@ test("duplicate import gives the warning dialog focus while Settings stays open"
     notes: "",
     jobUrl: "",
   };
-  const response = await request.post("/api/applications", { data: application });
+  const response = await request.post("/api/applications", { data: application, headers: sameOriginMutationHeaders });
   expect(response.status()).toBe(201);
   const { application: saved } = await response.json();
 
@@ -46,6 +48,6 @@ test("duplicate import gives the warning dialog focus while Settings stays open"
     await page.getByRole("button", { name: "Add job" }).evaluate((button: HTMLButtonElement) => button.focus());
     await expect(settings.getByRole("button", { name: "Close settings" })).toBeFocused();
   } finally {
-    await request.delete(`/api/applications/${saved.id}`);
+    await request.delete(`/api/applications/${saved.id}`, { headers: sameOriginMutationHeaders });
   }
 });

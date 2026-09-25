@@ -1,14 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
+import { sameOriginMutationHeaders } from "./api-helpers";
+
 test("a failed status undo keeps Undo available for retry", async ({ page, request }) => {
   const created = await request.post("/api/applications", { data: {
     company: `Undo retry ${randomUUID()}`, role: "Restore check", status: "APPLIED", appliedDate: "2026-09-22",
-  } });
+  }, headers: sameOriginMutationHeaders });
   expect(created.status()).toBe(201);
   const { application } = await created.json();
   try {
-    const archived = await request.patch(`/api/applications/${application.id}`, { data: { archived: true } });
+    const archived = await request.patch(`/api/applications/${application.id}`, { data: { revision: application.revision, archived: true }, headers: sameOriginMutationHeaders });
     expect(archived.status()).toBe(200);
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
@@ -35,14 +37,14 @@ test("a failed status undo keeps Undo available for retry", async ({ page, reque
     expect(restored.status).toBe("APPLIED");
     expect(restored.archived).toBe(true);
   } finally {
-    await request.delete(`/api/applications/${application.id}`);
+    await request.delete(`/api/applications/${application.id}`, { headers: sameOriginMutationHeaders });
   }
 });
 
 test("settings storage failure reports committed imported applications separately", async ({ page, request }) => {
   const created = await request.post("/api/applications", { data: {
     company: `Storage check ${randomUUID()}`, role: "Import check", status: "APPLIED", appliedDate: "2026-09-22",
-  } });
+  }, headers: sameOriginMutationHeaders });
   expect(created.status()).toBe(201);
   const { application } = await created.json();
   const importedId = randomUUID();
@@ -72,7 +74,7 @@ test("settings storage failure reports committed imported applications separatel
     const after = await (await request.get("/api/applications/export")).json();
     expect(after.applications.some((item: { id: string }) => item.id === importedId)).toBe(true);
   } finally {
-    await request.delete(`/api/applications/${importedId}`);
-    await request.delete(`/api/applications/${application.id}`);
+    await request.delete(`/api/applications/${importedId}`, { headers: sameOriginMutationHeaders });
+    await request.delete(`/api/applications/${application.id}`, { headers: sameOriginMutationHeaders });
   }
 });

@@ -1,14 +1,22 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
-import { apiError } from "@/lib/api";
+import { apiError, validationErrorResponse } from "@/lib/api";
+import { BACKUP_TOO_MANY_APPLICATIONS_ERROR, MAX_BACKUP_APPLICATIONS } from "@/lib/backup-limits";
 import { backupSnapshotSchema, canonicalSnapshot } from "@/lib/backup-snapshot";
+import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   try {
-    const parsed = backupSnapshotSchema.safeParse(await request.json());
-    if (!parsed.success) return NextResponse.json({ error: "Unsupported or invalid Nook version 2 backup", issues: parsed.error.flatten().fieldErrors }, { status: 400 });
+    const checked = await checkMutationRequest(request);
+    if (!checked.ok) return checked.response;
+    const contents = parseMutationJson(checked.body);
+    if (isRecord(contents) && Array.isArray(contents.applications) && contents.applications.length > MAX_BACKUP_APPLICATIONS) {
+      return NextResponse.json({ error: BACKUP_TOO_MANY_APPLICATIONS_ERROR }, { status: 413 });
+    }
+    const parsed = backupSnapshotSchema.safeParse(contents);
+    if (!parsed.success) return validationErrorResponse(parsed.error, "Unsupported or invalid Nook version 2 backup");
     const records = parsed.data.applications;
     const ids = records.map((item) => item.id);
     const eventIds = records.flatMap((item) => item.events.map((event) => event.id));
@@ -36,4 +44,8 @@ export async function POST(request: Request) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ error: "Backup ID conflicts with an existing record" }, { status: 409 });
     return apiError(error);
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

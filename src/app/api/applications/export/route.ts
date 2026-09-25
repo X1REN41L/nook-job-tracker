@@ -11,6 +11,13 @@ const defaultSettings = settingsSchema.parse({
 export async function GET() {
   try {
     const applications = await prisma.application.findMany({ include: { events: { orderBy: { id: "asc" } } }, orderBy: { id: "asc" } });
-    return NextResponse.json({ version: 2, applications: applications.map(({ events, ...application }) => ({ ...application, events: events.map(({ id, type, detail, emailSnippet, createdAt }) => ({ id, type, detail, emailSnippet, createdAt })) })), settings: defaultSettings });
+    return NextResponse.json({
+      version: 2,
+      applications: applications.map(({ events, revision, ...application }) => {
+        void revision;
+        return { ...application, events: events.map(({ id, type, detail, emailSnippet, createdAt }) => ({ id, type, detail, emailSnippet, createdAt })) };
+      }),
+      settings: defaultSettings,
+    });
   } catch (error) { return apiError(error); }
 }

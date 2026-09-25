@@ -1,9 +1,11 @@
 import { ApplicationDashboard } from "@/components/application-dashboard";
 import { prisma } from "@/lib/prisma";
+import { cleanupExpiredUndoSnapshots } from "@/lib/undo-snapshots";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  await cleanupExpiredUndoSnapshots();
   const applications = await prisma.application.findMany({
     orderBy: [{ appliedDate: "desc" }, { createdAt: "desc" }],
   });
