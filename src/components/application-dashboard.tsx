@@ -99,7 +99,7 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
   const sidebarCollapsed = useSyncExternalStore(subscribeToSidebarPreference, getSidebarPreference, () => false);
   const archivedExpanded = useSyncExternalStore(subscribeToArchivedPreference, getArchivedPreference, () => false);
-  const { toast, deleteRecovery, undoing, showToast, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange, undoDeleteRecovery } = useToastUndo({ onUndo: restoreLatestChange });
+  const { toast, deleteRecovery, undoing, showToast, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
   const { importProgress, hasPendingImport, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport } = useApplicationBackup({
     applications,
     insertApplications,
@@ -547,21 +547,6 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
           </button>
         </div>
       </header>
-
-      {deleteRecovery && (
-        <aside aria-label="Deletion recovery" className="mx-7 mt-3 flex shrink-0 items-center justify-between gap-4 rounded-nook border border-forest/30 bg-forest-tint px-4 py-2.5 text-sm text-ink">
-          <span className="min-w-0 truncate">Deleted {deleteRecovery.company}. You can still restore it.</span>
-          <button
-            aria-label={`Restore ${deleteRecovery.company}`}
-            className="shrink-0 rounded-nook-sm border border-forest px-3 py-1.5 font-semibold text-forest transition hover:bg-forest hover:text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-forest-tint disabled:opacity-60"
-            disabled={undoing}
-            onClick={(event) => void undoDeleteRecovery(event.detail === 0)}
-            type="button"
-          >
-            Restore
-          </button>
-        </aside>
-      )}
 
       {error && !isModalOpen && (
         <p className="mx-7 mt-4 rounded-nook border border-rose bg-rose-tint p-3 text-sm text-ink" role="alert">

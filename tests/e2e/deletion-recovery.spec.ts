@@ -50,24 +50,24 @@ test.afterEach(async ({ request }) => {
   await Promise.all(ownedIds.map((id) => request.delete(`/api/applications/${id}`, { headers: sameOriginMutationHeaders })));
 });
 
-test("the recovery control restores a deletion after the confirmation toast closes", async ({ page, request }) => {
+test("deletion offers Undo without a separate recovery banner", async ({ page, request }) => {
   const application = await createApplication(request);
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
 
   await deleteThroughDashboard(page, application);
-  const restore = page.getByRole("button", { name: `Restore ${application.company}`, exact: true });
-  await expect(restore).toBeVisible();
-  await expect(page.locator(".nook-toast")).toBeHidden({ timeout: 7000 });
-  await expect(restore).toBeVisible();
+  const undo = page.getByRole("button", { name: "Undo", exact: true });
+  await expect(undo).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Deletion recovery" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Restore ${application.company}`, exact: true })).toHaveCount(0);
 
   const restored = page.waitForResponse((response) =>
     response.request().method() === "POST" && response.url().endsWith(`/api/applications/${application.id}/restore`),
   );
-  await restore.click();
+  await undo.click();
   expect((await restored).status()).toBe(201);
   await expect(page.getByRole("button", { name: `Edit or archive ${application.role} at ${application.company}`, exact: true })).toBeVisible();
-  await expect(restore).toBeHidden();
+  await expect(undo).toBeHidden();
 });
 
 test("the toast timer pauses while hidden and recovery still works after returning", async ({ page, request }) => {
@@ -103,7 +103,7 @@ test("the toast timer pauses while hidden and recovery still works after returni
   await expect(page.getByRole("button", { name: `Edit or archive ${application.role} at ${application.company}`, exact: true })).toBeVisible();
 });
 
-test("the recovery control disappears at the server-provided expiry", async ({ page, request }) => {
+test("Undo disappears at the server-provided expiry", async ({ page, request }) => {
   const application = await createApplication(request);
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
@@ -112,13 +112,13 @@ test("the recovery control disappears at the server-provided expiry", async ({ p
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ token: randomUUID(), expiresAt: new Date(Date.now() + 1500).toISOString() }),
+      body: JSON.stringify({ token: randomUUID(), expiresAt: new Date(Date.now() + 3000).toISOString() }),
     });
   });
 
   await deleteThroughDashboard(page, application);
-  const restore = page.getByRole("button", { name: `Restore ${application.company}`, exact: true });
-  await expect(restore).toBeVisible();
-  await expect(restore).toBeHidden({ timeout: 2000 });
-  await expect(page.getByRole("button", { name: "Undo", exact: true })).toBeHidden();
+  const undo = page.getByRole("button", { name: "Undo", exact: true });
+  await expect(undo).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Deletion recovery" })).toHaveCount(0);
+  await expect(undo).toBeHidden({ timeout: 4000 });
 });
