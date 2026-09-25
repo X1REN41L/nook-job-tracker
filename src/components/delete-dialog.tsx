@@ -35,7 +35,7 @@ export function DeleteDialog({ application, deleting, onCancel, onConfirm, retur
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onCancel]);
 
-  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleting) onCancel(); }}>
+  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleting) onCancel(); }}>
     <section ref={dialogRef} aria-describedby="delete-description" aria-labelledby="delete-title" aria-modal="true" className="w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none" role="alertdialog" tabIndex={-1}>
       <h2 className="font-serif text-lg font-semibold" id="delete-title">Delete application?</h2>
       <p className="mt-2 text-sm leading-6 text-ink-soft" id="delete-description">Delete the <span className="font-medium text-ink">{application.role}</span> application at <span className="font-medium text-ink">{application.company}</span>. You can restore it for 10 minutes after deleting it.</p>

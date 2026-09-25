@@ -56,7 +56,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, importProgre
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section ref={dialogRef} aria-labelledby="settings-title" aria-modal="true" className="flex h-[min(42rem,calc(100dvh-2rem))] w-full max-w-3xl flex-col overflow-hidden rounded-nook-lg border border-line bg-paper text-ink shadow-nook-lift outline-none" role="dialog" tabIndex={-1}>
         <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-4">
           <h2 className="font-serif text-xl font-semibold" id="settings-title">Settings</h2>
@@ -84,7 +84,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, importProgre
             ))}
           </nav>
 
-          <div className="min-h-0 overflow-y-auto p-5 sm:p-6">
+          <div className="scrollbar-styled min-h-0 overflow-y-auto p-5 sm:p-6">
             {category === "general" && (
               <div>
                 <h3 className="font-serif text-lg font-semibold">General</h3>

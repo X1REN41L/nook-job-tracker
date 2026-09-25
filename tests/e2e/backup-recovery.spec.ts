@@ -78,3 +78,38 @@ test("settings storage failure reports committed imported applications separatel
     await request.delete(`/api/applications/${application.id}`, { headers: sameOriginMutationHeaders });
   }
 });
+
+test("backup import restores the sidebar collapse preference", async ({ page, request }) => {
+  await page.addInitScript(() => localStorage.setItem("nook-sidebar-collapsed", "true"));
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Expand sidebar", exact: true })).toBeVisible();
+
+  const modifier = await page.evaluate(() => /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent) ? "Meta" : "Control");
+  await page.keyboard.press(`${modifier}+Shift+,`);
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("button", { name: "Backup & Restore" }).click();
+
+  const exported = await (await request.get("/api/applications/export")).json();
+  const backup = {
+    ...exported,
+    settings: {
+      theme: "system",
+      defaultBoard: "APPLIED",
+      motion: "system",
+      boards: [],
+      sidebarCollapsed: false,
+      archivedExpanded: false,
+    },
+  };
+  await settings.locator('input[type="file"]').setInputFiles({
+    name: "sidebar-preference.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(backup)),
+  });
+
+  await expect(page.getByText(/^Imported \d+ applications; skipped \d+; settings restored$/)).toBeVisible();
+  await settings.getByRole("button", { name: "Close settings" }).click();
+  await expect(page.getByRole("button", { name: "Collapse sidebar", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).toBe("false");
+  await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeFocused();
+});

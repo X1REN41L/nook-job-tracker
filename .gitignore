@@ -5,6 +5,7 @@
 
 # next.js
 /.next/
+/.next-playwright.*/
 /out/
 
 # production build
@@ -59,3 +60,6 @@ prisma/migrations/
 # audit files
 /AUDIT.md
 /audit/
+
+#restructure-plan
+/restructure-plan/

@@ -18,6 +18,7 @@
   --color-ink: #2B2620;
   --color-ink-soft: #6B6255;
   --color-line: #E6DCC8;
+  --color-modal-backdrop: #2B2620;
 
   --color-forest: #3F5D4E;
   --color-forest-deep: #2E463A;
@@ -62,6 +63,7 @@
   --color-ink: #EFE7D8;
   --color-ink-soft: #B2A793;
   --color-line: #3A342B;
+  --color-modal-backdrop: #000000;
 
   --color-forest: #7FA98E;
   --color-forest-deep: #A9CBB4;
@@ -92,6 +94,121 @@ body {
   background: var(--color-cream);
   color: var(--color-ink);
   font-family: var(--font-sans);
+}
+
+/* Shared, theme-aware scrollbar styling for the app's scrollable surfaces. */
+.scrollbar-styled {
+  --scrollbar-width: 7px;
+  --scrollbar-height: 8px;
+  --scrollbar-track: color-mix(in srgb, var(--color-line) 26%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, var(--color-ink-soft) 48%, var(--color-line));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-ink-soft) 65%, var(--color-line));
+  --scrollbar-thumb-active: color-mix(in srgb, var(--color-ink-soft) 82%, var(--color-line));
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-gutter: stable;
+}
+
+.scrollbar-styled:hover {
+  scrollbar-color: var(--scrollbar-thumb-hover) var(--scrollbar-track);
+}
+
+.scrollbar-styled:active {
+  scrollbar-color: var(--scrollbar-thumb-active) var(--scrollbar-track);
+}
+
+.scrollbar-styled::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-height);
+}
+
+.scrollbar-styled::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: var(--scrollbar-track);
+}
+
+.scrollbar-styled::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+.scrollbar-styled::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.scrollbar-styled::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-active);
+  background-clip: padding-box;
+}
+
+.scrollbar-styled::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Board scrollbars keep a fixed, narrow track while the thumb fades in on use.
+   A transparent thumb preserves the same scrollbar geometry at every state. */
+.board-scroll.scrollbar-styled,
+.kanban-column-scroll.scrollbar-styled {
+  --scrollbar-width: 6px;
+  --scrollbar-height: 6px;
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: transparent;
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: auto;
+  transition: scrollbar-color 160ms ease;
+}
+
+.kanban-column-scroll {
+  margin-inline-end: -6px;
+}
+
+.board-scroll.scrollbar-styled,
+.kanban-column-scroll.scrollbar-styled {
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-ink-soft) 72%, transparent);
+  --scrollbar-thumb-active: color-mix(in srgb, var(--color-ink-soft) 84%, transparent);
+}
+
+.board-scroll.scrollbar-styled:hover,
+.board-scroll.scrollbar-styled.is-scrolling,
+.kanban-column:hover .kanban-column-scroll.scrollbar-styled,
+.kanban-column:focus-within .kanban-column-scroll.scrollbar-styled,
+.kanban-column-scroll.scrollbar-styled.is-scrolling {
+  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+}
+
+.board-scroll.scrollbar-styled:active,
+.kanban-column:active .kanban-column-scroll.scrollbar-styled {
+  scrollbar-color: var(--scrollbar-thumb-active) transparent;
+}
+
+.board-scroll.scrollbar-styled::-webkit-scrollbar-track,
+.kanban-column-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.board-scroll.scrollbar-styled::-webkit-scrollbar-thumb,
+.kanban-column-scroll.scrollbar-styled::-webkit-scrollbar-thumb {
+  background: transparent;
+  transition: background-color 160ms ease;
+}
+
+.board-scroll.scrollbar-styled:hover::-webkit-scrollbar-thumb,
+.board-scroll.scrollbar-styled.is-scrolling::-webkit-scrollbar-thumb,
+.kanban-column:hover .kanban-column-scroll::-webkit-scrollbar-thumb,
+.kanban-column:focus-within .kanban-column-scroll::-webkit-scrollbar-thumb,
+.kanban-column-scroll.is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.board-scroll.scrollbar-styled:active::-webkit-scrollbar-thumb,
+.kanban-column:active .kanban-column-scroll::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb-active);
+  background-clip: padding-box;
 }
 
 h1, h2, h3, h4, .font-display {
@@ -131,13 +248,15 @@ body.nook-dragging * {
 .app-workspace {
   --sidebar-motion-duration: 220ms;
   --sidebar-motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --sidebar-rail-width: 50px;
+  --sidebar-nav-inset: 14px;
   grid-template-columns: minmax(0, 1fr);
 }
 
 .sidebar-panel {
   position: absolute;
   inset-block: 0;
-  right: 0;
+  left: 0;
   z-index: 20;
   width: min(320px, calc(100vw - 48px));
   transition: transform var(--sidebar-motion-duration) var(--sidebar-motion-easing);
@@ -145,11 +264,11 @@ body.nook-dragging * {
 }
 
 .sidebar-collapsed .sidebar-panel {
-  transform: translateX(calc(100% - 40px));
+  transform: translateX(calc(-100% + var(--sidebar-rail-width)));
 }
 
 .sidebar-content {
-  min-width: 320px;
+  min-width: 0;
   opacity: 1;
   visibility: visible;
   transition:
@@ -167,6 +286,8 @@ body.nook-dragging * {
 }
 
 .sidebar-edge-tab {
+  background: linear-gradient(135deg, var(--color-forest), var(--color-forest-deep));
+  border-radius: 10px;
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
@@ -177,6 +298,38 @@ body.nook-dragging * {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
+}
+
+.sidebar-logo-mark,
+.sidebar-expand-mark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 120ms ease;
+}
+
+.sidebar-brand-row {
+  padding-inline: var(--sidebar-nav-inset);
+}
+
+.sidebar-main-nav {
+  padding-inline: var(--sidebar-nav-inset);
+}
+
+.sidebar-expand-mark {
+  opacity: 0;
+}
+
+.sidebar-edge-tab:hover .sidebar-logo-mark,
+.sidebar-edge-tab:focus-visible .sidebar-logo-mark {
+  opacity: 0;
+}
+
+.sidebar-edge-tab:hover .sidebar-expand-mark,
+.sidebar-edge-tab:focus-visible .sidebar-expand-mark {
+  opacity: 1;
 }
 
 /* Keep the final board column clear of the sidebar's edge, in either state. */
@@ -194,16 +347,26 @@ body.nook-dragging * {
   margin-left: -1rem;
 }
 
+.board-columns {
+  justify-content: safe center;
+}
+
+.kanban-column {
+  flex: 1 1 clamp(17.5rem, 20vw, 22.5rem);
+  min-width: 15.5rem;
+  max-width: 22.5rem;
+}
+
 @media (min-width: 768px) {
   .app-workspace {
     --sidebar-width: 320px;
-    grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
     transition: grid-template-columns var(--sidebar-motion-duration) var(--sidebar-motion-easing);
     will-change: grid-template-columns;
   }
 
   .app-workspace.sidebar-collapsed {
-    --sidebar-width: 40px;
+    --sidebar-width: var(--sidebar-rail-width);
   }
 
   .sidebar-panel {
@@ -214,10 +377,14 @@ body.nook-dragging * {
 }
 
 @media (max-width: 767px) {
-  /* Keep the collapsed rail in its own 40px column instead of covering the
+  /* Keep the collapsed rail in its own column instead of covering the
      board, preserving the same side padding on narrow screens too. */
   .app-workspace.sidebar-collapsed {
-    grid-template-columns: minmax(0, 1fr) 40px;
+    grid-template-columns: var(--sidebar-rail-width) minmax(0, 1fr);
+  }
+
+  .app-workspace.sidebar-collapsed .board-scroll {
+    grid-column: 2;
   }
 }
 
@@ -259,6 +426,7 @@ body.nook-dragging * {
   .icon-btn {
     @apply flex h-9 w-9 items-center justify-center rounded-nook-sm border border-line bg-paper text-ink-soft transition hover:bg-cream-2 hover:text-ink;
   }
+
 }
 
 .nook-toast-wrap {
@@ -280,8 +448,9 @@ body.nook-dragging * {
   display: flex;
   align-items: center;
   gap: 14px;
-  background: var(--color-ink);
-  color: var(--color-cream);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
   padding: 11px 18px;
   border-radius: var(--radius-nook-sm);
   box-shadow: var(--shadow-nook-lift);
@@ -296,12 +465,6 @@ body.nook-dragging * {
   color: inherit;
   font-weight: 700;
 }
-.dark .nook-toast {
-  background: var(--color-paper);
-  color: var(--color-ink);
-  border: 1px solid var(--color-line);
-}
-
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion="reduced"]) *, :root:not([data-motion="reduced"]) *::before, :root:not([data-motion="reduced"]) *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
   :root:not([data-motion="reduced"]) { scroll-behavior: auto !important; }

@@ -16,7 +16,7 @@ export function ShortcutOverlay({ isMac, onClose, returnFocusRef }: {
   useDialogFocusTrap(dialogRef, closeRef, returnFocusRef);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-ink/40 p-4 pt-[14vh] backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-modal-backdrop/40 p-4 pt-[14vh] backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section ref={dialogRef} aria-labelledby="shortcut-dialog-title" aria-modal="true" className="w-full max-w-md rounded-nook-lg border border-line bg-paper p-5 text-ink shadow-nook-lift outline-none" role="dialog" tabIndex={-1}>
         <div className="flex items-center justify-between gap-4">
           <div>

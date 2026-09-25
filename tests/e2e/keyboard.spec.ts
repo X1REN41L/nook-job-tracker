@@ -309,10 +309,12 @@ test("tabs through every dashboard, Kanban, sidebar, and archived control in vis
 
   const archivedRow = page.locator(`[data-application-id="${archived.id}"]`);
   const orderedControls = [
-    page.getByRole("button", { name: "Settings", exact: true }),
     page.getByRole("button", { name: "Add job", exact: true }),
-    page.getByRole("button", { name: `Edit or move ${active.role} at ${active.company}`, exact: true }),
     page.getByRole("button", { name: "Collapse sidebar", exact: true }),
+    page.getByRole("link", { name: "Dashboard", exact: true }),
+    page.getByRole("link", { name: "Job Board", exact: true }),
+    page.getByRole("link", { name: "Interviews", exact: true }),
+    page.getByRole("button", { name: "Settings", exact: true }),
     page.getByRole("textbox", { name: "Search company or role", exact: true }),
     ...["All", "Applied", "Online assessment", "Interview", "Offer", "Rejected"].map((name) =>
       page.getByRole("button", { name, exact: true }),
@@ -322,6 +324,7 @@ test("tabs through every dashboard, Kanban, sidebar, and archived control in vis
     archivedRow.getByRole("button", { name: `Edit or move archived ${archived.role} at ${archived.company}`, exact: true }),
     archivedRow.getByRole("button", { name: "Restore", exact: true }),
     archivedRow.getByRole("button", { name: `Delete ${archived.role} at ${archived.company}`, exact: true }),
+    page.getByRole("button", { name: `Edit or move ${active.role} at ${active.company}`, exact: true }),
   ];
   const indexes = await Promise.all(orderedControls.map(focusIndex));
   expect(indexes).toEqual([...indexes].sort((left, right) => left - right));

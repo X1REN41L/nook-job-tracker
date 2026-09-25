@@ -9,6 +9,8 @@ export const settingsSchema = z.object({
   boards: z.array(z.unknown()),
   sidebarCollapsed: z.boolean(),
   archivedExpanded: z.boolean(),
+  allApplicationsExpanded: z.boolean().default(true),
 });
 
-export type BackupSettings = z.infer<typeof settingsSchema>;
+export type BackupSettings = z.input<typeof settingsSchema>;
+export type ParsedBackupSettings = z.output<typeof settingsSchema>;

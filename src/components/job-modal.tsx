@@ -86,7 +86,7 @@ export function JobModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/40 p-4 py-[6vh] backdrop-blur-[2px]"
+      className="scrollbar-styled fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-modal-backdrop/40 p-4 py-[6vh] backdrop-blur-[2px]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) onClose();
       }}
@@ -199,7 +199,7 @@ export function JobModal({
 
           <Field label="Notes" hint="(optional)">
             <textarea
-              className="input min-h-20 resize-y"
+              className="scrollbar-styled input min-h-20 resize-y"
               maxLength={5000}
               onChange={(e) => onChangeField("notes", e.target.value)}
               placeholder="Recruiter contact, salary range, next steps…"

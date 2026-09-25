@@ -15,25 +15,29 @@ import { KanbanBoard, KanbanCardOverlay } from "@/components/kanban-board";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { DuplicateWarningDialog } from "@/components/duplicate-warning-dialog";
 import { InterviewDateDialog } from "@/components/interview-date-dialog";
+import { InterviewsList } from "@/components/interviews-list";
 import { JobModal, type JobFormState } from "@/components/job-modal";
 import { SettingsModal } from "@/components/settings-modal";
 import { ShortcutOverlay } from "@/components/shortcut-overlay";
 import { useApplicationBackup } from "@/hooks/use-application-backup";
 import { ARCHIVED_DROP_ID, SIDEBAR_EDGE_DROP_ID, useBoardDrag } from "@/hooks/use-board-drag";
 import { useDashboardShortcuts } from "@/hooks/use-dashboard-shortcuts";
+import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { useToastUndo, type ToastUndo } from "@/hooks/use-toast-undo";
 import { currentLocalDate } from "@/lib/application-date";
-import { ARCHIVED_CHANGE_EVENT, ARCHIVED_STORAGE_KEY, SIDEBAR_CHANGE_EVENT, SIDEBAR_STORAGE_KEY } from "@/lib/backup-settings";
+import { ALL_APPLICATIONS_CHANGE_EVENT, ALL_APPLICATIONS_STORAGE_KEY, ARCHIVED_CHANGE_EVENT, ARCHIVED_STORAGE_KEY, SIDEBAR_CHANGE_EVENT, SIDEBAR_STORAGE_KEY } from "@/lib/backup-settings";
 import { BOARD_STATUSES, boardLabel, useBoards } from "@/lib/board-preferences";
 import { applicationInputSchema, interviewDateSchema } from "@/lib/application-schema";
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { findPossibleDuplicate, type DuplicateMatch } from "@/lib/duplicate-match";
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";
 import { getDefaultBoard } from "@/lib/general-preferences";
+import { getInterviewListItems, getUpcomingInterviewCount } from "@/lib/interviews";
 import type { ApplicationRecord } from "@/types/application";
 
 const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), interviewDate: "", notes: "", jobUrl: "" });
 type DragSource = "board" | "sidebar" | "archived";
+export type ApplicationPageName = "job-board" | "dashboard" | "interviews";
 type PendingDuplicate = {
   candidate: JobFormState;
   editingId: string | null;
@@ -74,7 +78,36 @@ function getArchivedPreference() {
   }
 }
 
-export function ApplicationDashboard({ initialApplications }: { initialApplications: ApplicationRecord[] }) {
+function subscribeToAllApplicationsPreference(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(ALL_APPLICATIONS_CHANGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(ALL_APPLICATIONS_CHANGE_EVENT, onStoreChange);
+  };
+}
+
+function getAllApplicationsPreference() {
+  try {
+    return localStorage.getItem(ALL_APPLICATIONS_STORAGE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function subscribeToLocalDate(onStoreChange: () => void) {
+  const now = new Date();
+  const nextLocalMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const timeout = window.setTimeout(onStoreChange, nextLocalMidnight.getTime() - now.getTime());
+  return () => window.clearTimeout(timeout);
+}
+
+function getServerLocalDate() {
+  return "";
+}
+
+export function ApplicationDashboard({ initialApplications, page }: { initialApplications: ApplicationRecord[]; page: ApplicationPageName }) {
+  const boardScrollRef = useScrollbarActivity<HTMLDivElement>();
   const { theme, setTheme } = useTheme();
   const boards = useBoards();
   const [applications, setApplications] = useState(initialApplications);
@@ -99,6 +132,8 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
   const sidebarCollapsed = useSyncExternalStore(subscribeToSidebarPreference, getSidebarPreference, () => false);
   const archivedExpanded = useSyncExternalStore(subscribeToArchivedPreference, getArchivedPreference, () => false);
+  const allApplicationsExpanded = useSyncExternalStore(subscribeToAllApplicationsPreference, getAllApplicationsPreference, () => true);
+  const today = useSyncExternalStore(subscribeToLocalDate, currentLocalDate, getServerLocalDate);
   const { toast, deleteRecovery, undoing, showToast, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
   const { importProgress, hasPendingImport, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport } = useApplicationBackup({
     applications,
@@ -144,6 +179,15 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
     try {
       localStorage.setItem(ARCHIVED_STORAGE_KEY, String(!archivedExpanded));
       window.dispatchEvent(new Event(ARCHIVED_CHANGE_EVENT));
+    } catch {
+      // Leave the current preference unchanged when storage is unavailable.
+    }
+  }
+
+  function toggleAllApplications() {
+    try {
+      localStorage.setItem(ALL_APPLICATIONS_STORAGE_KEY, String(!allApplicationsExpanded));
+      window.dispatchEvent(new Event(ALL_APPLICATIONS_CHANGE_EVENT));
     } catch {
       // Leave the current preference unchanged when storage is unavailable.
     }
@@ -447,7 +491,8 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
     const overId = event.over?.id;
     if (!application || overId === undefined) return;
     if (dragSource === "sidebar" && overId !== ARCHIVED_DROP_ID) return;
-    if (overId === ARCHIVED_DROP_ID) {
+    const droppedOnArchive = overId === ARCHIVED_DROP_ID || (dragSource === "board" && overId === SIDEBAR_EDGE_DROP_ID);
+    if (droppedOnArchive) {
       if (dragSource === "archived") return;
       await moveApplication(application, application.status, true, undefined, true);
       return;
@@ -464,19 +509,26 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
     .filter((item) => activeFilter === "all" || item.status === activeFilter)
     .filter((item) => `${item.company} ${item.role}`.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
+  const recentItems = applications
+    .filter((item) => !item.archived)
+    .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
   const archivedItems = applications
     .filter((item) => item.archived)
     .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
+  const interviewToday = today || new Date().toISOString().slice(0, 10);
+  const interviews = getInterviewListItems(applications);
+  const upcomingInterviewCount = getUpcomingInterviewCount(applications, interviewToday);
   const activeApplication = applications.find(({ id }) => id === activeId) ?? null;
 
   function dropTargetLabel(id: string | number) {
     if (id === ARCHIVED_DROP_ID) return "Archived";
-    if (id === SIDEBAR_EDGE_DROP_ID) return "the sidebar edge";
+    if (id === SIDEBAR_EDGE_DROP_ID) return "Archive";
     return Object.values(Status).includes(id as Status) ? boardLabel(boards, id as Status) : "another drop target";
   }
 
   function focusSearch() {
     if (sidebarCollapsed) setSidebarCollapsed(false);
+    if (!allApplicationsExpanded) toggleAllApplications();
     requestAnimationFrame(() => requestAnimationFrame(() => searchInputRef.current?.focus()));
   }
 
@@ -514,39 +566,15 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
 
   return (
     <main className="select-none-ui flex h-screen flex-col overflow-hidden bg-cream text-ink transition-colors">
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line bg-paper px-7 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-forest to-forest-deep font-serif text-[15px] leading-none text-cream">
-            N
-          </span>
-          <div className="flex min-w-0 items-baseline gap-2.5">
-            <h1 className="shrink-0 font-serif text-xl font-semibold leading-none tracking-tight">Nook</h1>
-            <span className="hidden truncate text-sm leading-tight text-ink-soft sm:block">your job search, kept tidy</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            ref={settingsTriggerRef}
-            aria-label="Settings"
-            className="icon-btn bg-cream text-ink hover:border-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest active:bg-cream-2"
-            onClick={() => setSettingsOpen(true)}
-            title="Settings"
-            type="button"
-          >
-            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.5 2.3h3l.5 2.3c.5.2 1 .5 1.5.9l2.2-.8 2.1 2.1-.8 2.2c.4.5.7 1 .9 1.5l2.3.5v3l-2.3.5c-.2.5-.5 1-.9 1.5l.8 2.2-2.1 2.1-2.2-.8c-.5.4-1 .7-1.5.9l-.5 2.3h-3l-.5-2.3c-.5-.2-1-.5-1.5-.9l-2.2.8-2.1-2.1.8-2.2c-.4-.5-.7-1-.9-1.5l-2.3-.5v-3l2.3-.5c.2-.5.5-1 .9-1.5l-.8-2.2 2.1-2.1 2.2.8c.5-.4 1-.7 1.5-.9l.5-2.3Z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </button>
-          <button aria-label="Add job" className="btn-primary flex items-center gap-2" onClick={openAddModal} type="button">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span className="hidden sm:inline">Add job</span>
-          </button>
-        </div>
-      </header>
+      {page === "job-board" && (
+        <button aria-label="Add job" className="btn-primary fixed bottom-6 right-6 z-50 flex origin-bottom-right scale-[1.2] items-center gap-2 shadow-lg" onClick={openAddModal} type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span className="hidden sm:inline">Add job</span>
+        </button>
+      )}
 
       {error && !isModalOpen && (
         <p className="mx-7 mt-4 rounded-nook border border-rose bg-rose-tint p-3 text-sm text-ink" role="alert">
@@ -589,30 +617,50 @@ export function ApplicationDashboard({ initialApplications }: { initialApplicati
         <div
           className={`app-workspace relative grid min-h-0 flex-1 overflow-hidden ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}
         >
-        <div className="board-scroll h-full min-w-0 overflow-auto px-4.5 py-6">
-          <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingId={movingId} onEdit={startEdit} />
-        </div>
-
         <ApplicationSidebar
           boards={boards}
           sidebarItems={sidebarItems}
+          recentItems={recentItems}
           archivedItems={archivedItems}
           totalApplications={applications.length}
+          upcomingInterviewCount={upcomingInterviewCount}
           collapsed={sidebarCollapsed}
+          page={page}
           archivedExpanded={archivedExpanded}
+          allApplicationsExpanded={allApplicationsExpanded}
           movingId={movingId}
           searchTerm={searchTerm}
           activeFilter={activeFilter}
           headingRef={sidebarHeadingRef}
           searchInputRef={searchInputRef}
+          settingsTriggerRef={settingsTriggerRef}
           onSearchTermChange={setSearchTerm}
           onFilterChange={setActiveFilter}
           onToggleSidebar={toggleSidebar}
+          onOpenArchive={() => {
+            setSidebarCollapsed(false);
+            if (!archivedExpanded) toggleArchived();
+          }}
+          onOpenSettings={() => setSettingsOpen(true)}
           onToggleArchived={toggleArchived}
+          onToggleAllApplications={toggleAllApplications}
           onEdit={startEdit}
           onRequestDelete={(application, trigger) => requestDelete(application, trigger, false)}
           onRestore={(application) => moveApplication(application, application.status, true, undefined, false)}
         />
+        <div ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto px-4.5 py-6">
+          {page === "job-board" ? (
+            <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingId={movingId} onEdit={startEdit} />
+          ) : page === "interviews" ? (
+            <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} />
+          ) : (
+            <section className="flex min-h-full flex-col items-center justify-center text-center">
+              <h1 className="font-serif text-3xl font-semibold tracking-tight">Dashboard</h1>
+              <p className="mt-2 text-sm text-ink-soft">This page is a placeholder for now.</p>
+            </section>
+          )}
+        </div>
+
         </div>
         {activeApplication && typeof document !== "undefined"
           ? createPortal(

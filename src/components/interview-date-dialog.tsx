@@ -20,7 +20,7 @@ export function InterviewDateDialog({ application, error, onAddDate, onChangeDat
 
   useDialogFocusTrap(dialogRef, dateRef, returnFocusRef);
 
-  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/60 p-4 backdrop-blur-sm">
+  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/60 p-4 backdrop-blur-sm">
     <section ref={dialogRef} aria-describedby="interview-date-description" aria-labelledby="interview-date-title" aria-modal="true" className="w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none" role="dialog" tabIndex={-1}>
       <h2 className="font-serif text-lg font-semibold" id="interview-date-title">Add interview date</h2>
       <p className="mt-2 text-sm leading-6 text-ink-soft" id="interview-date-description">When is the interview for <span className="font-medium text-ink">{application.role}</span> at <span className="font-medium text-ink">{application.company}</span>?</p>

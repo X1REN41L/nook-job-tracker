@@ -124,7 +124,7 @@ function BoardRow({ board, editing, shift, onEdit, onUpdate }: {
           </fieldset>
           <div>
             <label className="mb-1 block text-xs font-semibold" htmlFor={`board-empty-${board.status}`}>Empty state text</label>
-            <textarea className={`input max-w-sm resize-y text-sm ${focusClass}`} id={`board-empty-${board.status}`} maxLength={240} onBlur={() => { if (!draftEmpty.trim()) setDraftEmpty(board.emptyText); }} onChange={(event) => { const value = event.target.value; setDraftEmpty(value); if (value.trim()) onUpdate({ emptyText: value }); }} rows={2} value={draftEmpty} />
+          <textarea className={`scrollbar-styled input max-w-sm resize-y text-sm ${focusClass}`} id={`board-empty-${board.status}`} maxLength={240} onBlur={() => { if (!draftEmpty.trim()) setDraftEmpty(board.emptyText); }} onChange={(event) => { const value = event.target.value; setDraftEmpty(value); if (value.trim()) onUpdate({ emptyText: value }); }} rows={2} value={draftEmpty} />
           </div>
         </div>
       )}

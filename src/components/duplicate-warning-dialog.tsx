@@ -51,7 +51,7 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/40 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]"
       onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onDismiss(); }}
     >
       <section

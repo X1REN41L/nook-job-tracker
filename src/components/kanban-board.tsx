@@ -7,6 +7,7 @@ import {
 import { Status } from "@prisma/client";
 import { CSS } from "@dnd-kit/utilities";
 
+import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { formatAppliedDate } from "@/lib/application-date";
 import { BOARD_COLOR_CLASSES, type BoardConfiguration } from "@/lib/board-preferences";
 import type { ApplicationRecord } from "@/types/application";
@@ -19,7 +20,7 @@ export function KanbanBoard({ applications, boards, dropDisabled = false, moving
   onEdit: (application: ApplicationRecord) => void;
 }) {
   return (
-    <div className="board-columns flex h-full min-h-0 items-stretch gap-4" aria-label="Application status board">
+    <div className="board-columns flex h-full min-h-0 w-full items-stretch gap-4" aria-label="Application status board">
       {boards.map((board) => {
         const items = applications.filter((application) => !application.archived && application.status === board.status);
         return <KanbanColumn key={board.status} board={board} applications={items} dropDisabled={dropDisabled} movingId={movingId} onEdit={onEdit} />;
@@ -35,14 +36,15 @@ function KanbanColumn({ board, applications, dropDisabled, movingId, onEdit }: {
   movingId: string | null;
   onEdit: (application: ApplicationRecord) => void;
 }) {
+  const scrollRef = useScrollbarActivity<HTMLDivElement>();
   const { isOver, setNodeRef } = useDroppable({ id: board.status, disabled: dropDisabled });
   return (
-    <section ref={setNodeRef} className={`flex h-full min-h-0 w-[272px] shrink-0 flex-col rounded-nook-lg border p-3 transition-colors ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
+    <section ref={setNodeRef} className={`kanban-column flex h-full min-h-0 flex-col rounded-nook-lg border p-3 transition-colors ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
       <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1.5 pt-1">
         <h3 className="flex items-center gap-2 text-sm font-semibold"><span className={`status-dot ${BOARD_COLOR_CLASSES[board.color]}`} />{board.label}</h3>
         <span className="rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-medium text-ink-soft">{applications.length}</span>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+      <div ref={scrollRef} className="kanban-column-scroll scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
         <div className="flex flex-col gap-2.5">
         {applications.map((application) => (
           <KanbanCard key={application.id} application={application} disabled={movingId !== null} onEdit={onEdit} />

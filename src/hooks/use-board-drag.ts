@@ -16,7 +16,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { Status } from "@prisma/client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { getBoards } from "@/lib/board-preferences";
 
@@ -73,9 +73,21 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
   const sidebarEdgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartedCollapsed = useRef(false);
   const autoExpandedSidebar = useRef(false);
+  const applicationDrag = useRef(false);
   const pointerNearRail = useRef(false);
   const dragStartBoardScrollLeft = useRef<number | null>(null);
   const lastPointerPosition = useRef<{ x: number; y: number } | null>(null);
+  const handleDragMoveRef = useRef<() => void>(() => undefined);
+  const collisionDetection: CollisionDetection = (args) => {
+    if (dragStartedCollapsed.current && autoExpandedSidebar.current) {
+      const pointerPosition = lastPointerPosition.current;
+      const boardRect = document.querySelector<HTMLElement>(".board-scroll")?.getBoundingClientRect();
+      if (pointerPosition && boardRect && pointerPosition.x <= boardRect.left + 16 && pointerPosition.y >= boardRect.top && pointerPosition.y <= boardRect.bottom) {
+        return [];
+      }
+    }
+    return collisionDetectionStrategy(args);
+  };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
@@ -93,10 +105,14 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
       lastPointerPosition.current = { x: event.clientX, y: event.clientY };
+      handleDragMoveRef.current();
     };
     const handleTouchMove = (event: TouchEvent) => {
       const touch = event.touches[0] ?? event.changedTouches[0];
-      if (touch) lastPointerPosition.current = { x: touch.clientX, y: touch.clientY };
+      if (touch) {
+        lastPointerPosition.current = { x: touch.clientX, y: touch.clientY };
+        handleDragMoveRef.current();
+      }
     };
     window.addEventListener("pointermove", handlePointerMove, { capture: true, passive: true });
     window.addEventListener("touchmove", handleTouchMove, { capture: true, passive: true });
@@ -122,7 +138,9 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
   function handleDragStart(event: DragStartEvent) {
     const data = event.active.data.current;
     setActiveId(String(data?.applicationId ?? event.active.id));
-    setActiveDragSource((data?.source as DragSource | undefined) ?? "board");
+    const source = (data?.source as DragSource | undefined) ?? "board";
+    setActiveDragSource(source);
+    applicationDrag.current = source === "board" || source === "sidebar" || source === "archived";
     document.body.classList.add("nook-dragging");
     dragStartedCollapsed.current = sidebarCollapsed;
     autoExpandedSidebar.current = false;
@@ -151,9 +169,21 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
       setPointerNearRail(false);
       return;
     }
+    if (applicationDrag.current) {
+      clearSidebarEdgeTimer();
+      const rail = document.querySelector<HTMLElement>(".sidebar-edge-rail");
+      const railRect = rail?.getBoundingClientRect();
+      const nearRail = Boolean(railRect && pointerPosition.x >= railRect.left - 16 && pointerPosition.x <= railRect.right + 16 && pointerPosition.y >= railRect.top && pointerPosition.y <= railRect.bottom);
+      setPointerNearRail(nearRail);
+      if (nearRail && dragStartBoardScrollLeft.current !== null) {
+        const boardScroll = document.querySelector<HTMLElement>(".board-scroll");
+        if (boardScroll) boardScroll.scrollLeft = dragStartBoardScrollLeft.current;
+      }
+      return;
+    }
     if (autoExpandedSidebar.current) {
       const boardRect = document.querySelector<HTMLElement>(".board-scroll")?.getBoundingClientRect();
-      setPointerNearRail(Boolean(boardRect && pointerPosition.x >= boardRect.right - 16 && pointerPosition.y >= boardRect.top && pointerPosition.y <= boardRect.bottom));
+      setPointerNearRail(Boolean(boardRect && pointerPosition.x <= boardRect.left + 16 && pointerPosition.y >= boardRect.top && pointerPosition.y <= boardRect.bottom));
       return;
     }
     const rail = document.querySelector<HTMLElement>(".sidebar-edge-rail");
@@ -179,11 +209,15 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
       setSidebarCollapsed(false);
     }, SIDEBAR_EDGE_DWELL_MS);
   }
+  useLayoutEffect(() => {
+    handleDragMoveRef.current = handleDragMove;
+  });
 
   function finishDrag() {
     clearSidebarEdgeTimer();
     setActiveId(null);
     setActiveDragSource(null);
+    applicationDrag.current = false;
     document.body.classList.remove("nook-dragging");
     lastPointerPosition.current = null;
     dragStartBoardScrollLeft.current = null;
@@ -204,7 +238,7 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
     activeId,
     activeDragSource,
     sensors,
-    collisionDetection: collisionDetectionStrategy,
+    collisionDetection,
     autoScroll: !isPointerNearRail,
     onDragStart: handleDragStart,
     onDragMove: handleDragMove,
