@@ -22,7 +22,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       if (!held || held.applicationId !== id || held.expiresAt <= new Date()) return { status: 404 as const };
       if (await tx.application.findUnique({ where: { id }, select: { id: true } })) return { status: 409 as const };
       const stored = JSON.parse(held.payload);
-      const { events, ...data } = applicationRestoreSnapshotSchema.parse({ ...stored, events: stored.events.map(({ id, type, detail, emailSnippet, createdAt }: { id: string; type: string; detail: string | null; emailSnippet: string | null; createdAt: string }) => ({ id, type, detail, emailSnippet, createdAt })) });
+      const snapshot = {
+        ...stored,
+        events: stored.events.map(({ id: eventId, type, fromStatus, toStatus, detail, emailSnippet, createdAt }: {
+          id: string; type: string; fromStatus?: string | null; toStatus?: string | null;
+          detail: string | null; emailSnippet: string | null; createdAt: string;
+        }) => ({ id: eventId, type, fromStatus, toStatus, detail, emailSnippet, createdAt })),
+      };
+      const { events, ...data } = applicationRestoreSnapshotSchema.parse(snapshot);
       const application = await tx.application.create({ data: { ...data, events: { create: events } } });
       await tx.undoSnapshot.delete({ where: { token } });
       return { status: 201 as const, application };

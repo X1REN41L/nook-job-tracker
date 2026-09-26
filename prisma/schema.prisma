@@ -25,6 +25,7 @@ model Application {
   createdAt   DateTime           @default(now())
 
   @@index([status])
+  @@index([appliedDate])
 }
 
 model ApplicationEvent {
@@ -32,6 +33,8 @@ model ApplicationEvent {
   applicationId String
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   type          EventType
+  fromStatus    Status?
+  toStatus      Status?
   detail        String?
   emailSnippet  String?
   createdAt     DateTime    @default(now())

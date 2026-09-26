@@ -9,7 +9,7 @@ const mutationHeaders = { Origin: origin, "Content-Type": "application/json" };
 const prisma = new PrismaClient();
 const post = (path, body) => fetch(`${base}${path}`, { method: "POST", headers: mutationHeaders, body: JSON.stringify(body) });
 const input = (role) => ({ company: "Backup API test", role, status: "APPLIED", appliedDate: "2026-09-24" });
-const settings = { theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false };
+const settings = { theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true };
 const backup = (applications) => ({ version: 2, applications, settings });
 const record = (role) => ({ id: randomUUID(), company: "Backup API test", role, status: "APPLIED", source: null,
   appliedDate: "2026-09-24T00:00:00.000Z", interviewDate: null, interviewDatePromptDismissed: true,
@@ -80,7 +80,9 @@ try {
   assert.equal(application.status, "INTERVIEW");
   assert.equal(application.revision, 2);
   const withEvents = await (await fetch(`${base}/api/applications/export`)).json();
-  assert.equal(withEvents.applications[0].events.length, 1);
+  assert.equal(withEvents.applications[0].events.length, 2, "A created application keeps its initial status event");
+  assert.ok(withEvents.applications[0].events.some(({ fromStatus, toStatus }) => fromStatus === null && toStatus === "APPLIED"));
+  assert.ok(withEvents.applications[0].events.some(({ fromStatus, toStatus }) => fromStatus === "APPLIED" && toStatus === "INTERVIEW"));
   assert.equal(withEvents.applications[0].archived, true);
   assert.equal((await fetch(`${base}/api/applications/${seedId}`, { method: "DELETE", headers: mutationHeaders })).status, 204);
   const restored = await post("/api/applications/import", withEvents);
@@ -98,6 +100,9 @@ try {
     { ...record("invalid status"), status: "INVALID" },
     { ...record("invalid fields"), company: "", appliedDate: "invalid" },
   ])), ["applications[0].status", "applications[1].company", "applications[1].appliedDate"]);
+  await assertValidationIssues(await post("/api/applications/import", backup([
+    { ...record("invalid event"), events: [{ ...record("event").events[0], fromStatus: "INTERVIEW", toStatus: "OFFER" }] },
+  ])), ["applications[0].events[0]"]);
   assert.equal(await prisma.application.count(), 1);
   const changedForUndo = await fetch(`${base}/api/applications/${seedId}`, { method: "PATCH", headers: mutationHeaders, body: JSON.stringify({ revision: 0, archived: false }) });
   assert.equal(changedForUndo.status, 200);
@@ -111,7 +116,14 @@ try {
   assert.ok(token);
   const restoredUndo = await post(`/api/applications/${seedId}/restore`, { token });
   assert.equal(restoredUndo.status, 201);
-  assert.equal((await restoredUndo.json()).application.revision, 1, "Undo restore must preserve the internal revision");
+  const undoRestoredApplication = (await restoredUndo.json()).application;
+  assert.equal(undoRestoredApplication.revision, 1, "Undo restore must preserve the internal revision");
+  const undoRestoredEvents = await prisma.applicationEvent.findMany({ where: { applicationId: seedId } });
+  assert.deepEqual(undoRestoredEvents.map(({ id, fromStatus, toStatus, detail, createdAt }) =>
+    [id, fromStatus, toStatus, detail, createdAt.toISOString()]).sort(([left], [right]) => left.localeCompare(right)),
+  withEvents.applications[0].events.map(({ id, fromStatus, toStatus, detail, createdAt }) =>
+    [id, fromStatus, toStatus, detail, createdAt]).sort(([left], [right]) => left.localeCompare(right)),
+    "Delete and undo restore must preserve typed status history");
   assert.equal((await post(`/api/applications/${seedId}/restore`, { token })).status, 404);
   const secondDelete = await fetch(`${base}/api/applications/${seedId}?undoable=1`, { method: "DELETE", headers: mutationHeaders });
   const secondToken = (await secondDelete.json()).token;

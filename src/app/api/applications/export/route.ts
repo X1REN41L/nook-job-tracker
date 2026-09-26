@@ -15,7 +15,7 @@ export async function GET() {
       version: 2,
       applications: applications.map(({ events, revision, ...application }) => {
         void revision;
-        return { ...application, events: events.map(({ id, type, detail, emailSnippet, createdAt }) => ({ id, type, detail, emailSnippet, createdAt })) };
+        return { ...application, events: events.map(({ id, type, fromStatus, toStatus, detail, emailSnippet, createdAt }) => ({ id, type, fromStatus, toStatus, detail, emailSnippet, createdAt })) };
       }),
       settings: defaultSettings,
     });

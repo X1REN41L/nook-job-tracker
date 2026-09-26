@@ -1,0 +1,19 @@
+ALTER TABLE "ApplicationEvent" ADD COLUMN "fromStatus" TEXT;
+ALTER TABLE "ApplicationEvent" ADD COLUMN "toStatus" TEXT;
+
+UPDATE "ApplicationEvent"
+SET
+  "fromStatus" = CASE
+    WHEN substr("detail", 1, 4) = 'null' THEN NULL
+    ELSE substr("detail", 1, instr("detail", ' → ') - 1)
+  END,
+  "toStatus" = substr("detail", instr("detail", ' → ') + 3)
+WHERE "type" = 'STATUS_CHANGE'
+  AND "detail" IN (
+    'null → APPLIED', 'null → ONLINE_ASSESSMENT', 'null → INTERVIEW', 'null → OFFER', 'null → REJECTED',
+    'APPLIED → ONLINE_ASSESSMENT', 'APPLIED → INTERVIEW', 'APPLIED → OFFER', 'APPLIED → REJECTED',
+    'ONLINE_ASSESSMENT → APPLIED', 'ONLINE_ASSESSMENT → INTERVIEW', 'ONLINE_ASSESSMENT → OFFER', 'ONLINE_ASSESSMENT → REJECTED',
+    'INTERVIEW → APPLIED', 'INTERVIEW → ONLINE_ASSESSMENT', 'INTERVIEW → OFFER', 'INTERVIEW → REJECTED',
+    'OFFER → APPLIED', 'OFFER → ONLINE_ASSESSMENT', 'OFFER → INTERVIEW', 'OFFER → REJECTED',
+    'REJECTED → APPLIED', 'REJECTED → ONLINE_ASSESSMENT', 'REJECTED → INTERVIEW', 'REJECTED → OFFER'
+  );

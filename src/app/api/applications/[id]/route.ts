@@ -6,6 +6,7 @@ import { apiError } from "@/lib/api";
 import { applicationEditSchema, applicationMutationSchema } from "@/lib/application-schema";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma } from "@/lib/prisma";
+import { statusTransitionDetail } from "@/lib/status-history";
 import { cleanupExpiredUndoSnapshots } from "@/lib/undo-snapshots";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -86,7 +87,10 @@ async function updateApplication(
             data: {
               applicationId: current.id,
               type: "STATUS_CHANGE",
-              detail: `${current.status} → ${nextStatus}`,
+              fromStatus: current.status,
+              toStatus: nextStatus,
+              detail: statusTransitionDetail(current.status, nextStatus),
+              createdAt: new Date(),
             },
           });
         }

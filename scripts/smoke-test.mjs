@@ -101,7 +101,7 @@ try {
   assert.equal(staleStatusBody.application.revision, application.revision);
   assert.equal(staleStatusBody.application.status, "APPLIED");
   assert.equal(staleStatusBody.application.role, "Edited internship");
-  assert.equal(await prisma.applicationEvent.count({ where: { applicationId } }), 0, "Stale writes must not add status history");
+  assert.equal(await prisma.applicationEvent.count({ where: { applicationId } }), 1, "Stale writes must not add status history beyond the initial event");
 
   const newerStatus = await request(path, "PATCH", { revision: application.revision, status: "INTERVIEW" });
   assert.equal(newerStatus.status, 200);
@@ -112,7 +112,7 @@ try {
   const staleArchiveBody = await staleArchive.json();
   assert.equal(staleArchiveBody.application.status, "INTERVIEW");
   assert.equal(staleArchiveBody.application.archived, false);
-  assert.equal(await prisma.applicationEvent.count({ where: { applicationId } }), 1, "A stale archive must preserve newer status history");
+  assert.equal(await prisma.applicationEvent.count({ where: { applicationId } }), 2, "A stale archive must preserve newer status history");
 
   for (const status of ["ONLINE_ASSESSMENT", "INTERVIEW", "OFFER", "REJECTED", "APPLIED"]) {
     const moved = await request(path, "PATCH", { revision: application.revision, status });
@@ -139,10 +139,10 @@ try {
   const persisted = await prisma.application.findUniqueOrThrow({ where: { id: applicationId }, include: { events: true } });
   assert.equal(persisted.role, "Edited internship");
   assert.equal(persisted.status, "APPLIED");
-  assert.equal(persisted.events.length, 6);
+  assert.equal(persisted.events.length, 7);
   assert.ok(persisted.events.every(({ type }) => type === "STATUS_CHANGE"));
   assert.equal((await request(path, "PATCH", { revision: application.revision, status: "APPLIED" })).status, 200);
-  assert.equal(await prisma.applicationEvent.count({ where: { applicationId } }), 6);
+  assert.equal(await prisma.applicationEvent.count({ where: { applicationId } }), 7);
   assert.equal((await request(path, "DELETE")).status, 204);
   assert.equal((await request(path)).status, 404);
   assert.equal((await request(path, "PATCH", { revision: application.revision, status: "ONLINE_ASSESSMENT" })).status, 404);
