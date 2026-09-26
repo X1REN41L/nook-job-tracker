@@ -6,10 +6,12 @@ import {
 } from "@dnd-kit/core";
 import { Status } from "@prisma/client";
 import { CSS } from "@dnd-kit/utilities";
+import { useLayoutEffect, useRef } from "react";
 
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { formatAppliedDate } from "@/lib/application-date";
 import { BOARD_COLOR_CLASSES, type BoardConfiguration } from "@/lib/board-preferences";
+import { motionIsCurrentlyOff } from "@/lib/general-preferences";
 import type { ApplicationRecord } from "@/types/application";
 
 export function KanbanBoard({ applications, boards, dropDisabled = false, movingId, onEdit }: {
@@ -19,8 +21,43 @@ export function KanbanBoard({ applications, boards, dropDisabled = false, moving
   movingId: string | null;
   onEdit: (application: ApplicationRecord) => void;
 }) {
+  const boardRef = useRef<HTMLDivElement>(null);
+  const beforeUpdate = useRef(new Map<string, { top: number; column: string }>());
+
+  useLayoutEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const cards = board.querySelectorAll<HTMLElement>("[data-kanban-card-id]");
+    const reduced = motionIsCurrentlyOff();
+    if (!reduced) {
+      const motion = getComputedStyle(document.documentElement);
+      const duration = Number.parseFloat(motion.getPropertyValue("--motion-standard")) || 190;
+      const easing = motion.getPropertyValue("--motion-ease").trim();
+      cards.forEach((card) => {
+        const before = beforeUpdate.current.get(card.dataset.kanbanCardId ?? "");
+        const column = card.closest<HTMLElement>("[data-board-status]")?.dataset.boardStatus;
+        if (!before || before.column !== column) return;
+        const shift = before.top - card.getBoundingClientRect().top;
+        if (Math.abs(shift) < 1) return;
+        card.animate(
+          [{ transform: `translate3d(0, ${shift}px, 0)` }, { transform: "none" }],
+          { duration, easing },
+        );
+      });
+    }
+    return () => {
+      const positions = new Map<string, { top: number; column: string }>();
+      board.querySelectorAll<HTMLElement>("[data-kanban-card-id]").forEach((card) => {
+        const id = card.dataset.kanbanCardId;
+        const column = card.closest<HTMLElement>("[data-board-status]")?.dataset.boardStatus;
+        if (id && column) positions.set(id, { top: card.getBoundingClientRect().top, column });
+      });
+      beforeUpdate.current = positions;
+    };
+  }, [applications, boards]);
+
   return (
-    <div className="board-columns flex h-full min-h-0 w-full items-stretch gap-4" aria-label="Application status board">
+    <div ref={boardRef} className="board-columns flex h-full min-h-0 w-full items-stretch gap-4" aria-label="Application status board">
       {boards.map((board) => {
         const items = applications.filter((application) => !application.archived && application.status === board.status);
         return <KanbanColumn key={board.status} board={board} applications={items} dropDisabled={dropDisabled} movingId={movingId} onEdit={onEdit} />;
@@ -39,7 +76,7 @@ function KanbanColumn({ board, applications, dropDisabled, movingId, onEdit }: {
   const scrollRef = useScrollbarActivity<HTMLDivElement>();
   const { isOver, setNodeRef } = useDroppable({ id: board.status, disabled: dropDisabled });
   return (
-    <section ref={setNodeRef} className={`kanban-column flex h-full min-h-0 flex-col rounded-nook-lg border p-3 transition-colors ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
+    <section ref={setNodeRef} data-board-status={board.status} className={`motion-surface kanban-column flex h-full min-h-0 flex-col rounded-nook-lg border p-3 ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
       <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1.5 pt-1">
         <h3 className="flex items-center gap-2 text-sm font-semibold"><span className={`status-dot ${BOARD_COLOR_CLASSES[board.color]}`} />{board.label}</h3>
         <span className="rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-medium text-ink-soft">{applications.length}</span>
@@ -141,7 +178,7 @@ function KanbanCard({ application, disabled, onEdit }: {
 
 export function KanbanCardOverlay({ application }: { application: ApplicationRecord }) {
   return (
-    <div className="card w-[272px] rotate-2 border-forest p-3.5 shadow-nook-lift">
+    <div className="card w-[272px] border-forest p-3.5 shadow-nook-lift">
       <p className="font-serif text-[15px] font-semibold">{application.role}</p>
       <p className="mt-0.5 text-[13px] text-ink-soft">{application.company}</p>
     </div>

@@ -13,35 +13,36 @@ async function readSections(container: Locator) {
 test("both shortcut panels show the same complete five sections on every route", async ({ page }) => {
   const isMac = process.platform === "darwin";
   const expected = [
-    { heading: "Global", rows: [
-      { action: "Open settings", keys: isMac ? "⌘ ⇧ ," : "Ctrl + Shift + ," },
-      { action: "Keyboard shortcuts", keys: "?" },
-      { action: "Toggle sidebar", keys: "B" },
-      { action: "Undo latest status change, archive, or delete", keys: "U" },
-      { action: "Close or cancel", keys: "Esc" },
+    { heading: "General", rows: [
+      { action: "Open Settings", keys: isMac ? "⌘ ⇧ ," : "Ctrl + Shift + ," },
+      { action: "Keyboard Shortcuts", keys: "?" },
+      { action: "Toggle Sidebar", keys: isMac ? "⌘ ⇧ S" : "Ctrl + Shift + S" },
+      { action: "Close / Cancel", keys: "Esc" },
+      { action: "Undo latest action", keys: "U" },
     ] },
-    { heading: "Job Board", rows: [
-      { action: "New Job", keys: "N" },
-      { action: "Search Job Board", keys: "/" },
-      { action: "Archive focused card", keys: isMac ? "⌥ A" : "Alt + Shift + A" },
-      { action: "Delete focused card", keys: "Delete / Backspace" },
+    { heading: "Page Navigation", rows: [
+      { action: "Dashboard", keys: "G D" },
+      { action: "Job Board", keys: "G J" },
+      { action: "Interviews", keys: "G I" },
     ] },
     { heading: "Dashboard", rows: [
-      { action: "Archive focused row", keys: isMac ? "⌥ A" : "Alt + Shift + A" },
-      { action: "Delete focused row", keys: "Delete / Backspace" },
+      { action: "Overview", keys: "G O" },
+      { action: "Analytics", keys: "G A" },
+      { action: "Stale Applications", keys: "G S" },
+    ] },
+    { heading: "Job Board", rows: [
+      { action: "New Job", keys: isMac ? "⌥ N" : "Alt + N" },
+      { action: "Search", keys: "/" },
+      { action: "Archive focused card", keys: isMac ? "⌥ A" : "Alt + A" },
+      { action: "Delete focused card", keys: "Delete / Backspace" },
+      { action: "Previous application", keys: "↑" },
+      { action: "Next application", keys: "↓" },
+      { action: "Previous column", keys: "←" },
+      { action: "Next column", keys: "→" },
     ] },
     { heading: "Interviews", rows: [
-      { action: "Search Interviews", keys: "/" },
-      { action: "Switch Interviews tabs", keys: "← / →" },
-    ] },
-    { heading: "Navigation", rows: [
-      { action: "Go to Dashboard", keys: "G D" },
-      { action: "Go to Job Board", keys: "G J" },
-      { action: "Go to Interviews", keys: "G I" },
-      { action: "Focus previous application", keys: "↑" },
-      { action: "Focus next application", keys: "↓" },
-      { action: "Focus card in previous column", keys: "←" },
-      { action: "Focus card in next column", keys: "→" },
+      { action: "Search", keys: "/" },
+      { action: "Switch tabs", keys: "← / →" },
     ] },
   ];
 
@@ -80,7 +81,7 @@ async function expectRowsAligned(container: Locator) {
       verticalCentersApart: Math.abs((label.top + label.bottom) / 2 - (key.top + key.bottom) / 2),
     };
   }));
-  expect(rows).toHaveLength(20);
+  expect(rows).toHaveLength(21);
   for (const row of rows) {
     expect(row.childCount).toBe(2);
     expect(row.labelRight).toBeLessThan(row.keyLeft);

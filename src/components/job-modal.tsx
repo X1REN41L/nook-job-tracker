@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { Status } from "@prisma/client";
 
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
+import { StableButtonLabel } from "@/components/stable-button-label";
 
 export type JobFormState = {
   company: string;
@@ -86,12 +87,12 @@ export function JobModal({
 
   return (
     <div
-      className="scrollbar-styled fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-modal-backdrop/40 p-4 py-[6vh] backdrop-blur-[2px]"
+      className="motion-dialog-backdrop scrollbar-styled fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-modal-backdrop/40 p-4 py-[6vh] backdrop-blur-[2px]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) onClose();
       }}
     >
-      <div ref={dialogRef} tabIndex={-1} className="w-full max-w-md rounded-nook-lg border border-line bg-paper shadow-nook-lift outline-none" role="dialog" aria-modal="true" aria-labelledby="job-modal-title" aria-busy={saving}>
+      <div ref={dialogRef} tabIndex={-1} className="motion-dialog-panel w-full max-w-md rounded-nook-lg border border-line bg-paper shadow-nook-lift outline-none" role="dialog" aria-modal="true" aria-labelledby="job-modal-title" aria-busy={saving}>
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <h2 className="font-serif text-lg font-semibold" id="job-modal-title">
             {editing ? "Edit job" : "Add a job"}
@@ -99,7 +100,7 @@ export function JobModal({
           <button
             aria-label="Close"
             disabled={saving}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft transition hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
             onClick={onClose}
             type="button"
           >
@@ -223,7 +224,7 @@ export function JobModal({
               Cancel
             </button>
             <button className="btn-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper" disabled={saving} type="submit">
-              {saving ? "Saving…" : "Save job"}
+              <StableButtonLabel label="Save job" busyLabel="Saving…" busy={saving} />
             </button>
           </div>
         </form>

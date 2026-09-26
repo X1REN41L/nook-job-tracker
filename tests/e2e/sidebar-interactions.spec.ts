@@ -91,12 +91,10 @@ test("archives a focused application and restores it from Archive", async ({ pag
   await page.goto("/");
   const card = page.getByLabel(`Edit or move ${application.role} at ${application.company}`, { exact: true });
   await card.focus();
-  const isMac = await page.evaluate(() => /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent));
-
   const archivedResponse = page.waitForResponse((response) =>
     response.request().method() === "PATCH" && response.url().endsWith(`/api/applications/${application.id}`),
   );
-  await page.keyboard.press(isMac ? "Alt+a" : "Alt+Shift+a");
+  await page.keyboard.press("Alt+a");
   const archived = await archivedResponse;
   expect(archived.status()).toBe(200);
   expect((await archived.json()).application.archived).toBe(true);

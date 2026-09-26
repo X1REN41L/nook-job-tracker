@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 import { useDialogFocusTrap } from "@/hooks/use-dialog-focus-trap";
+import { StableButtonLabel } from "@/components/stable-button-label";
 import type { ApplicationRecord } from "@/types/application";
 
 export function DeleteDialog({ application, deleting, onCancel, onConfirm, returnFocusRef }: {
@@ -35,13 +36,13 @@ export function DeleteDialog({ application, deleting, onCancel, onConfirm, retur
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onCancel]);
 
-  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleting) onCancel(); }}>
-    <section ref={dialogRef} aria-describedby="delete-description" aria-labelledby="delete-title" aria-modal="true" className="w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none" role="alertdialog" tabIndex={-1}>
+  return <div className="motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleting) onCancel(); }}>
+    <section ref={dialogRef} aria-describedby="delete-description" aria-labelledby="delete-title" aria-modal="true" className="motion-dialog-panel w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none" role="alertdialog" tabIndex={-1}>
       <h2 className="font-serif text-lg font-semibold" id="delete-title">Delete application?</h2>
       <p className="mt-2 text-sm leading-6 text-ink-soft" id="delete-description">Delete the <span className="font-medium text-ink">{application.role}</span> application at <span className="font-medium text-ink">{application.company}</span>. You can restore it for 10 minutes after deleting it.</p>
       <div className="mt-6 flex justify-end gap-3">
         <button ref={cancelRef} className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={deleting} onClick={onCancel} type="button">Cancel</button>
-        <button className="rounded-nook-sm bg-rose px-4 py-2 text-sm font-medium text-cream transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:opacity-60" disabled={deleting} onClick={onConfirm} type="button">{deleting ? "Deleting…" : "Delete"}</button>
+        <button className="rounded-nook-sm bg-rose px-4 py-2 text-sm font-medium text-cream motion-interactive hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:opacity-60" disabled={deleting} onClick={onConfirm} type="button"><StableButtonLabel label="Delete" busyLabel="Deleting…" busy={deleting} /></button>
       </div>
     </section>
   </div>;

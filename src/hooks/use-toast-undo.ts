@@ -206,6 +206,12 @@ export function useToastUndo({ onUndo }: { onUndo: (undo: ToastUndo, restoreKeyb
     return performUndo(deleteRecoveryRef.current ?? undefined, restoreKeyboardFocus);
   }
 
+  function clearApplicationUndo() {
+    dismissToast();
+    deleteRecoveryRef.current = null;
+    setDeleteRecoveryState(null);
+  }
+
   return {
     toast,
     deleteRecovery,
@@ -216,5 +222,6 @@ export function useToastUndo({ onUndo }: { onUndo: (undo: ToastUndo, restoreKeyb
     resumeUndoToastOnTab,
     undoLatestChange,
     undoDeleteRecovery,
+    clearApplicationUndo,
   };
 }

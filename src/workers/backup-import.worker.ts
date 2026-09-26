@@ -24,7 +24,7 @@ async function validateBackupFile(file: File) {
   }
 
   if (!backupSnapshotSchema.safeParse(contents).success) {
-    post({ ok: false, error: "Unsupported or invalid Nook version 2 backup." });
+    post({ ok: false, error: "Unsupported or invalid Nook version 1 backup." });
     return;
   }
 

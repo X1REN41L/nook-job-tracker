@@ -55,7 +55,6 @@ prisma/migrations/
 .idea/
 
 # local tooling output
-/graphify-out/
 
 # audit files
 /AUDIT.md
@@ -67,3 +66,4 @@ prisma/migrations/
 !prisma/migrations/**
 prisma/migrations/.DS_Store
 /screenshots/
+AGENTS.md

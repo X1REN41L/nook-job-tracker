@@ -58,3 +58,53 @@ test("keeps the expanded sidebar and collapsed rail on the left at desktop and m
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add job" })).toBeVisible();
 });
+
+test("keeps navigation and brand icons the same size and height when the sidebar collapses", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/dashboard");
+  await page.addStyleTag({ content: ".app-workspace, .sidebar-panel, .sidebar-content, .sidebar-edge-tab { transition-duration: 0s !important; transition-delay: 0s !important; }" });
+
+  const geometry = () => page.evaluate(() => {
+    const navigation = [...document.querySelectorAll<HTMLElement>('.sidebar-panel nav[aria-label="Main navigation"]')]
+      .find((element) => getComputedStyle(element).visibility === "visible");
+    if (!navigation) throw new Error("Main navigation is missing");
+    const items = [...navigation.querySelectorAll<HTMLElement>("a, button")];
+    const rect = (element: Element) => element.getBoundingClientRect();
+    const dimensions = (element: Element) => ({ width: rect(element).width, height: rect(element).height });
+    const center = (element: Element) => ({ x: rect(element).x + rect(element).width / 2, y: rect(element).y + rect(element).height / 2 });
+    return {
+      items: items.map((item) => {
+        const icon = item.querySelector("svg")!;
+        const container = icon.parentElement!;
+        return { button: dimensions(item), icon: dimensions(icon), container: dimensions(container), iconCenter: center(icon), containerCenter: center(container), buttonCenter: center(item) };
+      }),
+      logo: dimensions(document.querySelector(".sidebar-collapsed .sidebar-logo-mark, .sidebar-brand-row > span")!),
+      toggleIcon: dimensions(document.querySelector(".sidebar-collapsed .sidebar-expand-mark svg, .sidebar-brand-row button svg")!),
+    };
+  });
+
+  const expanded = await geometry();
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  const collapsed = await geometry();
+
+  expect(expanded.items).toHaveLength(4);
+  expect(collapsed.items).toHaveLength(4);
+  for (let index = 0; index < 4; index++) {
+    const before = expanded.items[index];
+    const after = collapsed.items[index];
+    expect(before.icon).toEqual({ width: 16, height: 16 });
+    expect(after.icon).toEqual(before.icon);
+    expect(before.container).toEqual({ width: 20, height: 20 });
+    expect(after.container).toEqual(before.container);
+    expect(before.iconCenter).toEqual(before.containerCenter);
+    expect(after.iconCenter).toEqual(after.containerCenter);
+    expect(after.containerCenter).toEqual(after.buttonCenter);
+    expect(after.button).toEqual({ width: 36, height: 36 });
+    expect(after.iconCenter.y).toBe(before.iconCenter.y);
+  }
+  expect(new Set(expanded.items.map((item) => item.iconCenter.x)).size).toBe(1);
+  expect(new Set(collapsed.items.map((item) => item.iconCenter.x)).size).toBe(1);
+  expect(expanded.logo).toEqual(collapsed.logo);
+  expect(expanded.toggleIcon).toEqual(collapsed.toggleIcon);
+});

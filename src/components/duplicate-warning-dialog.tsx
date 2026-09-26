@@ -8,6 +8,7 @@ import type { DuplicateMatch } from "@/lib/duplicate-match";
 import { STATUS_META } from "@/lib/status-meta";
 import type { ApplicationRecord } from "@/types/application";
 import { useDialogFocusTrap } from "@/hooks/use-dialog-focus-trap";
+import { StableButtonLabel } from "@/components/stable-button-label";
 
 export function DuplicateWarningDialog({ boards, editing, fromImport = false, match, saving, onAddAnyway, onDismiss, onViewExisting }: {
   boards: BoardConfiguration[];
@@ -51,7 +52,7 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]"
+      className="motion-dialog-backdrop fixed inset-0 z-[70] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]"
       onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onDismiss(); }}
     >
       <section
@@ -59,7 +60,7 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
         aria-describedby="duplicate-description"
         aria-labelledby="duplicate-title"
         aria-modal="true"
-        className="w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none"
+        className="motion-dialog-panel w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none"
         role="dialog"
         tabIndex={-1}
       >
@@ -70,7 +71,7 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
           </div>
           <button
             aria-label="Back to job form"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-soft transition hover:bg-cream-2"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-soft motion-interactive hover:bg-cream-2"
             disabled={saving}
             onClick={onDismiss}
             type="button"
@@ -108,7 +109,7 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
             {fromImport ? "Cancel import" : "View existing"}
           </button>
           <button className="btn-primary" disabled={saving} onClick={onAddAnyway} type="button">
-            {saving ? "Saving…" : editing ? "Save anyway" : "Add anyway"}
+            <StableButtonLabel label={editing ? "Save anyway" : "Add anyway"} busyLabel="Saving…" busy={saving} />
           </button>
         </div>
       </section>

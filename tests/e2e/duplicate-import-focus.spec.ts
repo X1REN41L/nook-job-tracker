@@ -28,7 +28,7 @@ test("duplicate import gives the warning dialog focus while Settings stays open"
       name: "duplicate-backup.json",
       mimeType: "application/json",
       buffer: Buffer.from(JSON.stringify({ ...exported, settings: {
-        theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [],
+        ...exported.settings, theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [],
         sidebarCollapsed: false, archivedExpanded: false,
       }, applications: [{ ...exported.applications.find((item: { id: string }) => item.id === saved.id), id: randomUUID() }] })),
     });

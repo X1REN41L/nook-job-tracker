@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: BACKUP_TOO_MANY_APPLICATIONS_ERROR }, { status: 413 });
     }
     const parsed = backupSnapshotSchema.safeParse(contents);
-    if (!parsed.success) return validationErrorResponse(parsed.error, "Unsupported or invalid Nook version 2 backup");
+    if (!parsed.success) return validationErrorResponse(parsed.error, "Unsupported or invalid Nook version 1 backup");
     const records = parsed.data.applications;
     const ids = records.map((item) => item.id);
     const eventIds = records.flatMap((item) => item.events.map((event) => event.id));

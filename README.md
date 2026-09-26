@@ -51,13 +51,13 @@ next-themes for appearance preferences, and Tailwind CSS for styling.
 ## Backup & Restore
 
 Open Settings, then Backup & Restore. Select **Export JSON** to download a
-version 2 backup of all stored applications, IDs, timestamps, event history,
-prompt state, and browser settings. Select **Import JSON** to merge a version 2
+version 1 backup of all stored applications, IDs, timestamps, event history,
+prompt state, and browser settings. Select **Import JSON** to merge a current version 1
 backup. Import creates missing IDs, skips identical IDs, and rejects changed
 records with the same ID (HTTP 409) without making partial changes. Existing
 applications are never deleted. Similar applications with different IDs require
-confirmation. An empty application list can restore settings alone. Older
-version 1 and array backups are unsupported. Settings are stored in this
+confirmation. An empty application list can restore settings alone. Outdated
+development backups and array backups are unsupported. Settings are stored in this
 browser; if browser storage fails, the import reports the application result
 separately.
 

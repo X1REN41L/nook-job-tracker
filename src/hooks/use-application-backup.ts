@@ -102,7 +102,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
         }
       }
       setImportProgress({ current: next.records.length, total: next.records.length });
-      const result = await insertApplications({ version: 2, applications: next.records, settings: next.settings });
+      const result = await insertApplications({ version: 1, applications: next.records, settings: next.settings });
       try {
         applyBackupSettings(next.settings, setTheme);
         showToast(`Imported ${result.created.length} applications; skipped ${result.skippedIds.length}; settings restored`);

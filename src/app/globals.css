@@ -53,6 +53,14 @@
 :root.light { color-scheme: light; }
 :root.dark { color-scheme: dark; }
 
+:root {
+  --motion-fast: 130ms;
+  --motion-standard: 190ms;
+  --motion-structural: 240ms;
+  --motion-exit: 160ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Dark-mode overrides for every token above. Utilities using these tokens
    (bg-cream, text-ink, border-line, bg-gold-tint, shadow-nook, ...) pick
    these up automatically wherever `.dark` is an ancestor. */
@@ -159,7 +167,7 @@ body {
   --scrollbar-thumb: transparent;
   scrollbar-color: transparent transparent;
   scrollbar-gutter: auto;
-  transition: scrollbar-color 160ms ease;
+  transition: scrollbar-color var(--motion-fast) var(--motion-ease);
 }
 
 .kanban-column-scroll {
@@ -193,7 +201,7 @@ body {
 .board-scroll.scrollbar-styled::-webkit-scrollbar-thumb,
 .kanban-column-scroll.scrollbar-styled::-webkit-scrollbar-thumb {
   background: transparent;
-  transition: background-color 160ms ease;
+  transition: background-color var(--motion-fast) var(--motion-ease);
 }
 
 .board-scroll.scrollbar-styled:hover::-webkit-scrollbar-thumb,
@@ -246,8 +254,6 @@ body.nook-dragging * {
 }
 
 .app-workspace {
-  --sidebar-motion-duration: 220ms;
-  --sidebar-motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
   --sidebar-width: 320px;
   --sidebar-rail-width: 50px;
   --sidebar-nav-inset: 14px;
@@ -260,8 +266,7 @@ body.nook-dragging * {
   left: 0;
   z-index: 20;
   width: min(320px, calc(100vw - 48px));
-  transition: transform var(--sidebar-motion-duration) var(--sidebar-motion-easing);
-  will-change: transform;
+  transition: width var(--motion-structural) var(--motion-ease);
 }
 
 .sidebar-resize-handle {
@@ -269,7 +274,7 @@ body.nook-dragging * {
 }
 
 .sidebar-collapsed .sidebar-panel {
-  transform: translateX(calc(-100% + var(--sidebar-rail-width)));
+  width: var(--sidebar-rail-width);
 }
 
 .sidebar-content {
@@ -277,7 +282,7 @@ body.nook-dragging * {
   opacity: 1;
   visibility: visible;
   transition:
-    opacity var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+    opacity var(--motion-standard) var(--motion-ease),
     visibility 0s linear 0s;
 }
 
@@ -286,55 +291,86 @@ body.nook-dragging * {
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity var(--sidebar-motion-duration) var(--sidebar-motion-easing),
-    visibility 0s linear var(--sidebar-motion-duration);
+    opacity var(--motion-standard) var(--motion-ease),
+    visibility 0s linear var(--motion-standard);
 }
 
-.sidebar-edge-tab {
-  background: linear-gradient(135deg, var(--color-forest), var(--color-forest-deep));
-  border-radius: 10px;
+.sidebar-flex-section {
+  display: flex;
+  flex: 0 0 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  transition: flex-grow var(--motion-structural) var(--motion-ease);
+}
+.sidebar-all-section { min-height: 49px; }
+.sidebar-archive-section { min-height: 45px; }
+.sidebar-flex-section.is-expanded { flex-shrink: 1; }
+.sidebar-all-section.is-expanded { flex-grow: 65; }
+.sidebar-archive-section.is-expanded { flex-grow: 35; }
+.sidebar-flex-section:not(.is-expanded) .sidebar-expandable-body {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 140ms ease, visibility 140ms ease;
+  transition: opacity var(--motion-standard) var(--motion-ease),
+    visibility 0s linear var(--motion-standard);
 }
-
-.sidebar-collapsed .sidebar-edge-tab {
-  visibility: visible;
+.sidebar-expandable-body {
   opacity: 1;
-  pointer-events: auto;
-}
-
-.sidebar-logo-mark,
-.sidebar-expand-mark {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 120ms ease;
+  visibility: visible;
+  transition: opacity var(--motion-standard) var(--motion-ease), visibility 0s;
 }
 
 .sidebar-brand-row {
-  padding-inline: var(--sidebar-nav-inset);
+  width: var(--sidebar-width);
+  padding-inline: calc((var(--sidebar-rail-width) - 36px) / 2);
 }
 
 .sidebar-main-nav {
-  padding-inline: var(--sidebar-nav-inset);
+  padding-inline: calc((var(--sidebar-rail-width) - 36px) / 2);
 }
 
-.sidebar-expand-mark {
-  opacity: 0;
+.sidebar-nav-icon {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  align-items: center;
+  justify-content: center;
 }
 
-.sidebar-edge-tab:hover .sidebar-logo-mark,
-.sidebar-edge-tab:focus-visible .sidebar-logo-mark {
-  opacity: 0;
-}
-
-.sidebar-edge-tab:hover .sidebar-expand-mark,
-.sidebar-edge-tab:focus-visible .sidebar-expand-mark {
+.sidebar-reveal,
+.sidebar-header-toggle {
   opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
+  transition:
+    opacity var(--motion-standard) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease),
+    visibility 0s linear 0s;
+}
+
+.sidebar-collapsed .sidebar-reveal,
+.sidebar-collapsed .sidebar-header-toggle {
+  opacity: 0;
+  transform: translateX(-6px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-standard) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease),
+    visibility 0s linear var(--motion-standard);
+}
+
+.sidebar-logo-button {
+  left: calc((var(--sidebar-rail-width) - 36px) / 2);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.sidebar-collapsed .sidebar-logo-button {
+  visibility: visible;
+  pointer-events: auto;
 }
 
 /* Keep the final board column clear of the sidebar's edge, in either state. */
@@ -365,8 +401,7 @@ body.nook-dragging * {
 @media (min-width: 768px) {
   .app-workspace {
     grid-template-columns: var(--sidebar-drag-width, var(--sidebar-width)) minmax(0, 1fr);
-    transition: grid-template-columns var(--sidebar-motion-duration) var(--sidebar-motion-easing);
-    will-change: grid-template-columns;
+    transition: grid-template-columns var(--motion-structural) var(--motion-ease);
   }
 
   .app-workspace.sidebar-collapsed {
@@ -400,7 +435,7 @@ body.nook-dragging * {
     right: 0;
     width: 4px;
     background: transparent;
-    transition: background-color 120ms ease;
+    transition: background-color var(--motion-fast) var(--motion-ease);
   }
 
   .sidebar-resize-handle:hover::after,
@@ -423,7 +458,11 @@ body.nook-dragging * {
   .sidebar-panel {
     position: relative;
     width: auto;
-    transform: none !important;
+    transition: none;
+  }
+
+  .sidebar-collapsed .sidebar-panel {
+    width: auto;
   }
 }
 
@@ -434,6 +473,10 @@ body.sidebar-resizing-active * {
 }
 
 @media (max-width: 767px) {
+  .sidebar-brand-row {
+    width: min(320px, calc(100vw - 48px));
+  }
+
   /* Keep the collapsed rail in its own column instead of covering the
      board, preserving the same side padding on narrow screens too. */
   .app-workspace.sidebar-collapsed {
@@ -447,29 +490,32 @@ body.sidebar-resizing-active * {
 
 @layer components {
   .input {
-    @apply w-full rounded-nook-sm border border-line bg-cream px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-soft focus:border-forest focus:ring-2 focus:ring-forest-tint;
+    @apply w-full rounded-nook-sm border border-line bg-cream px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-soft focus:border-forest focus:ring-2 focus:ring-forest-tint;
+    transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
   }
 
   .card {
-    @apply rounded-nook border border-line bg-paper shadow-nook transition-shadow hover:shadow-nook-lift;
+    @apply rounded-nook border border-line bg-paper shadow-nook hover:shadow-nook-lift;
+    transition: box-shadow var(--motion-fast) var(--motion-ease);
   }
 
   .kanban-card-focus:focus-visible {
     outline: none;
     border-color: var(--color-forest);
     box-shadow: 0 0 0 2px var(--color-forest-tint), var(--shadow-nook);
+    transition: none;
   }
 
   .btn-primary {
-    @apply rounded-nook-sm bg-forest px-4 py-2 text-sm font-medium text-cream transition hover:bg-forest-deep disabled:opacity-60;
+    @apply rounded-nook-sm bg-forest px-4 py-2 text-sm font-medium text-cream hover:bg-forest-deep disabled:opacity-60;
   }
 
   .btn-ghost {
-    @apply rounded-nook-sm border border-line px-4 py-2 text-sm font-medium text-ink transition hover:bg-cream-2 disabled:opacity-60;
+    @apply rounded-nook-sm border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-cream-2 disabled:opacity-60;
   }
 
   .btn-danger {
-    @apply rounded-nook-sm border border-rose px-4 py-2 text-sm font-medium text-rose transition hover:bg-rose-tint disabled:opacity-60;
+    @apply rounded-nook-sm border border-rose px-4 py-2 text-sm font-medium text-rose hover:bg-rose-tint disabled:opacity-60;
   }
 
   .badge {
@@ -481,22 +527,61 @@ body.sidebar-resizing-active * {
   }
 
   .icon-btn {
-    @apply flex h-9 w-9 items-center justify-center rounded-nook-sm border border-line bg-paper text-ink-soft transition hover:bg-cream-2 hover:text-ink;
+    @apply flex h-9 w-9 items-center justify-center rounded-nook-sm border border-line bg-paper text-ink-soft hover:bg-cream-2 hover:text-ink;
   }
 
 }
+
+/* Property lists keep focus rings and theme changes immediate. */
+.motion-interactive,
+.btn-primary,
+.btn-ghost,
+.btn-danger,
+.icon-btn {
+  transition: background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease);
+}
+
+.motion-surface {
+  transition: background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.motion-chevron { transition: transform var(--motion-standard) var(--motion-ease); }
+.board-reorder-neighbor { transition: transform var(--motion-standard) var(--motion-ease); }
+.motion-small-reveal { animation: nook-small-reveal var(--motion-standard) var(--motion-ease) both; }
+@keyframes nook-small-reveal { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+.motion-dialog-backdrop { animation: nook-backdrop-in var(--motion-standard) var(--motion-ease) both; }
+.motion-dialog-panel { animation: nook-dialog-in var(--motion-structural) var(--motion-ease) both; }
+[data-motion-presence="closing"] .motion-dialog-backdrop {
+  animation: nook-backdrop-out var(--motion-exit) var(--motion-ease) both;
+  pointer-events: none;
+}
+[data-motion-presence="closing"] .motion-dialog-panel {
+  animation: nook-dialog-out var(--motion-exit) var(--motion-ease) both;
+  pointer-events: none;
+}
+@keyframes nook-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nook-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes nook-dialog-in { from { opacity: 0; transform: translateY(5px) scale(0.99); } to { opacity: 1; transform: none; } }
+@keyframes nook-dialog-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(3px) scale(0.995); } }
 
 .nook-toast-wrap {
   position: fixed;
   bottom: 22px;
   left: 50%;
-  transform: translateX(-50%) translateY(20px);
+  transform: translateX(-50%) translateY(6px);
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity var(--motion-exit) var(--motion-ease), transform var(--motion-exit) var(--motion-ease);
   z-index: 100;
   pointer-events: none;
 }
 .nook-toast-wrap.nook-toast-show {
+  transition-duration: var(--motion-standard);
   opacity: 1;
   transform: translateX(-50%) translateY(0);
   pointer-events: auto;
@@ -523,8 +608,21 @@ body.sidebar-resizing-active * {
   font-weight: 700;
 }
 @media (prefers-reduced-motion: reduce) {
-  :root:not([data-motion="reduced"]) *, :root:not([data-motion="reduced"]) *::before, :root:not([data-motion="reduced"]) *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
-  :root:not([data-motion="reduced"]) { scroll-behavior: auto !important; }
+  :root:not([data-motion="on"]):not([data-motion="off"]) *, :root:not([data-motion="on"]):not([data-motion="off"]) *::before, :root:not([data-motion="on"]):not([data-motion="off"]) *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
+  :root:not([data-motion="on"]):not([data-motion="off"]) .motion-dialog-panel { transform: none !important; }
+  :root:not([data-motion="on"]):not([data-motion="off"]) .sidebar-reveal, :root:not([data-motion="on"]):not([data-motion="off"]) .sidebar-header-toggle, :root:not([data-motion="on"]):not([data-motion="off"]) .nook-toast-wrap { transition: opacity var(--motion-fast) var(--motion-ease) !important; }
+  :root:not([data-motion="on"]):not([data-motion="off"]) { scroll-behavior: auto !important; }
 }
-:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
-:root[data-motion="reduced"] { scroll-behavior: auto !important; }
+:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
+:root[data-motion="off"] .motion-dialog-panel { transform: none !important; }
+:root[data-motion="off"] .sidebar-reveal, :root[data-motion="off"] .sidebar-header-toggle, :root[data-motion="off"] .nook-toast-wrap { transition: opacity var(--motion-fast) var(--motion-ease) !important; }
+:root[data-motion="off"] { scroll-behavior: auto !important; }
+
+:root[data-motion="off"] .sidebar-reveal,
+:root[data-motion="off"] .sidebar-header-toggle { transform: none; }
+:root[data-motion="off"] .nook-toast-wrap { transform: translateX(-50%); }
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="on"]):not([data-motion="off"]) .sidebar-reveal,
+  :root:not([data-motion="on"]):not([data-motion="off"]) .sidebar-header-toggle { transform: none; }
+  :root:not([data-motion="on"]):not([data-motion="off"]) .nook-toast-wrap { transform: translateX(-50%); }
+}

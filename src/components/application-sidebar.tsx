@@ -4,7 +4,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Status } from "@prisma/client";
 import Link from "next/link";
-import { Archive, CalendarClock, Columns3, LayoutDashboard, Settings } from "lucide-react";
+import { Archive, CalendarClock, Columns3, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
 import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
@@ -44,7 +44,17 @@ type ApplicationSidebarProps = {
   onRestore: (application: ApplicationRecord) => Promise<void>;
 };
 
-const mainNavItemClass = "box-border flex h-9 w-full min-w-0 cursor-pointer items-center gap-3 rounded-nook-sm px-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest [&>svg]:shrink-0 [&>span:first-of-type]:min-w-0 [&>span:first-of-type]:truncate";
+const navRowClass = "box-border flex h-9 w-full min-w-0 shrink-0 cursor-pointer items-center rounded-nook-sm text-left text-sm motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
+const mainNavItemClass = `sidebar-nav-row ${navRowClass} p-0`;
+const dashboardSectionItemClass = `${navRowClass} border px-2`;
+
+function MainNavIcon({ Icon }: { Icon: LucideIcon }) {
+  return (
+    <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center">
+      <Icon className="h-4 w-4 shrink-0" size={16} strokeWidth={1.8} />
+    </span>
+  );
+}
 
 export function ApplicationSidebar({
   boards,
@@ -83,12 +93,8 @@ export function ApplicationSidebar({
   const allApplicationsContentId = useId();
   const allApplicationsHeadingId = useId();
   const activeApplicationsCount = totalApplications - archivedItems.length;
-  const allApplicationsSectionClassName = allApplicationsExpanded
-    ? archivedExpanded ? "min-h-0 flex flex-col flex-[65_1_0%]" : "min-h-0 flex flex-col flex-1"
-    : `shrink-0 ${archivedExpanded ? "" : "mt-auto"}`;
-  const archivedSectionClassName = archivedExpanded
-    ? allApplicationsExpanded ? "min-h-0 flex-[35_1_0%]" : "min-h-0 flex-1"
-    : "shrink-0";
+  const allApplicationsSectionClassName = `sidebar-flex-section sidebar-all-section ${allApplicationsExpanded ? "is-expanded" : "mt-auto"}`;
+  const archivedSectionClassName = `sidebar-flex-section sidebar-archive-section ${archivedExpanded ? "is-expanded" : ""}`;
 
   useLayoutEffect(() => {
     if (pendingToggleFocusRef.current !== collapsed) return;
@@ -138,23 +144,25 @@ export function ApplicationSidebar({
             collapsed={collapsed}
             onRailPointerDown={onResizePointerDown}
             onOpenArchive={onOpenArchive}
-            onOpenSettings={onOpenSettings}
-            onToggle={handleToggleSidebar}
             page={page}
-            settingsTriggerRef={settingsTriggerRef}
-            toggleButtonRef={expandButtonRef}
           />
 
-          <div className="sidebar-content flex h-full min-h-0 flex-col" inert={collapsed}>
-          <div className="sidebar-brand-row flex shrink-0 items-center gap-3 py-4">
+          <div className="sidebar-brand-row relative z-10 flex shrink-0 items-center py-4">
             <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-forest to-forest-deep font-serif text-lg leading-none text-cream">
               N
             </span>
-            <p className="min-w-0 flex-1 font-serif text-base font-semibold leading-tight tracking-tight">Nook</p>
+            <button
+              ref={expandButtonRef}
+              aria-label="Expand sidebar"
+              className="sidebar-logo-button absolute top-4 h-9 w-9 rounded-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+              onClick={handleToggleSidebar}
+              type="button"
+            />
+            <p className="sidebar-reveal ml-3 whitespace-nowrap font-serif text-base font-semibold leading-tight tracking-tight">Nook</p>
             <button
               ref={collapseButtonRef}
               aria-label="Collapse sidebar"
-              className="icon-btn h-8 w-8 shrink-0"
+              className="sidebar-header-toggle icon-btn absolute right-[14px] h-8 w-8"
               onClick={handleToggleSidebar}
               type="button"
             >
@@ -162,55 +170,65 @@ export function ApplicationSidebar({
             </button>
           </div>
 
-          <nav aria-label="Main navigation" className="sidebar-main-nav shrink-0 border-b border-line py-3">
+          <nav aria-label="Main navigation" className="sidebar-main-nav relative z-10 shrink-0 border-b border-line py-3">
             <div className="flex flex-col gap-1">
               <Link
+                aria-current={page === "dashboard" ? "page" : undefined}
+                aria-label="Dashboard"
                 className={`${mainNavItemClass} ${page === "dashboard" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
                 href="/dashboard"
+                title={collapsed ? "Dashboard" : undefined}
               >
-                <LayoutDashboard aria-hidden="true" size={17} strokeWidth={1.8} />
-                <span>Dashboard</span>
+                <span className="sidebar-nav-icon"><MainNavIcon Icon={LayoutDashboard} /></span>
+                <span className="sidebar-reveal ml-3 whitespace-nowrap">Dashboard</span>
               </Link>
               <Link
                 aria-current={page === "job-board" ? "page" : undefined}
+                aria-label="Job Board"
                 className={`${mainNavItemClass} ${page === "job-board" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
                 href="/jobs"
+                title={collapsed ? "Job Board" : undefined}
               >
-                <Columns3 aria-hidden="true" size={17} strokeWidth={1.8} />
-                <span>Job Board</span>
+                <span className="sidebar-nav-icon"><MainNavIcon Icon={Columns3} /></span>
+                <span className="sidebar-reveal ml-3 whitespace-nowrap">Job Board</span>
               </Link>
               <Link
                 aria-current={page === "interviews" ? "page" : undefined}
+                aria-label="Interviews"
                 className={`${mainNavItemClass} ${page === "interviews" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
                 href="/interviews"
+                title={collapsed ? "Interviews" : undefined}
               >
-                <CalendarClock aria-hidden="true" size={17} strokeWidth={1.8} />
-                <span className="min-w-0 flex-1">Interviews</span>
+                <span className="sidebar-nav-icon"><MainNavIcon Icon={CalendarClock} /></span>
+                <span className="sidebar-reveal ml-3 whitespace-nowrap">Interviews</span>
                 <span
                   aria-hidden="true"
-                  className="ml-auto min-w-5 rounded-full border border-line bg-cream px-1.5 py-0.5 text-center text-[11px] font-medium leading-none text-ink-soft"
+                  className="sidebar-reveal ml-auto mr-2 min-w-5 rounded-full border border-line bg-cream px-1.5 py-0.5 text-center text-[11px] font-medium leading-none text-ink-soft"
                   data-testid="upcoming-interview-count"
                 >
                   {upcomingInterviewCount}
                 </span>
               </Link>
               <button
-                ref={!collapsed ? settingsTriggerRef : undefined}
+                ref={settingsTriggerRef}
                 aria-label="Settings"
-                className={`${mainNavItemClass} text-left text-ink-soft hover:bg-cream-2 hover:text-ink`}
+                className={`${mainNavItemClass} text-ink-soft hover:bg-cream-2 hover:text-ink`}
                 onClick={onOpenSettings}
+                title={collapsed ? "Settings" : undefined}
                 type="button"
               >
-                <Settings aria-hidden="true" size={17} strokeWidth={1.8} />
-                <span>Settings</span>
+                <span className="sidebar-nav-icon"><MainNavIcon Icon={Settings} /></span>
+                <span className="sidebar-reveal ml-3 whitespace-nowrap">Settings</span>
               </button>
             </div>
           </nav>
 
+          <div className="sidebar-content flex min-h-0 flex-1 flex-col" inert={collapsed}>
+
           {page === "job-board" && (
             <>
               <div className={allApplicationsSectionClassName}>
-                <div className={`shrink-0 px-4.5 ${allApplicationsExpanded ? "pt-4" : "border-b border-line py-3"}`}>
+                <div className={`shrink-0 border-b px-4.5 py-3 ${allApplicationsExpanded ? "border-transparent" : "border-line"}`}>
                   <h2 aria-label="All applications" className="font-serif text-base font-semibold outline-none" id={allApplicationsHeadingId} ref={headingRef} tabIndex={-1}>
                     <button
                       aria-controls={allApplicationsContentId}
@@ -225,7 +243,7 @@ export function ApplicationSidebar({
                       </span>
                       <svg
                         aria-hidden="true"
-                        className={`ml-auto text-ink-soft transition-transform ${allApplicationsExpanded ? "rotate-180" : ""}`}
+                        className={`ml-auto text-ink-soft motion-chevron ${allApplicationsExpanded ? "rotate-180" : ""}`}
                         width="16"
                         height="16"
                         viewBox="0 0 24 24"
@@ -243,8 +261,10 @@ export function ApplicationSidebar({
 
                 <section
                   aria-labelledby={allApplicationsHeadingId}
-                  className={allApplicationsExpanded ? "min-h-0 flex flex-1 flex-col" : "hidden"}
+                  aria-hidden={!allApplicationsExpanded}
+                  className="sidebar-expandable-body min-h-0 flex flex-1 flex-col"
                   id={allApplicationsContentId}
+                  inert={!allApplicationsExpanded}
                 >
                   <div className="shrink-0 border-b border-line px-4.5 pb-4 pt-2.5">
                     <div className="relative">
@@ -265,7 +285,7 @@ export function ApplicationSidebar({
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
                       <button
                         aria-pressed={activeFilter === "all"}
-                        className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === "all" ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
+                        className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === "all" ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
                         onClick={() => onFilterChange("all")}
                         tabIndex={0}
                         type="button"
@@ -276,7 +296,7 @@ export function ApplicationSidebar({
                         <button
                           key={board.status}
                           aria-pressed={activeFilter === board.status}
-                          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === board.status ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
+                          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === board.status ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
                           onClick={() => onFilterChange(board.status)}
                           tabIndex={0}
                           type="button"
@@ -338,7 +358,7 @@ export function ApplicationSidebar({
                   <Link
                     key={section}
                     aria-current={dashboardSection === section ? "page" : undefined}
-                    className={`${mainNavItemClass} border ${dashboardSection === section ? "border-forest bg-forest font-semibold text-cream" : "border-transparent text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                    className={`${dashboardSectionItemClass} ${dashboardSection === section ? "border-forest bg-forest font-semibold text-cream" : "border-transparent text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
                     href={href}
                   >
                     <span>{label}</span>
@@ -370,7 +390,7 @@ function SidebarApplicationRow({ application, boards, disabled, draggable = true
       ref={setNodeRef}
       data-application-id={application.id}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className={`flex w-full items-center gap-2.5 rounded-nook-sm px-2.5 py-2 text-left transition hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest ${draggable ? "touch-none cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "opacity-0 transition-none" : ""}`}
+      className={`flex w-full items-center gap-2.5 rounded-nook-sm px-2.5 py-2 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest ${draggable ? "touch-none cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "opacity-0 transition-none" : ""}`}
       onClick={() => { if (!disabled && !isDragging) onEdit(application); }}
       type="button"
       {...(draggable ? listeners : {})}
@@ -406,13 +426,13 @@ function ArchivedSection({ applications, boards, className, expanded, movingId, 
   return (
     <section
       ref={setNodeRef}
-      className={`${className} flex min-h-0 flex-col border-t border-line transition-colors ${isOver ? "bg-forest-tint ring-2 ring-inset ring-forest" : "bg-paper"}`}
+      className={`${className} flex min-h-0 flex-col border-t border-line motion-surface ${isOver ? "bg-forest-tint ring-2 ring-inset ring-forest" : "bg-paper"}`}
     >
       <div className="shrink-0">
         <button
           aria-controls={contentId}
           aria-expanded={expanded}
-          className="flex w-full items-center gap-2 px-4.5 py-3 text-left transition hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
+          className="flex w-full items-center gap-2 px-4.5 py-3 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
           onClick={onToggle}
           type="button"
         >
@@ -422,7 +442,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingId, 
           </span>
           <svg
             aria-hidden="true"
-            className={`ml-auto text-ink-soft transition-transform ${expanded ? "rotate-180" : ""}`}
+            className={`ml-auto text-ink-soft motion-chevron ${expanded ? "rotate-180" : ""}`}
             width="16"
             height="16"
             viewBox="0 0 24 24"
@@ -437,8 +457,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingId, 
         </button>
       </div>
 
-      {expanded && (
-        <div className="scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2" id={contentId}>
+      <div aria-hidden={!expanded} className="sidebar-expandable-body scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2" id={contentId} inert={!expanded}>
           {applications.length === 0 ? (
             <p className="px-3 py-4 text-center text-xs leading-5 text-ink-soft">No archived applications.</p>
           ) : (
@@ -456,8 +475,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingId, 
               ))}
             </div>
           )}
-        </div>
-      )}
+      </div>
     </section>
   );
 }
@@ -481,7 +499,7 @@ function ArchivedRow({ application, boards, disabled, onEdit, onRequestDelete, o
       ref={setNodeRef}
       data-application-id={application.id}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className={`rounded-nook-sm transition hover:bg-cream-2 ${isDragging ? "opacity-0 transition-none" : ""}`}
+      className={`rounded-nook-sm motion-interactive hover:bg-cream-2 ${isDragging ? "opacity-0 transition-none" : ""}`}
     >
       <button
         className="flex w-full touch-none cursor-grab items-center gap-2.5 px-2.5 py-1 text-left active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
@@ -502,7 +520,7 @@ function ArchivedRow({ application, boards, disabled, onEdit, onRequestDelete, o
       </button>
       <div className="flex justify-end gap-2 px-2.5 pb-1">
         <button
-          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-forest transition hover:text-forest-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-50"
+          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-forest motion-interactive hover:text-forest-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-50"
           disabled={disabled}
           onClick={() => void onRestore(application)}
           type="button"
@@ -511,7 +529,7 @@ function ArchivedRow({ application, boards, disabled, onEdit, onRequestDelete, o
         </button>
         <button
           aria-label={`Delete ${application.role} at ${application.company}`}
-          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-rose transition hover:bg-rose-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose disabled:opacity-50"
+          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-rose motion-interactive hover:bg-rose-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose disabled:opacity-50"
           disabled={disabled}
           onClick={(event) => onRequestDelete(application, event.currentTarget)}
           type="button"
@@ -528,86 +546,25 @@ function SidebarEdgeRail({
   collapsed,
   onRailPointerDown,
   onOpenArchive,
-  onOpenSettings,
-  onToggle,
   page,
-  settingsTriggerRef,
-  toggleButtonRef,
 }: {
   archivedCount: number;
   collapsed: boolean;
   onRailPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onOpenArchive: () => void;
-  onOpenSettings: () => void;
-  onToggle: () => void;
   page: "job-board" | "dashboard" | "interviews";
-  settingsTriggerRef: RefObject<HTMLButtonElement | null>;
-  toggleButtonRef: RefObject<HTMLButtonElement | null>;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: SIDEBAR_EDGE_DROP_ID, disabled: !collapsed || page !== "job-board" });
 
   return (
     <div
       ref={setNodeRef}
-      className={`sidebar-edge-rail absolute inset-y-0 left-0 z-10 w-[var(--sidebar-rail-width)] transition-colors ${isOver ? "bg-forest-tint ring-2 ring-inset ring-forest" : ""}`}
+      className={`sidebar-edge-rail absolute inset-y-0 left-0 w-[var(--sidebar-rail-width)] motion-interactive ${isOver ? "bg-forest-tint ring-2 ring-inset ring-forest" : ""}`}
       inert={!collapsed}
       onPointerDown={(event) => {
         if (collapsed && event.target === event.currentTarget) onRailPointerDown(event);
       }}
     >
-      <button
-        ref={toggleButtonRef}
-        aria-label="Expand sidebar"
-        className="sidebar-edge-tab pointer-events-auto absolute left-1/2 top-4 flex h-10 w-10 -translate-x-1/2 items-center justify-center font-serif text-xl leading-none text-cream shadow-nook focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
-        onClick={onToggle}
-        type="button"
-      >
-        <span aria-hidden="true" className="sidebar-logo-mark">N</span>
-        <span aria-hidden="true" className="sidebar-expand-mark">
-          <PanelChevron direction="right" size={19} />
-        </span>
-      </button>
-      {collapsed && (
-        <nav aria-label="Main navigation" className="absolute left-1/2 top-20 flex -translate-x-1/2 flex-col gap-1">
-          <Link
-            aria-current={page === "dashboard" ? "page" : undefined}
-            aria-label="Dashboard"
-            className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-nook-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${page === "dashboard" ? "bg-forest text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
-            href="/dashboard"
-            title="Dashboard"
-          >
-            <LayoutDashboard aria-hidden="true" size={19} strokeWidth={1.8} />
-          </Link>
-          <Link
-            aria-current={page === "job-board" ? "page" : undefined}
-            aria-label="Job Board"
-            className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-nook-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${page === "job-board" ? "bg-forest text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
-            href="/jobs"
-            title="Job Board"
-          >
-            <Columns3 aria-hidden="true" size={19} strokeWidth={1.8} />
-          </Link>
-          <Link
-            aria-current={page === "interviews" ? "page" : undefined}
-            aria-label="Interviews"
-            className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-nook-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${page === "interviews" ? "bg-forest text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
-            href="/interviews"
-            title="Interviews"
-          >
-            <CalendarClock aria-hidden="true" size={19} strokeWidth={1.8} />
-          </Link>
-          <button
-            ref={settingsTriggerRef}
-            aria-label="Settings"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-nook-sm text-ink-soft transition hover:bg-cream-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
-            onClick={onOpenSettings}
-            title="Settings"
-            type="button"
-          >
-            <Settings aria-hidden="true" size={19} strokeWidth={1.8} />
-          </button>
-        </nav>
-      )}
       {collapsed && page === "job-board" && (
         <SidebarArchiveRailButton archivedCount={archivedCount} isOver={isOver} onOpenArchive={onOpenArchive} />
       )}
@@ -625,7 +582,7 @@ function SidebarArchiveRailButton({ archivedCount, isOver, onOpenArchive }: { ar
   return (
     <button
       aria-label={`Open Archive, ${archivedCount} archived`}
-      className={`absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-nook-sm text-ink-soft transition hover:bg-cream-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${isOver ? "bg-forest-tint text-forest-deep ring-2 ring-forest" : ""}`}
+      className={`absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-nook-sm text-ink-soft motion-interactive hover:bg-cream-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${isOver ? "bg-forest-tint text-forest-deep ring-2 ring-forest" : ""}`}
       data-testid="collapsed-archive-button"
       onClick={onOpenArchive}
       title={`Archive (${archivedCount})`}

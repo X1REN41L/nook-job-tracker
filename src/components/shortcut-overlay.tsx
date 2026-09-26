@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { ShortcutList } from "@/components/shortcut-list";
+import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-modal-shell";
 import { useDialogFocusTrap } from "@/hooks/use-dialog-focus-trap";
 
 export function ShortcutOverlay({ isMac, onClose, returnFocusRef }: {
@@ -28,9 +29,9 @@ export function ShortcutOverlay({ isMac, onClose, returnFocusRef }: {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section ref={dialogRef} aria-labelledby="shortcut-dialog-title" aria-modal="true" className="flex max-h-[80dvh] w-full max-w-3xl flex-col overflow-hidden rounded-nook-lg border border-line bg-paper text-ink shadow-nook-lift outline-none" role="dialog" tabIndex={-1}>
-        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-6 py-4">
+    <div className="motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section ref={dialogRef} aria-labelledby="shortcut-dialog-title" aria-modal="true" className={MODAL_SHELL_CLASS} role="dialog" tabIndex={-1}>
+        <div className={MODAL_HEADER_CLASS}>
           <div>
             <h2 className="font-serif text-xl font-semibold" id="shortcut-dialog-title">Keyboard Shortcuts</h2>
           </div>
@@ -42,8 +43,8 @@ export function ShortcutOverlay({ isMac, onClose, returnFocusRef }: {
           </button>
         </div>
 
-        <div className="relative min-h-0">
-          <div className="scrollbar-styled max-h-[calc(80dvh-4.75rem)] overflow-y-auto px-6 pb-7 pt-5" onScroll={() => {
+        <div className="relative min-h-0 flex-1">
+          <div className="scrollbar-styled h-full overflow-y-auto px-6 pb-7 pt-5" onScroll={() => {
             const list = listRef.current;
             if (list) setShowBottomFade(list.scrollTop + list.clientHeight < list.scrollHeight - 1);
           }} ref={listRef}>

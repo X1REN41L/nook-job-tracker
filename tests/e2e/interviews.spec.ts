@@ -164,7 +164,7 @@ test("searches by role and company within the selected tab and supports keyboard
   await search.fill("missing role");
   await expect(page.getByText("No interviews match your search.", { exact: true })).toBeVisible();
   await search.fill("");
-  await expect(page.getByText("No past interviews.", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("None yet — patience, and a callback, will fix that.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("tabpanel").locator("article")).toHaveCount(1);
 });
 
@@ -176,7 +176,7 @@ test("shows the specified empty states without an interview creation action", as
   await expect(page.getByRole("button", { name: /^Add interview$/i })).toHaveCount(0);
 
   await page.getByRole("tab", { name: "Past" }).click();
-  await expect(page.getByText("No past interviews.", { exact: true })).toBeVisible();
+  await expect(page.getByText("None yet — patience, and a callback, will fix that.", { exact: true })).toBeVisible();
 
   await page.getByRole("searchbox", { name: "Search by company or role" }).fill("acme");
   await expect(page.getByText("No interviews match your search.", { exact: true })).toBeVisible();

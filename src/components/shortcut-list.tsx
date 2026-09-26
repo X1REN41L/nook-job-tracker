@@ -1,17 +1,15 @@
-import { shortcutLabels, type ShortcutSection } from "@/lib/keyboard-shortcuts";
-
-const sections: ShortcutSection[] = ["Global", "Job Board", "Interviews", "Navigation"];
+import { shortcutLabels, shortcutSections } from "@/lib/keyboard-shortcuts";
 
 export function ShortcutList({ className = "", isMac }: { className?: string; isMac: boolean }) {
   const shortcuts = shortcutLabels(isMac);
   return (
     <div className={className}>
-      {sections.map((section, index) => (
+      {shortcutSections.map((section, index) => (
         <section aria-label={section} className={index > 0 ? "mt-6 border-t border-line pt-5" : ""} key={section}>
           <h3 className="font-serif text-lg font-semibold leading-tight">{section}</h3>
           <ul className="mt-3 divide-y divide-line">
-            {shortcuts.filter((shortcut) => shortcut.section === section).map(({ action, keys }) => (
-              <li className="flex items-center justify-between gap-3 py-2.5 text-sm" key={action}>
+            {shortcuts.filter((shortcut) => shortcut.section === section).map(({ id, action, keys }) => (
+              <li className="flex items-center justify-between gap-3 py-2.5 text-sm" key={id}>
                 <span className="min-w-0 whitespace-nowrap">{action}</span>
                 <span className="flex w-36 shrink-0 justify-end"><ShortcutKeys label={keys} /></span>
               </li>

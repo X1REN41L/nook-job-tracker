@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
 import type { getDashboardOverview } from "@/lib/dashboard-analytics";
 import { currentBrowserTimeZone } from "@/lib/application-date";
+import { getStaleApplicationThreshold, subscribeToPreferences } from "@/lib/general-preferences";
 
 type OverviewData = Awaited<ReturnType<typeof getDashboardOverview>>;
 type Rate = OverviewData["interviewRate"];
@@ -87,7 +88,7 @@ function UpcomingInterviewsPreview({ items, loading, error }: { items: OverviewD
         <div className="divide-y divide-line/70">
           {items.slice(0, 3).map((item) => (
             <article key={item.id} className="min-w-0 py-4 first:pt-5">
-              <p className="text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : `In ${item.daysUntilInterview} ${item.daysUntilInterview === 1 ? "day" : "days"}`}</p>
+              <p className="text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}</p>
               <h3 className="mt-1 break-words text-sm font-semibold leading-5">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></h3>
             </article>
           ))}
@@ -98,31 +99,33 @@ function UpcomingInterviewsPreview({ items, loading, error }: { items: OverviewD
 }
 
 export function DashboardOverview({ today, refreshKey }: { today: string; refreshKey: unknown }) {
-  const [data, setData] = useState<OverviewData | null>(null);
+  const staleApplicationThreshold = useSyncExternalStore(subscribeToPreferences, getStaleApplicationThreshold, () => 15);
+  const [result, setResult] = useState<{ today: string; threshold: number; data: OverviewData } | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!today) return;
     const controller = new AbortController();
-    const query = new URLSearchParams({ today, timeZone: currentBrowserTimeZone() });
+    const query = new URLSearchParams({ today, timeZone: currentBrowserTimeZone(), staleApplicationThreshold: String(staleApplicationThreshold) });
     fetch(`/api/dashboard/overview?${query}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error("Overview request failed");
         return response.json() as Promise<OverviewData>;
       })
       .then((overview) => {
-        setData(overview);
+        setResult({ today, threshold: staleApplicationThreshold, data: overview });
         setError(false);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         console.error("Could not load Overview", reason);
-        setData(null);
+        setResult(null);
         setError(true);
       });
     return () => controller.abort();
-  }, [today, refreshKey]);
+  }, [today, refreshKey, staleApplicationThreshold]);
 
+  const data = result?.today === today && result.threshold === staleApplicationThreshold ? result.data : null;
   const loading = !data && !error;
 
   return (

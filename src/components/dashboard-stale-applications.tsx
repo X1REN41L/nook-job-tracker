@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { getStaleApplications, StaleApplication } from "@/lib/dashboard-analytics";
 import { currentBrowserTimeZone } from "@/lib/application-date";
+import { getStaleApplicationThreshold, subscribeToPreferences } from "@/lib/general-preferences";
 import { STATUS_META } from "@/lib/status-meta";
 import type { ApplicationRecord } from "@/types/application";
 
@@ -37,7 +38,7 @@ function StaleApplicationRow({ application, onEdit }: {
     <li className="min-w-0">
       {onEdit ? (
         <button
-          className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left transition hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
+          className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
           onClick={onEdit}
           type="button"
         >
@@ -81,20 +82,21 @@ export function DashboardStaleApplications({ today, refreshKey, applications, on
   applications: ApplicationRecord[];
   onEdit: (application: ApplicationRecord) => void;
 }) {
-  const [result, setResult] = useState<{ today: string; data: StaleData } | null>(null);
+  const staleApplicationThreshold = useSyncExternalStore(subscribeToPreferences, getStaleApplicationThreshold, () => 15);
+  const [result, setResult] = useState<{ today: string; threshold: number; data: StaleData } | null>(null);
   const [failedToday, setFailedToday] = useState<string | null>(null);
 
   useEffect(() => {
     if (!today) return;
     const controller = new AbortController();
-    const query = new URLSearchParams({ today, timeZone: currentBrowserTimeZone() });
+    const query = new URLSearchParams({ today, timeZone: currentBrowserTimeZone(), staleApplicationThreshold: String(staleApplicationThreshold) });
     fetch(`/api/dashboard/stale?${query}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error("Stale applications request failed");
         return response.json() as Promise<StaleData>;
       })
       .then((data) => {
-        setResult({ today, data });
+        setResult({ today, threshold: staleApplicationThreshold, data });
         setFailedToday(null);
       })
       .catch((reason: unknown) => {
@@ -103,9 +105,9 @@ export function DashboardStaleApplications({ today, refreshKey, applications, on
         setFailedToday(today);
       });
     return () => controller.abort();
-  }, [today, refreshKey]);
+  }, [today, refreshKey, staleApplicationThreshold]);
 
-  const data = result?.today === today ? result.data : null;
+  const data = result?.today === today && result.threshold === staleApplicationThreshold ? result.data : null;
   const error = failedToday === today;
   const loading = !data && !error;
   const applicationById = new Map(applications.map((application) => [application.id, application]));
@@ -124,7 +126,7 @@ export function DashboardStaleApplications({ today, refreshKey, applications, on
       {loading && <p className="mt-7 text-sm text-ink-soft" role="status">Loading applications…</p>}
       {data && !error && (
         data.counts.total === 0 ? (
-          <p className="mt-8 text-sm text-ink-soft">No stale applications.</p>
+          <p className="mt-8 text-sm text-ink-soft">{"Nothing's gone quiet yet — good sign."}</p>
         ) : (
           <div className="mt-9 space-y-8">
             {severityOrder.map((severity) => (

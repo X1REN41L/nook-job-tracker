@@ -16,6 +16,7 @@ import { KanbanBoard, KanbanCardOverlay } from "@/components/kanban-board";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { DuplicateWarningDialog } from "@/components/duplicate-warning-dialog";
 import { InterviewDateDialog } from "@/components/interview-date-dialog";
+import { MotionPresence } from "@/components/motion-presence";
 import { InterviewsList } from "@/components/interviews-list";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
@@ -151,6 +152,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicate | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsConfirmationOpen, setSettingsConfirmationOpen] = useState(false);
   const isMac = typeof navigator !== "undefined" && isMacPlatform();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
@@ -159,7 +161,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const archivedExpanded = useSyncExternalStore(subscribeToArchivedPreference, getArchivedPreference, () => false);
   const allApplicationsExpanded = useSyncExternalStore(subscribeToAllApplicationsPreference, getAllApplicationsPreference, () => true);
   const today = useSyncExternalStore(subscribeToLocalDate, currentLocalDate, getServerLocalDate);
-  const { toast, deleteRecovery, undoing, showToast, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
+  const { toast, deleteRecovery, undoing, showToast, clearApplicationUndo, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
+  const lastToastRef = useRef(toast);
+  if (toast) lastToastRef.current = toast;
+  const visibleToast = toast ?? lastToastRef.current;
   const { importProgress, hasPendingImport, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport } = useApplicationBackup({
     applications,
     insertApplications,
@@ -319,6 +324,38 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     const imported = body.applications as ApplicationRecord[];
     setApplications((current) => [...current, ...imported].sort((a, b) => b.appliedDate.localeCompare(a.appliedDate)));
     return { created: imported, skippedIds: body.skippedIds as string[] };
+  }
+
+  async function deleteAllApplicationData() {
+    try {
+      const response = await fetch("/api/applications/purge", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Could not delete application data");
+
+      setApplications([]);
+      resetForm();
+      setIsModalOpen(false);
+      setPendingDelete(null);
+      reopenModalAfterDelete.current = false;
+      deleteTriggerRef.current = null;
+      setPendingInterviewDate(null);
+      setInterviewDateDraft("");
+      setInterviewDateError("");
+      setMovingId(null);
+      setSearchTerm("");
+      setActiveFilter("all");
+      setError("");
+      clearApplicationUndo();
+      showToast("All application data deleted.");
+      return true;
+    } catch (caught) {
+      showToast(caught instanceof Error ? caught.message : "Could not delete application data");
+      return false;
+    }
   }
 
   function updateField<K extends keyof JobFormState>(field: K, value: JobFormState[K]) {
@@ -717,7 +754,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     canUndo: Boolean(toast?.undo || deleteRecovery),
     onResumeUndoToastOnTab: resumeUndoToastOnTab,
     onCloseShortcuts: () => setShortcutsOpen(false),
-    onCloseSettings: () => setSettingsOpen(false),
+    onCloseSettings: () => { if (!settingsConfirmationOpen) setSettingsOpen(false); },
     onNewJob: openAddModal,
     onOpenSettings: () => setSettingsOpen(true),
     onFocusSearch: focusSearch,
@@ -735,7 +772,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   });
 
   return (
-    <main className="select-none-ui flex h-screen flex-col overflow-hidden bg-cream text-ink transition-colors">
+    <main className="select-none-ui flex h-screen flex-col overflow-hidden bg-cream text-ink">
       {page === "job-board" && (
         <button aria-label="Add job" className="btn-primary fixed bottom-6 right-6 z-50 flex origin-bottom-right scale-[1.2] items-center gap-2 shadow-lg" onClick={openAddModal} type="button">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
@@ -842,7 +879,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         </div>
         {activeApplication && typeof document !== "undefined"
           ? createPortal(
-              <DragOverlay zIndex={70}>
+              <DragOverlay dropAnimation={null} zIndex={70}>
                 <KanbanCardOverlay application={activeApplication} />
               </DragOverlay>,
               document.body,
@@ -850,7 +887,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           : null}
       </DndContext>
 
-      {isModalOpen && !pendingDuplicate && (
+      <MotionPresence open={isModalOpen && !pendingDuplicate} immediateExit={pendingDuplicate !== null || pendingDelete !== null}>
         <JobModal
           boards={boards}
           editing={Boolean(editingId)}
@@ -862,9 +899,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onSubmit={submit}
           saving={saving}
         />
-      )}
+      </MotionPresence>
 
-      {pendingDuplicate && (
+      <MotionPresence open={pendingDuplicate !== null} immediateExit>
+        {pendingDuplicate && (
         <DuplicateWarningDialog
           fromImport={hasPendingImport}
           boards={boards}
@@ -878,33 +916,40 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onViewExisting={viewExistingDuplicate}
           saving={saving}
         />
-      )}
+        )}
+      </MotionPresence>
 
-      {shortcutsOpen && (
+      <MotionPresence open={shortcutsOpen}>
         <ShortcutOverlay
           isMac={isMac}
           onClose={() => setShortcutsOpen(false)}
           returnFocusRef={shortcutTriggerRef}
         />
-      )}
+      </MotionPresence>
 
-      {settingsOpen && (
+      <MotionPresence open={settingsOpen}>
         <SettingsModal
           isMac={isMac}
           onClose={() => setSettingsOpen(false)}
           onExport={exportApplications}
           onImport={importApplications}
+          onDeleteAll={deleteAllApplicationData}
+          onConfirmationChange={setSettingsConfirmationOpen}
+          deleteDisabled={hasPendingImport || undoing || saving || deleting || movingId !== null || savingInterviewDate}
           importProgress={importProgress}
           returnFocusRef={settingsTriggerRef}
           suspendFocusTrap={pendingDuplicate !== null}
         />
-      )}
+      </MotionPresence>
 
-      {pendingDelete && (
+      <MotionPresence open={pendingDelete !== null}>
+        {pendingDelete && (
         <DeleteDialog application={pendingDelete} deleting={deleting} onCancel={cancelDelete} onConfirm={confirmDelete} returnFocusRef={deleteTriggerRef} />
-      )}
+        )}
+      </MotionPresence>
 
-      {pendingInterviewDate && (
+      <MotionPresence open={pendingInterviewDate !== null}>
+        {pendingInterviewDate && (
         <InterviewDateDialog
           application={pendingInterviewDate}
           error={interviewDateError}
@@ -915,10 +960,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           saving={savingInterviewDate}
           value={interviewDateDraft}
         />
-      )}
+        )}
+      </MotionPresence>
 
-      <div className={`nook-toast-wrap ${toast ? "nook-toast-show" : ""}`} role="status" aria-live="polite">
-        {toast && (
+      <div className={`nook-toast-wrap ${toast ? "nook-toast-show" : ""}`} role="status" aria-live="polite" aria-hidden={!toast} inert={!toast}>
+        {visibleToast && (
           <div
             className="nook-toast"
             onBlurCapture={(event) => {
@@ -928,8 +974,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             onMouseEnter={() => pauseToastDismissTimer("hover")}
             onMouseLeave={() => endToastInteraction("hover")}
           >
-            <span>{toast.message}</span>
-            {toast.undo && (
+            <span>{visibleToast.message}</span>
+            {visibleToast.undo && (
               <button className="nook-toast-action" disabled={undoing} onClick={(event) => void undoLatestChange(event.detail === 0)} type="button">
                 Undo
               </button>

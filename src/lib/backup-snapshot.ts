@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { MAX_BACKUP_APPLICATIONS } from "@/lib/backup-limits";
 import { settingsSchema } from "@/lib/backup-settings-schema";
-import { isValidStatusTransition, parseStatusTransitionDetail, statusTransitionDetail } from "@/lib/status-history";
+import { isValidStatusTransition, statusTransitionDetail } from "@/lib/status-history";
 
 type TypedTransition = { fromStatus: Status; toStatus: Status };
 
@@ -49,62 +49,48 @@ function possibleTrailEnds(edges: TypedTransition[], starts: Status[]) {
 const date = z.iso.datetime({ offset: true }).transform((value) => new Date(value));
 const rawEventSnapshotSchema = z.object({
   id: z.string().min(1), type: z.enum(EventType), detail: z.string().nullable(),
-  fromStatus: z.enum(Status).nullable().optional(), toStatus: z.enum(Status).nullable().optional(),
+  fromStatus: z.enum(Status).nullable(), toStatus: z.enum(Status).nullable(),
   emailSnippet: z.string().nullable(), createdAt: date,
 }).strict();
 export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, context) => {
-  const hasFromStatus = event.fromStatus !== undefined;
-  const hasToStatus = event.toStatus !== undefined;
-  if (hasFromStatus !== hasToStatus) {
-    context.addIssue({ code: "custom", message: "Both status fields must be provided together" });
-    return z.NEVER;
-  }
-  const fromStatus = event.fromStatus ?? null;
-  const toStatus = event.toStatus ?? null;
-
   if (event.type !== EventType.STATUS_CHANGE) {
-    if ((event.fromStatus !== undefined && event.fromStatus !== null) || (event.toStatus !== undefined && event.toStatus !== null)) {
+    if (event.fromStatus !== null || event.toStatus !== null) {
       context.addIssue({ code: "custom", message: "Only status change events can include status fields" });
       return z.NEVER;
     }
-    return { ...event, fromStatus: null, toStatus: null };
+    return event;
   }
 
-  if (hasFromStatus && fromStatus !== null && toStatus !== null) {
-    if (!isValidStatusTransition(fromStatus, toStatus)) {
+  if (event.fromStatus !== null && event.toStatus !== null) {
+    if (!isValidStatusTransition(event.fromStatus, event.toStatus)) {
       context.addIssue({ code: "custom", message: "Status change must move to a different status" });
       return z.NEVER;
     }
-    if (event.detail !== statusTransitionDetail(fromStatus, toStatus)) {
+    if (event.detail !== statusTransitionDetail(event.fromStatus, event.toStatus)) {
       context.addIssue({ code: "custom", message: "Typed status fields must match the event detail" });
       return z.NEVER;
     }
     return event;
   }
 
-  if (hasFromStatus && fromStatus === null && toStatus !== null) {
-    if (event.detail !== statusTransitionDetail(null, toStatus)) {
+  if (event.fromStatus === null && event.toStatus !== null) {
+    if (event.detail !== statusTransitionDetail(null, event.toStatus)) {
       context.addIssue({ code: "custom", message: "Initial status fields must match the event detail" });
       return z.NEVER;
     }
     return event;
   }
 
-  if (hasFromStatus && (fromStatus !== null || toStatus !== null)) {
+  if (event.fromStatus !== null || event.toStatus !== null) {
     context.addIssue({ code: "custom", message: "Status fields must describe a valid transition" });
     return z.NEVER;
   }
 
-  const parsed = parseStatusTransitionDetail(event.detail);
-  return {
-    ...event,
-    fromStatus: parsed?.fromStatus ?? null,
-    toStatus: parsed?.toStatus ?? null,
-  };
+  return event;
 });
 export const applicationSnapshotSchema = z.object({
   id: z.string().min(1), company: z.string().trim().min(1).max(120), role: z.string().trim().min(1).max(120),
-  status: z.enum(Status), archived: z.boolean().default(false), source: z.string().max(120).nullable(), appliedDate: date,
+  status: z.enum(Status), archived: z.boolean(), source: z.string().max(120).nullable(), appliedDate: date,
   interviewDate: date.nullable(), interviewDatePromptDismissed: z.boolean(),
   notes: z.string().max(5000).nullable(), jobUrl: z.string().max(2000).nullable(),
   createdAt: date, lastUpdated: date, events: z.array(eventSnapshotSchema),
@@ -168,7 +154,7 @@ export const applicationRestoreSnapshotSchema = applicationSnapshotSchema.extend
   revision: z.number().int().nonnegative().default(0),
 });
 export const backupSnapshotSchema = z.object({
-  version: z.literal(2), applications: z.array(applicationSnapshotSchema).max(MAX_BACKUP_APPLICATIONS), settings: settingsSchema,
+  version: z.literal(1), applications: z.array(applicationSnapshotSchema).max(MAX_BACKUP_APPLICATIONS), settings: settingsSchema,
 }).strict();
 export type BackupSnapshot = z.input<typeof backupSnapshotSchema>;
 

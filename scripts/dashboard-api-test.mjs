@@ -9,8 +9,8 @@ const headers = { Origin: origin, "Content-Type": "application/json" };
 const prisma = new PrismaClient();
 const createdIds = [];
 const today = new Date().toISOString().slice(0, 10);
-const dashboardPath = (section, date = today, timeZone = "UTC") =>
-  `/api/dashboard/${section}?${new URLSearchParams({ today: date, timeZone })}`;
+const dashboardPath = (section, date = today, timeZone = "UTC", staleApplicationThreshold = 15) =>
+  `/api/dashboard/${section}?${new URLSearchParams({ today: date, timeZone, staleApplicationThreshold: String(staleApplicationThreshold) })}`;
 
 function shiftDate(key, offset) {
   const date = new Date(key + "T00:00:00.000Z");
@@ -201,14 +201,14 @@ try {
   const previousYear = String(Number(today.slice(0, 4)) - 1);
   await createApplication({ role: "Selected year offer", status: "OFFER", appliedDate: previousYear + "-05-12" });
 
-  const legacyId = randomUUID();
-  const legacyEventId = randomUUID();
+  const incompleteId = randomUUID();
+  const incompleteEventId = randomUUID();
   const createdAt = new Date().toISOString();
   const backup = {
-    version: 2,
-    settings: { theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false },
+    version: 1,
+    settings: { theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15, motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true },
     applications: [{
-      id: legacyId,
+      id: incompleteId,
       company: "Dashboard API test",
       role: "Imported incomplete history",
       status: "APPLIED",
@@ -222,9 +222,11 @@ try {
       createdAt,
       lastUpdated: createdAt,
       events: [{
-        id: legacyEventId,
+        id: incompleteEventId,
         type: "STATUS_CHANGE",
         detail: "OFFER → APPLIED",
+        fromStatus: null,
+        toStatus: null,
         emailSnippet: null,
         createdAt,
       }],
@@ -234,11 +236,11 @@ try {
     method: "POST", headers, body: JSON.stringify(backup),
   });
   assert.equal(importResponse.status, 201, await importResponse.clone().text());
-  createdIds.push(legacyId);
+  createdIds.push(incompleteId);
   const exported = await json("/api/applications/export");
-  const exportedLegacy = exported.applications.find(({ id }) => id === legacyId);
-  assert.equal(exportedLegacy.events[0].fromStatus, "OFFER", "Legacy detail should be safely parsed on import");
-  assert.equal(exportedLegacy.events[0].toStatus, "APPLIED");
+  const exportedIncomplete = exported.applications.find(({ id }) => id === incompleteId);
+  assert.equal(exportedIncomplete.events[0].fromStatus, null, "Unknown transition fields stay unknown on import");
+  assert.equal(exportedIncomplete.events[0].toStatus, null);
 
   const malformedId = randomUUID();
   const malformedBackup = structuredClone(backup);
@@ -283,7 +285,7 @@ try {
   assert.equal(overview.upcomingInterviews.items[0].daysUntilInterview, 0, "An interview today is upcoming");
   assert.equal(overview.interviewRate.numerator, 4, "Interview milestones remain counted after moving away from Interview");
   assert.equal(overview.interviewRate.denominator, createdIds.length);
-  assert.equal(overview.offerRate.numerator, 5, "Archived and historical Offer milestones remain counted");
+  assert.equal(overview.offerRate.numerator, 4, "Archived and typed historical Offer milestones remain counted; unknown transitions stay unknown");
   assert.equal(overview.interviewRate.historyCoverage.totalApplications, createdIds.length);
   assertRateValues(overview, ["interviewRate", "offerRate"]);
   assert.equal(overview.interviewRate.historyCoverage.completeApplications + overview.interviewRate.historyCoverage.incompleteApplications, createdIds.length);
@@ -292,23 +294,34 @@ try {
   assert.deepEqual(overview.staleApplications.map(({ severity }) => severity), ["CRITICAL", "HIGH", "HIGH"]);
   assert.deepEqual(overview.staleApplications.map(({ id }) => id), [stale60.id, stale59.id, stale30.id]);
   assert.equal(overview.staleApplications[0].staleDays, 60);
-  assert.equal(overview.staleTimingCoverage.withoutReliableStatusTimestamp, 1);
+  assert.equal(overview.staleTimingCoverage.withoutReliableStatusTimestamp, 2);
   assert.equal(overview.staleTimingCoverage.isComplete, false);
 
   const stale = await json(dashboardPath("stale"));
-  assert.deepEqual(stale.counts, { CRITICAL: 1, HIGH: 2, MEDIUM: 2, total: 5 });
+  assert.deepEqual(stale.counts, { CRITICAL: 1, HIGH: 2, MEDIUM: 3, total: 6 });
   assert.equal(stale.applicationsBySeverity.CRITICAL[0].id, stale60.id);
   assert.deepEqual(stale.applicationsBySeverity.HIGH.map(({ id }) => id), [stale59.id, stale30.id]);
-  assert.deepEqual(stale.applicationsBySeverity.MEDIUM.map(({ id }) => id), [stale29.id, stale21.id]);
+  assert.deepEqual(stale.applicationsBySeverity.MEDIUM.map(({ id }) => id), [stale29.id, stale21.id, stale20.id]);
   assert.deepEqual(stale.applications.map(({ id, staleDays, severity }) => [id, staleDays, severity]), [
     [stale60.id, 60, "CRITICAL"], [stale59.id, 59, "HIGH"], [stale30.id, 30, "HIGH"],
-    [stale29.id, 29, "MEDIUM"], [stale21.id, 21, "MEDIUM"],
+    [stale29.id, 29, "MEDIUM"], [stale21.id, 21, "MEDIUM"], [stale20.id, 20, "MEDIUM"],
   ]);
   assert.deepEqual(stale.top.map(({ id }) => id), overview.staleApplications.map(({ id }) => id));
   assert.deepEqual(stale.top, overview.staleApplications, "Overview and stale endpoint share the exact stale result");
-  assert.equal(stale.applications.some(({ id }) => id === stale20.id || id === archivedStale.id || id === staleOffer.id || id === missingTiming.id), false);
-  assert.equal(stale.timingCoverage.withoutReliableStatusTimestamp, 1);
+  assert.equal(stale.applications.some(({ id }) => id === archivedStale.id || id === staleOffer.id || id === missingTiming.id), false);
+  assert.equal(stale.timingCoverage.withoutReliableStatusTimestamp, 2);
   assert.equal(stale.timingCoverage.isComplete, false);
+
+  const defaultStale = await json(`/api/dashboard/stale?${new URLSearchParams({ today, timeZone: "UTC" })}`);
+  assert.equal(defaultStale.counts.total, 6, "Missing threshold defaults to 15 days");
+  for (const [threshold, count] of [[7, 6], [15, 6], [30, 3]]) {
+    const filtered = await json(dashboardPath("stale", today, "UTC", threshold));
+    const preview = await json(dashboardPath("overview", today, "UTC", threshold));
+    assert.equal(filtered.counts.total, count, `${threshold} day stale threshold`);
+    assert.deepEqual(filtered.top, preview.staleApplications, "Overview and Stale Applications use the same threshold");
+  }
+  assert.equal((await fetch(base + dashboardPath("stale", today, "UTC", 14))).status, 400);
+  assert.equal((await fetch(base + dashboardPath("stale", today, "UTC", 21))).status, 400);
 
   const nextDay = shiftDate(today, 1);
   const nextDayStale = await json(dashboardPath("stale", nextDay));
@@ -515,12 +528,8 @@ try {
   assert.deepEqual(dhakaStale.top, dhakaOverview.staleApplications);
   for (const [age, id] of timezoneFixtures) {
     const actual = dhakaStale.applications.find((item) => item.id === id);
-    if (age === 20) {
-      assert.equal(actual, undefined, "20 local calendar days is not stale");
-    } else {
-      assert.equal(actual?.staleDays, age, `Dhaka local day boundary at ${age} days`);
-      assert.equal(actual?.severity, age >= 60 ? "CRITICAL" : age >= 30 ? "HIGH" : "MEDIUM");
-    }
+    assert.equal(actual?.staleDays, age, `Dhaka local day boundary at ${age} days`);
+    assert.equal(actual?.severity, age >= 60 ? "CRITICAL" : age >= 30 ? "HIGH" : "MEDIUM");
   }
   const utcSameDate = await createApplication({ role: "UTC and local date match" });
   await setStatusEventTimestamp(utcSameDate.id, "2026-09-26T12:00:00.000Z");

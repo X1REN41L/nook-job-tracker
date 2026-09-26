@@ -4,15 +4,15 @@ import { apiError } from "@/lib/api";
 import { settingsSchema } from "@/lib/backup-settings-schema";
 
 const defaultSettings = settingsSchema.parse({
-  theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [],
-  sidebarCollapsed: false, archivedExpanded: false,
+  theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15,
+  motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true,
 });
 
 export async function GET() {
   try {
     const applications = await prisma.application.findMany({ include: { events: { orderBy: { id: "asc" } } }, orderBy: { id: "asc" } });
     return NextResponse.json({
-      version: 2,
+      version: 1,
       applications: applications.map(({ events, revision, ...application }) => {
         void revision;
         return { ...application, events: events.map(({ id, type, fromStatus, toStatus, detail, emailSnippet, createdAt }) => ({ id, type, fromStatus, toStatus, detail, emailSnippet, createdAt })) };

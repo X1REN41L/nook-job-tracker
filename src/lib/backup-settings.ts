@@ -1,6 +1,6 @@
 import { getBoards, normalizeBoards, saveBoards } from "@/lib/board-preferences";
 import { settingsSchema, type BackupSettings, type ParsedBackupSettings } from "@/lib/backup-settings-schema";
-import { DEFAULT_BOARD_KEY, MOTION_KEY, getDefaultBoard, getMotionMode, setPreference } from "@/lib/general-preferences";
+import { DEFAULT_BOARD_KEY, MOTION_KEY, STALE_THRESHOLD_KEY, STARTUP_PAGE_KEY, getDefaultBoard, getMotionMode, getStaleApplicationThreshold, getStartupPage, setPreference } from "@/lib/general-preferences";
 
 export const SIDEBAR_STORAGE_KEY = "nook-sidebar-collapsed";
 export const SIDEBAR_CHANGE_EVENT = "nook-sidebar-change";
@@ -18,6 +18,8 @@ export function readBackupSettings(theme: string | undefined): ParsedBackupSetti
   return {
     theme: theme === "light" || theme === "dark" ? theme : "system",
     defaultBoard: getDefaultBoard(),
+    startupPage: getStartupPage(),
+    staleApplicationThreshold: getStaleApplicationThreshold(),
     motion: getMotionMode(),
     boards: getBoards(),
     sidebarCollapsed: localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true",
@@ -27,13 +29,16 @@ export function readBackupSettings(theme: string | undefined): ParsedBackupSetti
 }
 
 export function applyBackupSettings(settings: BackupSettings, setTheme: (theme: string) => void) {
-  setTheme(settings.theme);
-  setPreference(DEFAULT_BOARD_KEY, settings.defaultBoard);
-  setPreference(MOTION_KEY, settings.motion);
-  saveBoards(normalizeBoards(settings.boards));
-  localStorage.setItem(SIDEBAR_STORAGE_KEY, String(settings.sidebarCollapsed));
-  localStorage.setItem(ARCHIVED_STORAGE_KEY, String(settings.archivedExpanded));
-  localStorage.setItem(ALL_APPLICATIONS_STORAGE_KEY, String(settings.allApplicationsExpanded ?? true));
+  const parsed = settingsSchema.parse(settings);
+  setTheme(parsed.theme);
+  setPreference(DEFAULT_BOARD_KEY, parsed.defaultBoard);
+  setPreference(STARTUP_PAGE_KEY, parsed.startupPage);
+  setPreference(STALE_THRESHOLD_KEY, String(parsed.staleApplicationThreshold));
+  setPreference(MOTION_KEY, parsed.motion);
+  saveBoards(normalizeBoards(parsed.boards));
+  localStorage.setItem(SIDEBAR_STORAGE_KEY, String(parsed.sidebarCollapsed));
+  localStorage.setItem(ARCHIVED_STORAGE_KEY, String(parsed.archivedExpanded));
+  localStorage.setItem(ALL_APPLICATIONS_STORAGE_KEY, String(parsed.allApplicationsExpanded));
   window.dispatchEvent(new Event(SIDEBAR_CHANGE_EVENT));
   window.dispatchEvent(new Event(ARCHIVED_CHANGE_EVENT));
   window.dispatchEvent(new Event(ALL_APPLICATIONS_CHANGE_EVENT));

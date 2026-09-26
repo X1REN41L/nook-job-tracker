@@ -40,6 +40,7 @@ export const timeZoneSchema = z.string().min(1).refine((value) => {
 export const dashboardStaleQuerySchema = z.object({
   today: calendarDateKeySchema,
   timeZone: timeZoneSchema,
+  staleApplicationThreshold: z.enum(["7", "15", "30"]).default("15").transform(Number),
 }).strict();
 
 export function calendarDateInTimeZone(timestamp: Date, timeZone: string) {

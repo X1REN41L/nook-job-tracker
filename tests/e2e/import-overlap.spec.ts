@@ -35,14 +35,14 @@ test("ignores a file selected during an import and accepts it after completion",
     const select = (application: typeof first) => input.setInputFiles({
       name: "backup.json",
       mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ version: 2, applications: [{
-        ...application, id: randomUUID(), source: null, interviewDate: null,
+      buffer: Buffer.from(JSON.stringify({ version: 1, applications: [{
+        ...application, id: randomUUID(), archived: false, source: null, interviewDate: null,
         interviewDatePromptDismissed: false, notes: null, jobUrl: null,
         appliedDate: new Date(application.appliedDate).toISOString(),
         createdAt: new Date().toISOString(), lastUpdated: new Date().toISOString(), events: [],
       }], settings: {
-        theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [],
-        sidebarCollapsed: false, archivedExpanded: false,
+        theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15,
+        motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true,
       } })),
     });
 

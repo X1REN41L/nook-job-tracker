@@ -5,8 +5,8 @@ import { sameOriginMutationHeaders } from "./api-helpers";
 
 const maxFileBytes = 10 * 1024 * 1024;
 const settings = {
-  theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [],
-  sidebarCollapsed: false, archivedExpanded: false,
+  theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15,
+  motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true,
 };
 
 test("backup import enforces limits, reviews duplicates, and accepts a near-limit file", async ({ page, request }) => {
@@ -40,7 +40,7 @@ test("backup import enforces limits, reviews duplicates, and accepts a near-limi
     expect(importRequests).toHaveLength(0);
     expect((await (await request.get("/api/applications")).json()).applications).toHaveLength(initialCount);
 
-    const overCount = { version: 2, applications: Array(5_001).fill(null), settings };
+    const overCount = { version: 1, applications: Array(5_001).fill(null), settings };
     await input.setInputFiles({ name: "too-many.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(overCount)) });
     await expect(dialog.getByRole("alert")).toHaveText("Backup can contain no more than 5,000 applications.");
     expect(importRequests).toHaveLength(0);
@@ -54,7 +54,7 @@ test("backup import enforces limits, reviews duplicates, and accepts a near-limi
     const duplicate = { ...seedExport.applications.find((item: { id: string }) => item.id === seedId), id: randomUUID() };
     await input.setInputFiles({
       name: "duplicate.json", mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ version: 2, applications: [duplicate], settings })),
+      buffer: Buffer.from(JSON.stringify({ version: 1, applications: [duplicate], settings })),
     });
     const duplicateDialog = page.getByRole("dialog", { name: "Possible duplicate" });
     await expect(duplicateDialog).toBeVisible();
@@ -63,12 +63,12 @@ test("backup import enforces limits, reviews duplicates, and accepts a near-limi
 
     const now = new Date().toISOString();
     const nearLimitBackup = {
-      version: 2,
+      version: 1,
       applications: [{
         id: largeId, company: "Near limit import", role: "Large backup", status: "APPLIED", archived: false,
         source: null, appliedDate: now, interviewDate: null, interviewDatePromptDismissed: false,
         notes: null, jobUrl: null, createdAt: now, lastUpdated: now,
-        events: [{ id: randomUUID(), type: "STATUS_CHANGE", detail: "x".repeat(9_500_000), emailSnippet: null, createdAt: now }],
+        events: [{ id: randomUUID(), type: "STATUS_CHANGE", detail: "x".repeat(9_500_000), fromStatus: null, toStatus: null, emailSnippet: null, createdAt: now }],
       }],
       settings,
     };

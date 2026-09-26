@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:keyboard": "bash scripts/run-playwright.sh",
+    "test:shortcuts": "node --test scripts/keyboard-shortcuts-test.mjs",
     "test:duplicates": "node scripts/duplicate-match-test.mjs",
     "test:smoke": "bash scripts/run-backup-api-test.sh scripts/smoke-test.mjs",
     "test:backup": "bash scripts/run-backup-api-test.sh",

@@ -158,7 +158,8 @@ test("traps focus in Add, Edit, Delete, and Settings modals in forward and rever
     settingsDialog.getByRole("button", { name: "Use dark theme" }),
     settingsDialog.getByRole("combobox", { name: "New Applications Default Board" }),
     settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "System" }),
-    settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "Reduced" }),
+    settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "On", exact: true }),
+    settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "Off", exact: true }),
   ];
   await assertFocusCycle(page, settingsDialog, settingsControls, 0);
 

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
-import type { AnalyticsPeriod, getDashboardAnalytics } from "@/lib/dashboard-analytics";
+import { analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod } from "@/lib/analytics-period";
+import type { getDashboardAnalytics } from "@/lib/dashboard-analytics";
 import { STATUS_META } from "@/lib/status-meta";
 
 type AnalyticsData = Awaited<ReturnType<typeof getDashboardAnalytics>>;
@@ -74,14 +75,16 @@ function AnalyticsPeriodSelector({ period, month, year, onPeriodChange, onMonthC
 function ApplicationsTrend({ trend }: { trend: AnalyticsData["applicationsTrend"] }) {
   const maxCount = Math.max(0, ...trend.buckets.map((bucket) => bucket.count));
   const scale = Math.max(1, maxCount);
+  const hasData = maxCount > 0;
   return (
     <section className="min-w-0" aria-labelledby="applications-trend-heading">
       <div className="border-b border-line pb-3">
         <h2 className="font-serif text-xl font-semibold leading-tight" id="applications-trend-heading">Applications Trend</h2>
         <p className="mt-1 text-sm text-ink-soft">Applications submitted in this period</p>
       </div>
-      <div className="mt-6 min-w-0" role="img" aria-label={`Applications submitted: ${trend.buckets.map((bucket, index) => `${trend.granularity === "WEEK" ? `Week ${index + 1}` : `${formatMonth(bucket.startDate, "long")} ${bucket.startDate.slice(0, 4)}`}, ${bucket.count}`).join("; ")}`}>
+      <div className="mt-6 min-w-0" role={hasData ? "img" : undefined} aria-label={hasData ? `Applications submitted: ${trend.buckets.map((bucket, index) => `${trend.granularity === "WEEK" ? `Week ${index + 1}` : `${formatMonth(bucket.startDate, "long")} ${bucket.startDate.slice(0, 4)}`}, ${bucket.count}`).join("; ")}` : undefined}>
         <div className="relative h-44 border-b border-line">
+          {!hasData && <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-ink-soft">No trend to show. Give it something to trend.</p>}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex flex-col justify-between">
             {[0, 1, 2, 3].map((line) => <div className="border-t border-line/70" key={line} />)}
           </div>
@@ -134,6 +137,13 @@ export function DashboardAnalytics({ today, refreshKey }: { today: string; refre
   const month = customMonth ?? today.slice(5, 7);
   const year = customYear ?? today.slice(0, 4);
   const validYear = /^[0-9]{4}$/.test(year);
+  const range = today && (period !== "CUSTOM_MONTH" && period !== "CUSTOM_YEAR" || validYear)
+    ? analyticsPeriodRange({
+      period,
+      ...(period === "CUSTOM_MONTH" ? { month: `${year}-${month}` } : {}),
+      ...(period === "CUSTOM_YEAR" ? { year: Number(year) } : {}),
+    }, today)
+    : null;
   const selectionKey = `${today}|${period}|${period === "CUSTOM_MONTH" ? month : ""}|${period === "CUSTOM_MONTH" || period === "CUSTOM_YEAR" ? year : ""}`;
   const [result, setResult] = useState<{ key: string; data: AnalyticsData } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
@@ -177,7 +187,7 @@ export function DashboardAnalytics({ today, refreshKey }: { today: string; refre
   return (
     <section className="@container w-full min-w-0 pb-10" aria-labelledby="analytics-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <h1 className="font-serif text-[clamp(1.875rem,calc(1.65rem_+_0.15vw),2.125rem)] font-semibold leading-tight tracking-tight" id="analytics-heading">Analytics</h1>
+        <h1 className="font-serif text-[clamp(1.875rem,calc(1.65rem_+_0.15vw),2.125rem)] font-semibold leading-tight tracking-tight" id="analytics-heading">Analytics{range ? ` - ${analyticsCohortLabel(range, period, today.slice(0, 4))}` : ""}</h1>
         <AnalyticsPeriodSelector period={period} month={month} year={year} onPeriodChange={setPeriod} onMonthChange={setCustomMonth} onYearChange={setCustomYear} />
       </div>
       {invalidYear && <p className="mt-3 text-sm text-rose" role="status">Enter a four-digit year.</p>}

@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   try {
     const query = dashboardStaleQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries()));
     if (!query.success) return validationErrorResponse(query.error, "A valid user calendar date and timezone are required");
-    return NextResponse.json(await getStaleApplications(query.data.today, query.data.timeZone));
+    return NextResponse.json(await getStaleApplications(query.data.today, query.data.timeZone, query.data.staleApplicationThreshold));
   } catch (error) {
     return apiError(error);
   }

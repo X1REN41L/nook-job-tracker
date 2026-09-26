@@ -66,7 +66,7 @@ test("settings storage failure reports committed imported applications separatel
     await settings.locator('input[type="file"]').setInputFiles({
       name: "storage-failure.json", mimeType: "application/json",
       buffer: Buffer.from(JSON.stringify({ ...exported, settings: {
-        theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [],
+        ...exported.settings, theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [],
         sidebarCollapsed: false, archivedExpanded: false,
       }, applications: [{ ...record, id: importedId, company: `${record.company} restored`, events: [] }] })),
     });
@@ -93,6 +93,7 @@ test("backup import restores the sidebar collapse preference", async ({ page, re
   const backup = {
     ...exported,
     settings: {
+      ...exported.settings,
       theme: "system",
       defaultBoard: "APPLIED",
       motion: "system",

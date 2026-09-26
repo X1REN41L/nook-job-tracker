@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { matchDashboardShortcut, startsShortcutSequence } from "@/lib/keyboard-shortcuts";
+import { matchDashboardShortcut, shortcutDestination, startsShortcutSequence } from "@/lib/keyboard-shortcuts";
 import type { ApplicationPageName } from "@/components/application-dashboard";
 import type { ApplicationRecord } from "@/types/application";
 
@@ -84,20 +84,21 @@ export function useDashboardShortcuts({
 
       const anotherDialogIsOpen = isModalOpen || hasPendingDuplicate || hasPendingDelete || hasPendingInterviewDate || shortcutsOpen || settingsOpen;
       if (anotherDialogIsOpen || dragActive) return;
-      if (startsShortcutSequence(event)) {
+      if (startsShortcutSequence(event, page)) {
         pendingPrefixRef.current = { key: event.key.toLowerCase(), at: Date.now() };
         event.preventDefault();
         return;
       }
       if (!shortcut) return;
 
-      if (shortcut === "go-dashboard" || shortcut === "go-job-board" || shortcut === "go-interviews") {
+      const destination = shortcutDestination(shortcut);
+      if (destination) {
         event.preventDefault();
-        onNavigate(shortcut === "go-dashboard" ? "/dashboard" : shortcut === "go-job-board" ? "/jobs" : "/interviews");
+        onNavigate(destination);
         return;
       }
-      if (shortcut === "interview-tab-left" || shortcut === "interview-tab-right") {
-        if (onSwitchInterviewTab(shortcut === "interview-tab-left" ? "left" : "right")) event.preventDefault();
+      if (shortcut === "switch-interview-tabs") {
+        if (onSwitchInterviewTab(event.key === "ArrowLeft" ? "left" : "right")) event.preventDefault();
         return;
       }
       if (shortcut === "focus-application-up" || shortcut === "focus-application-down" || shortcut === "focus-column-left" || shortcut === "focus-column-right") {
@@ -116,7 +117,7 @@ export function useDashboardShortcuts({
         onOpenSettings();
         return;
       }
-      if (shortcut === "focus-search") {
+      if (shortcut === "search-job-board" || shortcut === "search-interviews") {
         if (onFocusSearch()) event.preventDefault();
         return;
       }
@@ -138,12 +139,13 @@ export function useDashboardShortcuts({
       }
 
       if (shortcut !== "archive-focused" && shortcut !== "delete-focused") {
-        const unhandled: never = shortcut;
-        return unhandled;
+        return;
       }
 
       const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      const applicationId = focused?.closest<HTMLElement>("[data-application-id]")?.dataset.applicationId;
+      const card = focused?.closest<HTMLElement>(".board-columns [data-kanban-card-id]");
+      if (card !== focused) return;
+      const applicationId = card?.dataset.kanbanCardId;
       const application = applications.find(({ id }) => id === applicationId);
       if (!application) return;
       if (shortcut === "archive-focused") {

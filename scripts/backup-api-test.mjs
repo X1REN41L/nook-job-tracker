@@ -9,12 +9,12 @@ const mutationHeaders = { Origin: origin, "Content-Type": "application/json" };
 const prisma = new PrismaClient();
 const post = (path, body) => fetch(`${base}${path}`, { method: "POST", headers: mutationHeaders, body: JSON.stringify(body) });
 const input = (role) => ({ company: "Backup API test", role, status: "APPLIED", appliedDate: "2026-09-24" });
-const settings = { theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true };
-const backup = (applications) => ({ version: 2, applications, settings });
+const settings = { theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15, motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true };
+const backup = (applications) => ({ version: 1, applications, settings });
 const record = (role) => ({ id: randomUUID(), company: "Backup API test", role, status: "APPLIED", source: null,
   appliedDate: "2026-09-24T00:00:00.000Z", interviewDate: null, interviewDatePromptDismissed: true,
   notes: "Preserved note", jobUrl: null, createdAt: "2026-09-24T01:00:00.000Z", lastUpdated: "2026-09-24T02:00:00.000Z",
-  events: [{ id: randomUUID(), type: "STATUS_CHANGE", detail: "ONLINE_ASSESSMENT → APPLIED", emailSnippet: null, createdAt: "2026-09-24T01:30:00.000Z" }] });
+  events: [{ id: randomUUID(), type: "STATUS_CHANGE", detail: "ONLINE_ASSESSMENT → APPLIED", fromStatus: "ONLINE_ASSESSMENT", toStatus: "APPLIED", emailSnippet: null, createdAt: "2026-09-24T01:30:00.000Z" }] });
 async function assertValidationIssues(response, expectedPaths) {
   assert.equal(response.status, 400);
   const body = await response.json();
@@ -65,10 +65,10 @@ try {
   const forged = await fetch(`${base}/api/applications`, { headers: { "x-forwarded-for": "203.0.113.19" } });
   assert.equal(forged.status, 200);
   const exported = await (await fetch(`${base}/api/applications/export`)).json();
-  assert.equal(exported.version, 2);
+  assert.equal(exported.version, 1);
   assert.deepEqual(exported.settings, settings);
   assert.equal(exported.applications.length, 1);
-  assert.equal("revision" in exported.applications[0], false, "Backup v2 exports must not include application revisions");
+  assert.equal("revision" in exported.applications[0], false, "Backup exports must not include application revisions");
   const seedId = exported.applications[0].id;
   const moved = await fetch(`${base}/api/applications/${seedId}`, { method: "PATCH", headers: mutationHeaders, body: JSON.stringify({ revision: application.revision, status: "INTERVIEW" }) });
   assert.equal(moved.status, 200);
@@ -89,7 +89,7 @@ try {
   assert.equal(restored.status, 201, await restored.clone().text());
   const importResult = await restored.json();
   assert.deepEqual(importResult.createdIds, [seedId]);
-  assert.equal(importResult.applications[0].revision, 0, "Backup v2 import should start at the database default revision");
+  assert.equal(importResult.applications[0].revision, 0, "Backup import should start at the database default revision");
   const roundTrip = await (await fetch(`${base}/api/applications/export`)).json();
   assert.deepEqual(roundTrip.applications, withEvents.applications);
   const identical = await post("/api/applications/import", backup(withEvents.applications));
@@ -107,7 +107,18 @@ try {
   const changedForUndo = await fetch(`${base}/api/applications/${seedId}`, { method: "PATCH", headers: mutationHeaders, body: JSON.stringify({ revision: 0, archived: false }) });
   assert.equal(changedForUndo.status, 200);
   assert.equal((await changedForUndo.json()).application.revision, 1);
-  assert.equal((await post("/api/applications/import", { version: 1, applications: [] })).status, 400);
+  await assertValidationIssues(await post("/api/applications/import", { ...backup([]), version: 2 }), ["version"]);
+  await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, startupPage: undefined } }), ["settings.startupPage"]);
+  await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, allApplicationsExpanded: undefined } }), ["settings.allApplicationsExpanded"]);
+  await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, motion: "reduced" } }), ["settings.motion"]);
+  await assertValidationIssues(await post("/api/applications/import", backup([{ ...record("missing archived"), archived: undefined }])), ["applications[0].archived"]);
+  await assertValidationIssues(await post("/api/applications/import", backup([{ ...record("missing transition"), events: [{ ...record("event").events[0], fromStatus: undefined }] }])), ["applications[0].events[0].fromStatus"]);
+  assert.equal(await prisma.application.count(), 1, "Outdated backups must not create records");
+  assert.equal((await post("/api/applications/import", { version: 1, applications: [], settings: { ...settings, startupPage: "interviews", staleApplicationThreshold: 30 } })).status, 201);
+  assert.equal((await post("/api/applications/import", { ...backup([]), settings: { ...settings, motion: "on" } })).status, 201);
+  assert.equal((await post("/api/applications/import", { ...backup([]), settings: { ...settings, motion: "off" } })).status, 201);
+  assert.equal((await post("/api/applications/import", { version: 1, applications: [], settings: { ...settings, staleApplicationThreshold: 14 } })).status, 400);
+  assert.equal((await post("/api/applications/import", { version: 1, applications: [], settings: { ...settings, staleApplicationThreshold: 21 } })).status, 400);
   assert.equal((await post("/api/applications/import", [])).status, 400);
   assert.equal((await post("/api/applications/import", backup([]))).status, 201);
   const deleted = await fetch(`${base}/api/applications/${seedId}?undoable=1`, { method: "DELETE", headers: mutationHeaders });
@@ -153,5 +164,5 @@ try {
   await prisma.undoSnapshot.create({ data: { token: deleteCleanupToken, applicationId: "expired-delete", payload: "{}", expiresAt: new Date(0) } });
   assert.equal((await fetch(`${base}/api/applications/${deleteCleanupApplication.id}`, { method: "DELETE", headers: mutationHeaders })).status, 204);
   assert.equal(await prisma.undoSnapshot.count({ where: { token: deleteCleanupToken } }), 0, "Delete requests should purge expired snapshot payloads");
-  console.log("Passed: backup round trip, identical merge, conflicts, malformed atomicity, unsupported versions, settings-only import, one-time restore, expiry cleanup on load/delete/restore, collision, invalid status.");
+  console.log("Passed: version 1 backup round trip, outdated backup rejection, identical merge, conflicts, malformed atomicity, settings-only import, one-time restore, expiry cleanup on load/delete/restore, collision, invalid status.");
 } finally { await prisma.$disconnect(); }

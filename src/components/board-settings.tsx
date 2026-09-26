@@ -70,7 +70,7 @@ export function BoardSettings() {
         </div>
       </DndContext>
       {confirmReset ? (
-        <div aria-label="Reset board defaults confirmation" className="mt-5 rounded-nook-sm border border-line bg-cream p-3 text-sm" role="group">
+        <div aria-label="Reset board defaults confirmation" className="motion-small-reveal mt-5 rounded-nook-sm border border-line bg-cream p-3 text-sm" role="group">
           <p>Restore default names, colors, empty-state messages, and order? Application data and your default new-application status stay the same.</p>
           <div className="mt-3 flex justify-end gap-2">
             <button ref={cancelResetRef} className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => { setConfirmReset(false); requestAnimationFrame(() => resetRef.current?.focus()); }} type="button">Cancel</button>
@@ -99,9 +99,9 @@ function BoardRow({ board, editing, shift, onEdit, onUpdate }: {
   const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 
   return (
-    <div ref={setRefs} className={`relative ${isDragging ? "z-10 rounded-nook-sm bg-cream shadow-sm" : "transition-transform duration-200 ease-out motion-reduce:transition-none"}`} style={{ transform: isDragging ? `${CSS.Translate.toString(transform)} scale(1.012)` : shift ? `translate3d(0, ${shift}px, 0)` : undefined }}>
+    <div ref={setRefs} className={`relative ${isDragging ? "z-10 rounded-nook-sm bg-cream shadow-sm" : "board-reorder-neighbor"}`} style={{ transform: isDragging ? CSS.Translate.toString(transform) : shift ? `translate3d(0, ${shift}px, 0)` : undefined }}>
       <div className="flex min-h-12 items-center gap-2 py-1.5">
-        <button ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label={`Reorder ${board.label} board`} className={`touch-none cursor-grab rounded-nook-sm p-1.5 text-ink-soft active:cursor-grabbing ${focusClass}`} type="button">
+        <button ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label={`Reorder ${board.label} board`} className={`motion-interactive touch-none cursor-grab rounded-nook-sm p-1.5 text-ink-soft hover:bg-cream-2 active:cursor-grabbing ${focusClass}`} type="button">
           <svg aria-hidden="true" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 20 20" width="18"><path d="M3 5h14M3 10h14M3 15h14" /></svg>
         </button>
         <span className={`status-dot ${BOARD_COLOR_CLASSES[board.color]}`} />

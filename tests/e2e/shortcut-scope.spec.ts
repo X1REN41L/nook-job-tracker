@@ -72,7 +72,7 @@ test("Escape closes the interview date prompt without marking it skipped", async
   expect((await record.json()).application.interviewDatePromptDismissed).toBe(false);
 });
 
-test("all nine original shortcuts have the expected behavior on each route and Settings suppresses them", async ({ page }) => {
+test("general shortcuts work across routes while page actions remain scoped", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
@@ -81,8 +81,12 @@ test("all nine original shortcuts have the expected behavior on each route and S
   for (const route of ["/jobs", "/interviews", "/dashboard"]) {
     await page.goto(route);
     await page.keyboard.press("n");
-    await expect(page.getByRole("dialog", { name: "Add a job" })).toBeVisible();
-    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Add a job" })).toHaveCount(0);
+    await page.keyboard.press("Alt+n");
+    if (route === "/jobs") {
+      await expect(page.getByRole("dialog", { name: "Add a job" })).toBeVisible();
+      await page.keyboard.press("Escape");
+    }
     await expect(page.getByRole("dialog", { name: "Add a job" })).toHaveCount(0);
 
     await page.keyboard.press("/");
@@ -94,11 +98,9 @@ test("all nine original shortcuts have the expected behavior on each route and S
     await page.keyboard.press("?");
     const shortcuts = page.getByRole("dialog", { name: "Keyboard Shortcuts" });
     await expect(shortcuts).toBeVisible();
-    await expect(shortcuts.getByText("Undo latest status change, archive, or delete")).toBeVisible();
+    await expect(shortcuts.getByText("Undo latest action")).toBeVisible();
     await expect(shortcuts.getByText(modifier === "Meta" ? "⌘ ⇧ ," : "Ctrl + Shift + ,", { exact: true })).toBeVisible();
-    for (const section of ["Job Board", "Dashboard"]) {
-      await expect(shortcuts.getByRole("region", { name: section }).getByText(modifier === "Meta" ? "⌥ A" : "Alt + Shift + A", { exact: true })).toBeVisible();
-    }
+    await expect(shortcuts.getByRole("region", { name: "Job Board" }).getByText(modifier === "Meta" ? "⌥ A" : "Alt + A", { exact: true })).toBeVisible();
     await expect(shortcuts.getByText("G J", { exact: true })).toBeVisible();
     await expect(shortcuts.getByText("← / →", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
@@ -112,14 +114,14 @@ test("all nine original shortcuts have the expected behavior on each route and S
     await expect(page.locator(".nook-toast")).toHaveCount(0);
 
     const before = await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"));
-    await page.keyboard.press("b");
+    await page.keyboard.press(`${modifier}+Shift+s`);
     expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).not.toBe(before);
 
     await page.keyboard.press(`${modifier}+Shift+,`);
     const settings = page.getByRole("dialog", { name: "Settings" });
     await expect(settings).toBeVisible();
     const collapsed = await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"));
-    for (const key of ["n", "/", "?", "Alt+a", "Delete", "Backspace", "b", "u", "g", "j", "ArrowDown"]) {
+    for (const key of ["Alt+n", "/", "?", "Alt+a", "Delete", "Backspace", `${modifier}+Shift+s`, "u", "g", "j", "ArrowDown"]) {
       await page.keyboard.press(key);
     }
     await expect(settings).toBeVisible();
@@ -182,22 +184,19 @@ test("keyboard-only navigation, card focus, archive, delete, and undo", async ({
   await page.keyboard.press("g");
   await page.keyboard.press("d");
   await expect(page).toHaveURL(/\/dashboard$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("a");
+  await expect(page).toHaveURL(/\/dashboard\/analytics$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("s");
+  await expect(page).toHaveURL(/\/dashboard\/stale$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("o");
+  await expect(page).toHaveURL(/\/dashboard$/);
   await page.keyboard.press("ArrowDown");
-  await expect(page.locator(`#recent-applications-heading + div [data-application-id="${assessment.id}"]`)).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(page.locator(`#recent-applications-heading + div [data-application-id="${applied.id}"]`)).toBeFocused();
-  await page.keyboard.press("ArrowUp");
-  await expect(page.locator(`#recent-applications-heading + div [data-application-id="${assessment.id}"]`)).toBeFocused();
   await page.keyboard.press("Alt+a");
-  await expect(page.locator(`#recent-applications-heading + div [data-application-id="${assessment.id}"]`)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
-  await page.keyboard.press("u");
   await expect(page.locator(`#recent-applications-heading + div [data-application-id="${assessment.id}"]`)).toBeVisible();
-  await page.keyboard.press("ArrowDown");
-  await expect(page.locator(`#recent-applications-heading + div [data-application-id="${assessment.id}"]`)).toBeFocused();
   await page.keyboard.press("Backspace");
-  await expect(page.getByRole("alertdialog", { name: "Delete application?" })).toBeVisible();
-  await page.keyboard.press("Escape");
   await expect(page.getByRole("alertdialog", { name: "Delete application?" })).toHaveCount(0);
 
   await page.keyboard.press("g");

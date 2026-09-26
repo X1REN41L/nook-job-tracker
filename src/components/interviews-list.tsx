@@ -66,10 +66,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
   }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      event.preventDefault();
-      focusTab(selectedTab === "upcoming" ? "past" : "upcoming");
-    } else if (event.key === "Home") {
+    if (event.key === "Home") {
       event.preventDefault();
       focusTab("upcoming");
     } else if (event.key === "End") {
@@ -92,7 +89,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
               ref={tab === "upcoming" ? upcomingTabRef : pastTabRef}
               aria-controls={panelId}
               aria-selected={selectedTab === tab}
-              className={`border-b-2 px-0.5 pb-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${selectedTab === tab ? "border-forest text-forest" : "border-transparent text-ink-soft hover:text-ink"}`}
+              className={`border-b-2 px-0.5 pb-2 text-sm font-semibold motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${selectedTab === tab ? "border-forest text-forest" : "border-transparent text-ink-soft hover:text-ink"}`}
               id={`${id}-${tab}-tab`}
               onClick={() => setSelectedTab(tab)}
               onKeyDown={handleTabKeyDown}
@@ -149,7 +146,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
               <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-past-heading`}>Past Interviews</h2>
               <button
                 aria-label={`Sort past interviews: ${pastSort === "recent" ? "most recent first" : "oldest first"}`}
-                className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+                className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook motion-interactive hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
                 onClick={() => setPastSort((current) => current === "recent" ? "oldest" : "recent")}
                 type="button"
               >
@@ -157,7 +154,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
               </button>
             </div>
             {past.length === 0 ? (
-              <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "No past interviews."}</p>
+              <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "None yet — patience, and a callback, will fix that."}</p>
             ) : (
               <div>{past.map((interview) => <InterviewRow key={interview.id} interview={interview} />)}</div>
             )}

@@ -2,19 +2,15 @@ import { Prisma, Status } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { calendarDateInTimeZone } from "@/lib/calendar-date";
+import {
+  analyticsPeriodRange, dateFromParts, dateKey, monthEnd, monthParts, monthStart, shiftMonth,
+  type AnalyticsSelection,
+} from "@/lib/analytics-period";
 import { analyzeStatusHistory, type StatusHistoryEvent } from "@/lib/status-history";
 
 const ACTIVE_STATUSES = [Status.APPLIED, Status.ONLINE_ASSESSMENT, Status.INTERVIEW] as const;
 const TERMINAL_INTERVIEW_STATUSES = [Status.OFFER, Status.REJECTED] as const;
 const STALE_SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM"] as const;
-
-export type AnalyticsPeriod = "CURRENT_MONTH" | "LAST_3_MONTHS" | "CURRENT_YEAR" | "CUSTOM_MONTH" | "CUSTOM_YEAR";
-
-export type AnalyticsSelection = {
-  period: AnalyticsPeriod;
-  month?: string;
-  year?: number;
-};
 
 type DashboardApplication = {
   id: string;
@@ -102,17 +98,6 @@ function rateFor(applications: DashboardApplication[], milestone: Status): RateM
   };
 }
 
-function dateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function dateFromParts(year: number, monthIndex: number, day: number) {
-  const date = new Date(0);
-  date.setUTCHours(0, 0, 0, 0);
-  date.setUTCFullYear(year, monthIndex, day);
-  return date;
-}
-
 function dateFromKey(key: string) {
   const [year, month, day] = key.split("-").map(Number);
   return dateFromParts(year, month - 1, day);
@@ -126,51 +111,6 @@ function addDays(key: string, count: number) {
 
 function daysBetween(start: string, end: string) {
   return Math.round((dateFromKey(end).getTime() - dateFromKey(start).getTime()) / 86_400_000);
-}
-
-function monthStart(year: number, month: number) {
-  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-01`;
-}
-
-function monthEnd(year: number, month: number) {
-  return dateKey(dateFromParts(year, month, 0));
-}
-
-function monthParts(key: string) {
-  const [year, month] = key.split("-").map(Number);
-  return { year, month };
-}
-
-function shiftMonth(year: number, month: number, offset: number) {
-  const date = dateFromParts(year, month - 1 + offset, 1);
-  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 };
-}
-
-function periodRange(selection: AnalyticsSelection, today?: string) {
-  if (selection.period !== "CUSTOM_MONTH" && selection.period !== "CUSTOM_YEAR" && !today) {
-    throw new Error("A user calendar date is required for current analytics periods");
-  }
-  const currentDate = today ?? "";
-  const { year: currentYear, month: currentMonth } = monthParts(currentDate);
-  switch (selection.period) {
-    case "CURRENT_MONTH":
-      return { startDate: monthStart(currentYear, currentMonth), endDate: currentDate };
-    case "LAST_3_MONTHS": {
-      const firstMonth = shiftMonth(currentYear, currentMonth, -2);
-      return { startDate: monthStart(firstMonth.year, firstMonth.month), endDate: currentDate };
-    }
-    case "CURRENT_YEAR":
-      return { startDate: `${String(currentYear).padStart(4, "0")}-01-01`, endDate: currentDate };
-    case "CUSTOM_MONTH": {
-      const { year, month } = monthParts(`${selection.month}-01`);
-      return { startDate: monthStart(year, month), endDate: monthEnd(year, month) };
-    }
-    case "CUSTOM_YEAR":
-      return {
-        startDate: `${String(selection.year).padStart(4, "0")}-01-01`,
-        endDate: `${String(selection.year).padStart(4, "0")}-12-31`,
-      };
-  }
 }
 
 function makeTrendBuckets(selection: AnalyticsSelection, startDate: string, endDate: string) {
@@ -210,7 +150,7 @@ async function loadApplications(where?: Prisma.ApplicationWhereInput): Promise<D
   });
 }
 
-function staleApplications(applications: DashboardApplication[], today: string, timeZone: string): StaleApplication[] {
+function staleApplications(applications: DashboardApplication[], today: string, timeZone: string, threshold: number): StaleApplication[] {
   const result: StaleApplication[] = [];
   for (const application of applications) {
     if (application.archived || !ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number])) continue;
@@ -219,7 +159,7 @@ function staleApplications(applications: DashboardApplication[], today: string, 
     if (!lastStatusEvent) continue;
 
     const staleDays = Math.max(0, daysBetween(calendarDateInTimeZone(new Date(lastStatusEvent.createdAt), timeZone), today));
-    if (staleDays < 21) continue;
+    if (staleDays < threshold) continue;
     const severity = staleDays >= 60 ? "CRITICAL" : staleDays >= 30 ? "HIGH" : "MEDIUM";
     result.push({
       id: application.id,
@@ -272,7 +212,7 @@ function staleGroups(applications: StaleApplication[]) {
   };
 }
 
-export async function getDashboardOverview(today: string, timeZone: string) {
+export async function getDashboardOverview(today: string, timeZone: string, staleApplicationThreshold = 15) {
   const applications = await loadApplications();
   const upcoming = applications
     .filter((application) =>
@@ -284,7 +224,7 @@ export async function getDashboardOverview(today: string, timeZone: string) {
     .sort((left, right) =>
       dateKey(left.interviewDate!).localeCompare(dateKey(right.interviewDate!)) || left.id.localeCompare(right.id),
     );
-  const stale = staleApplications(applications, today, timeZone);
+  const stale = staleApplications(applications, today, timeZone, staleApplicationThreshold);
 
   return {
     totalApplications: applications.length,
@@ -311,19 +251,19 @@ export async function getDashboardOverview(today: string, timeZone: string) {
   };
 }
 
-export async function getStaleApplications(today: string, timeZone: string) {
+export async function getStaleApplications(today: string, timeZone: string, staleApplicationThreshold = 15) {
   const applications = await loadApplications({
     archived: false,
     status: { in: [...ACTIVE_STATUSES] },
   });
   return {
-    ...staleGroups(staleApplications(applications, today, timeZone)),
+    ...staleGroups(staleApplications(applications, today, timeZone, staleApplicationThreshold)),
     timingCoverage: staleTimingCoverage(applications),
   };
 }
 
 export async function getDashboardAnalytics(selection: AnalyticsSelection, today?: string) {
-  const range = periodRange(selection, today);
+  const range = analyticsPeriodRange(selection, today);
   const applications = await loadApplications({
     appliedDate: {
       gte: dateFromKey(range.startDate),
