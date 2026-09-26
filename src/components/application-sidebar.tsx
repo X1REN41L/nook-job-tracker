@@ -148,16 +148,18 @@ export function ApplicationSidebar({
           />
 
           <div className="sidebar-brand-row relative z-10 flex shrink-0 items-center py-4">
-            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-forest to-forest-deep font-serif text-lg leading-none text-cream">
-              N
-            </span>
             <button
               ref={expandButtonRef}
               aria-label="Expand sidebar"
-              className="sidebar-logo-button absolute top-4 h-9 w-9 rounded-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+              className="sidebar-logo-button absolute top-4 z-10 flex h-9 w-9 items-center justify-center rounded-[10px] text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
               onClick={handleToggleSidebar}
               type="button"
-            />
+            >
+              <PanelChevron direction="right" />
+            </button>
+            <span aria-hidden="true" className="sidebar-brand-logo flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-forest to-forest-deep font-serif text-lg leading-none text-cream">
+              <span className="sidebar-brand-initial">N</span>
+            </span>
             <p className="sidebar-reveal ml-3 whitespace-nowrap font-serif text-base font-semibold leading-tight tracking-tight">Nook</p>
             <button
               ref={collapseButtonRef}

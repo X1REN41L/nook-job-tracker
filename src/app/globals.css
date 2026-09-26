@@ -371,6 +371,15 @@ body.nook-dragging * {
 .sidebar-collapsed .sidebar-logo-button {
   visibility: visible;
   pointer-events: auto;
+  opacity: 0;
+}
+
+.sidebar-collapsed .sidebar-logo-button:is(:hover, :focus-visible) {
+  opacity: 1;
+}
+
+.sidebar-collapsed .sidebar-logo-button:is(:hover, :focus-visible) + .sidebar-brand-logo .sidebar-brand-initial {
+  opacity: 0;
 }
 
 /* Keep the final board column clear of the sidebar's edge, in either state. */
