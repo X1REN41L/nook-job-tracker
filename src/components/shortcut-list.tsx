@@ -1,6 +1,6 @@
 import { shortcutLabels, type ShortcutSection } from "@/lib/keyboard-shortcuts";
 
-const sections: ShortcutSection[] = ["Global", "Job Board", "Dashboard", "Interviews", "Navigation"];
+const sections: ShortcutSection[] = ["Global", "Job Board", "Interviews", "Navigation"];
 
 export function ShortcutList({ className = "", isMac }: { className?: string; isMac: boolean }) {
   const shortcuts = shortcutLabels(isMac);

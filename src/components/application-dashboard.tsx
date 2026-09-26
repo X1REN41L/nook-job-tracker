@@ -17,6 +17,9 @@ import { DeleteDialog } from "@/components/delete-dialog";
 import { DuplicateWarningDialog } from "@/components/duplicate-warning-dialog";
 import { InterviewDateDialog } from "@/components/interview-date-dialog";
 import { InterviewsList } from "@/components/interviews-list";
+import { DashboardOverview } from "@/components/dashboard-overview";
+import { DashboardAnalytics } from "@/components/dashboard-analytics";
+import { DashboardStaleApplications } from "@/components/dashboard-stale-applications";
 import { JobModal, type JobFormState } from "@/components/job-modal";
 import { SettingsModal } from "@/components/settings-modal";
 import { ShortcutOverlay } from "@/components/shortcut-overlay";
@@ -46,6 +49,7 @@ const MAX_SIDEBAR_WIDTH = 420;
 const SIDEBAR_COLLAPSE_THRESHOLD = 180;
 const SIDEBAR_REOPEN_THRESHOLD = 80;
 export type ApplicationPageName = "job-board" | "dashboard" | "interviews";
+export type DashboardSection = "overview" | "analytics" | "stale";
 type PendingDuplicate = {
   candidate: JobFormState;
   editingId: string | null;
@@ -125,7 +129,7 @@ function getServerLocalDate() {
   return "";
 }
 
-export function ApplicationDashboard({ initialApplications, page }: { initialApplications: ApplicationRecord[]; page: ApplicationPageName }) {
+export function ApplicationDashboard({ initialApplications, page, dashboardSection = "overview" }: { initialApplications: ApplicationRecord[]; page: ApplicationPageName; dashboardSection?: DashboardSection }) {
   const router = useRouter();
   const boardScrollRef = useScrollbarActivity<HTMLDivElement>();
   const { theme, setTheme } = useTheme();
@@ -620,13 +624,10 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
     .filter((item) => activeFilter === "all" || item.status === activeFilter)
     .filter((item) => `${item.company} ${item.role}`.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
-  const recentItems = applications
-    .filter((item) => !item.archived)
-    .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
   const archivedItems = applications
     .filter((item) => item.archived)
     .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
-  const interviewToday = today || new Date().toISOString().slice(0, 10);
+  const interviewToday = today || currentLocalDate();
   const interviews = getInterviewListItems(applications);
   const upcomingInterviewCount = getUpcomingInterviewCount(applications, interviewToday);
   const activeApplication = applications.find(({ id }) => id === activeId) ?? null;
@@ -667,18 +668,6 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
       element.scrollIntoView({ block: "nearest", inline: "nearest" });
       return true;
     };
-    if (page === "dashboard") {
-      if (direction === "left" || direction === "right") return false;
-      if (sidebarCollapsed) {
-        setSidebarCollapsed(false);
-        requestAnimationFrame(() => document.querySelector<HTMLElement>("#recent-applications-heading + div [data-application-id]")?.focus());
-        return true;
-      }
-      const rows = Array.from(document.querySelectorAll<HTMLElement>("#recent-applications-heading + div [data-application-id]"));
-      const focused = document.activeElement?.closest("[data-application-id]");
-      const index = rows.findIndex((row) => row === focused);
-      return focus(rows[index < 0 ? direction === "up" ? rows.length - 1 : 0 : index + (direction === "down" ? 1 : -1)]);
-    }
     if (page !== "job-board") return false;
     const columns = Array.from(document.querySelectorAll<HTMLElement>(".board-columns .kanban-column"));
     const focused = document.activeElement?.closest<HTMLElement>("[data-kanban-card-id]");
@@ -803,13 +792,13 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
         <ApplicationSidebar
           boards={boards}
           sidebarItems={sidebarItems}
-          recentItems={recentItems}
           archivedItems={archivedItems}
           totalApplications={applications.length}
           upcomingInterviewCount={upcomingInterviewCount}
           collapsed={sidebarCollapsed}
           width={sidebarWidth}
           page={page}
+          dashboardSection={dashboardSection}
           archivedExpanded={archivedExpanded}
           allApplicationsExpanded={allApplicationsExpanded}
           movingId={movingId}
@@ -840,10 +829,13 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
           ) : page === "interviews" ? (
             <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} searchInputRef={interviewSearchRef} upcomingTabRef={upcomingTabRef} pastTabRef={pastTabRef} />
           ) : (
-            <section className="flex min-h-full flex-col items-center justify-center text-center">
-              <h1 className="font-serif text-3xl font-semibold tracking-tight">Dashboard</h1>
-              <p className="mt-2 text-sm text-ink-soft">This page is a placeholder for now.</p>
-            </section>
+            dashboardSection === "overview" ? (
+              <DashboardOverview today={today} refreshKey={applications} />
+            ) : dashboardSection === "analytics" ? (
+              <DashboardAnalytics today={today} refreshKey={applications} />
+            ) : (
+              <DashboardStaleApplications today={today} refreshKey={applications} applications={applications} onEdit={startEdit} />
+            )
           )}
         </div>
 

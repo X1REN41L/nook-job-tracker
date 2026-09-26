@@ -9,6 +9,8 @@ const headers = { Origin: origin, "Content-Type": "application/json" };
 const prisma = new PrismaClient();
 const createdIds = [];
 const today = new Date().toISOString().slice(0, 10);
+const dashboardPath = (section, date = today, timeZone = "UTC") =>
+  `/api/dashboard/${section}?${new URLSearchParams({ today: date, timeZone })}`;
 
 function shiftDate(key, offset) {
   const date = new Date(key + "T00:00:00.000Z");
@@ -89,6 +91,10 @@ async function changeStatus(application, status) {
 }
 
 async function setStatusEventAge(applicationId, days) {
+  return setStatusEventTimestamp(applicationId, shiftDate(today, -days) + "T12:00:00.000Z");
+}
+
+async function setStatusEventTimestamp(applicationId, timestamp) {
   const event = await prisma.applicationEvent.findFirst({
     where: { applicationId, type: "STATUS_CHANGE" },
     orderBy: { createdAt: "asc" },
@@ -96,12 +102,12 @@ async function setStatusEventAge(applicationId, days) {
   assert.ok(event, "application should have its initial status event");
   await prisma.applicationEvent.update({
     where: { id: event.id },
-    data: { createdAt: new Date(Date.now() - days * 86_400_000) },
+    data: { createdAt: new Date(timestamp) },
   });
 }
 
 try {
-  const emptyOverview = await json("/api/dashboard/overview?today=" + today);
+  const emptyOverview = await json(dashboardPath("overview"));
   assert.equal(emptyOverview.totalApplications, 0);
   assert.equal(emptyOverview.activePipeline, 0);
   assert.equal(emptyOverview.upcomingInterviews.count, 0);
@@ -114,7 +120,7 @@ try {
   assert.deepEqual(emptyOverview.staleTimingCoverage, {
     applicationsInScope: 0, withReliableStatusTimestamp: 0, withoutReliableStatusTimestamp: 0, isComplete: true,
   });
-  const emptyStale = await json("/api/dashboard/stale");
+  const emptyStale = await json(dashboardPath("stale"));
   assert.deepEqual(emptyStale.counts, { CRITICAL: 0, HIGH: 0, MEDIUM: 0, total: 0 });
   assert.equal(emptyStale.timingCoverage.isComplete, true);
   const emptyAnalytics = await json("/api/dashboard/analytics?today=" + today);
@@ -124,7 +130,7 @@ try {
   assertRateValues(emptyAnalytics, ["interviewRate", "offerRate", "rejectionRate"]);
 
   const milestone = await createApplication({ role: "Milestone history" });
-  const singleOverview = await json("/api/dashboard/overview?today=" + today);
+  const singleOverview = await json(dashboardPath("overview"));
   assert.equal(singleOverview.totalApplications, 1);
   assert.equal(singleOverview.interviewRate.denominator, 1);
   assert.equal(singleOverview.interviewRate.numerator, 0);
@@ -265,7 +271,7 @@ try {
   const missingTiming = await createApplication({ role: "Missing reliable status timestamp" });
   await prisma.applicationEvent.deleteMany({ where: { applicationId: missingTiming.id, type: "STATUS_CHANGE" } });
 
-  const overview = await json("/api/dashboard/overview?today=" + today);
+  const overview = await json(dashboardPath("overview"));
   assert.equal(overview.totalApplications, createdIds.length);
   assert.equal(overview.activePipeline, await prisma.application.count({
     where: { archived: false, status: { in: ["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW"] } },
@@ -289,7 +295,7 @@ try {
   assert.equal(overview.staleTimingCoverage.withoutReliableStatusTimestamp, 1);
   assert.equal(overview.staleTimingCoverage.isComplete, false);
 
-  const stale = await json("/api/dashboard/stale");
+  const stale = await json(dashboardPath("stale"));
   assert.deepEqual(stale.counts, { CRITICAL: 1, HIGH: 2, MEDIUM: 2, total: 5 });
   assert.equal(stale.applicationsBySeverity.CRITICAL[0].id, stale60.id);
   assert.deepEqual(stale.applicationsBySeverity.HIGH.map(({ id }) => id), [stale59.id, stale30.id]);
@@ -299,9 +305,19 @@ try {
     [stale29.id, 29, "MEDIUM"], [stale21.id, 21, "MEDIUM"],
   ]);
   assert.deepEqual(stale.top.map(({ id }) => id), overview.staleApplications.map(({ id }) => id));
+  assert.deepEqual(stale.top, overview.staleApplications, "Overview and stale endpoint share the exact stale result");
   assert.equal(stale.applications.some(({ id }) => id === stale20.id || id === archivedStale.id || id === staleOffer.id || id === missingTiming.id), false);
   assert.equal(stale.timingCoverage.withoutReliableStatusTimestamp, 1);
   assert.equal(stale.timingCoverage.isComplete, false);
+
+  const nextDay = shiftDate(today, 1);
+  const nextDayStale = await json(dashboardPath("stale", nextDay));
+  const nextDayOverview = await json(dashboardPath("overview", nextDay));
+  assert.deepEqual(nextDayStale.top, nextDayOverview.staleApplications);
+  assert.deepEqual(nextDayStale.applications.map(({ id, staleDays, severity }) => [id, staleDays, severity]), [
+    [stale60.id, 61, "CRITICAL"], [stale59.id, 60, "CRITICAL"], [stale30.id, 31, "HIGH"],
+    [stale29.id, 30, "HIGH"], [stale21.id, 22, "MEDIUM"], [stale20.id, 21, "MEDIUM"],
+  ], "An explicit today moves each 20/21, 29/30, and 59/60-day boundary consistently");
 
   const currentMonth = await json("/api/dashboard/analytics?today=" + today);
   assert.equal(currentMonth.period, "CURRENT_MONTH");
@@ -364,8 +380,21 @@ try {
 
   assert.equal((await fetch(base + "/api/dashboard/analytics?period=CUSTOM_MONTH")).status, 400);
   assert.equal((await fetch(base + "/api/dashboard/analytics?period=CUSTOM_YEAR&month=2026-01&year=2026")).status, 400);
-  assert.equal((await fetch(base + "/api/dashboard/overview?today=2026-02-30")).status, 400);
+  assert.equal((await fetch(base + dashboardPath("overview", "2026-02-30"))).status, 400);
   assert.equal((await fetch(base + "/api/dashboard/overview")).status, 400, "Overview requires an explicit calendar date");
+  assert.equal((await fetch(base + "/api/dashboard/stale")).status, 400, "Stale requires an explicit calendar date");
+  assert.equal((await fetch(base + dashboardPath("stale", "2026-02-30"))).status, 400);
+  assert.equal((await fetch(base + dashboardPath("stale", "2026-1-01"))).status, 400);
+  for (const section of ["overview", "stale"]) {
+    const missingZone = await fetch(base + `/api/dashboard/${section}?today=${today}`);
+    assert.equal(missingZone.status, 400, `${section} requires a timezone`);
+    assert.match((await missingZone.json()).error, /timezone/i);
+    const invalidZone = await fetch(base + dashboardPath(section, today, "Mars/Phobos"));
+    assert.equal(invalidZone.status, 400, `${section} rejects an invalid timezone`);
+    assert.match((await invalidZone.json()).error, /timezone/i);
+    assert.equal((await fetch(base + dashboardPath(section, today, "+06:00"))).status, 400,
+      `${section} rejects a numeric offset in place of an IANA timezone`);
+  }
   assert.equal((await fetch(base + "/api/dashboard/analytics?today=2026-02-30")).status, 400);
   assert.equal((await fetch(base + "/api/dashboard/analytics?period=CUSTOM_MONTH&month=2026-13")).status, 400);
   assert.equal((await fetch(base + "/api/dashboard/analytics?period=CUSTOM_YEAR&year=20x6")).status, 400);
@@ -380,11 +409,11 @@ try {
   });
   assert.equal(archiveDecember.status, 200);
 
-  const janFirstOverview = await json("/api/dashboard/overview?today=2026-01-01");
+  const janFirstOverview = await json(dashboardPath("overview", "2026-01-01"));
   const janMeeting = janFirstOverview.upcomingInterviews.items.find(({ id }) => id === calendarMeeting.id);
   assert.ok(janMeeting, "The exact supplied calendar date is included as an upcoming interview day");
   assert.equal(janMeeting.daysUntilInterview, 0);
-  const decLastOverview = await json("/api/dashboard/overview?today=2025-12-31");
+  const decLastOverview = await json(dashboardPath("overview", "2025-12-31"));
   assert.equal(decLastOverview.upcomingInterviews.items.find(({ id }) => id === calendarMeeting.id)?.daysUntilInterview, 1,
     "Calendar-day arithmetic crosses local month/year boundaries without timezone conversion");
   assert.ok(janFirstOverview.upcomingInterviews.items.some(({ id }) => id === februaryCohort.id));
@@ -454,10 +483,10 @@ try {
   const earlyCalendarYear = await json("/api/dashboard/analytics?today=0004-02-29");
   assert.deepEqual(earlyCalendarYear.range, { startDate: "0004-02-01", endDate: "0004-02-29" });
 
-  const allTimeBeforeArchive = await json("/api/dashboard/overview?today=" + today);
+  const allTimeBeforeArchive = await json(dashboardPath("overview"));
   const currentCohortBeforeArchive = await json("/api/dashboard/analytics?today=" + today);
   await prisma.application.updateMany({ where: { id: { in: createdIds } }, data: { archived: true } });
-  const allArchivedOverview = await json("/api/dashboard/overview?today=" + today);
+  const allArchivedOverview = await json(dashboardPath("overview"));
   assert.equal(allArchivedOverview.totalApplications, createdIds.length);
   assert.equal(allArchivedOverview.activePipeline, 0);
   assert.equal(allArchivedOverview.upcomingInterviews.count, 0);
@@ -467,13 +496,61 @@ try {
   assert.deepEqual(allArchivedOverview.staleTimingCoverage, {
     applicationsInScope: 0, withReliableStatusTimestamp: 0, withoutReliableStatusTimestamp: 0, isComplete: true,
   });
-  const allArchivedStale = await json("/api/dashboard/stale");
+  const allArchivedStale = await json(dashboardPath("stale"));
   assert.deepEqual(allArchivedStale.counts, { CRITICAL: 0, HIGH: 0, MEDIUM: 0, total: 0 });
   const allArchivedAnalytics = await json("/api/dashboard/analytics?today=" + today);
   assert.equal(allArchivedAnalytics.applications, currentCohortBeforeArchive.applications,
     "Analytics cohort metrics include archived applications");
 
-  console.log("Passed: zero/one/all-archived states, typed and repeated transitions, imported chain validation, rate coverage, explicit calendar dates, interview ordering, stale thresholds/order/coverage, exact cohorts, status breakdown, and zero-filled trends.");
+  const boundaryToday = "2026-10-17";
+  const timezoneFixtures = new Map();
+  for (const age of [20, 21, 29, 30, 59, 60]) {
+    const application = await createApplication({ role: `Dhaka local ${age} days` });
+    // The UTC event date is one day earlier; 22:30 UTC is 04:30 in Dhaka.
+    await setStatusEventTimestamp(application.id, `${shiftDate(boundaryToday, -age - 1)}T22:30:00.000Z`);
+    timezoneFixtures.set(age, application.id);
+  }
+  const dhakaStale = await json(dashboardPath("stale", boundaryToday, "Asia/Dhaka"));
+  const dhakaOverview = await json(dashboardPath("overview", boundaryToday, "Asia/Dhaka"));
+  assert.deepEqual(dhakaStale.top, dhakaOverview.staleApplications);
+  for (const [age, id] of timezoneFixtures) {
+    const actual = dhakaStale.applications.find((item) => item.id === id);
+    if (age === 20) {
+      assert.equal(actual, undefined, "20 local calendar days is not stale");
+    } else {
+      assert.equal(actual?.staleDays, age, `Dhaka local day boundary at ${age} days`);
+      assert.equal(actual?.severity, age >= 60 ? "CRITICAL" : age >= 30 ? "HIGH" : "MEDIUM");
+    }
+  }
+  const utcSameDate = await createApplication({ role: "UTC and local date match" });
+  await setStatusEventTimestamp(utcSameDate.id, "2026-09-26T12:00:00.000Z");
+  const utcStale = await json(dashboardPath("stale", boundaryToday, "UTC"));
+  assert.equal(utcStale.applications.find((item) => item.id === utcSameDate.id)?.staleDays, 21);
+
+  const previousLocalDate = await createApplication({ role: "Previous local day" });
+  await setStatusEventTimestamp(previousLocalDate.id, "2026-09-26T02:30:00.000Z");
+  const losAngelesStale = await json(dashboardPath("stale", boundaryToday, "America/Los_Angeles"));
+  assert.equal(losAngelesStale.applications.find((item) => item.id === previousLocalDate.id)?.staleDays, 22,
+    "Early UTC hours belong to the previous local calendar day in Los Angeles");
+  assert.deepEqual(losAngelesStale.top, (await json(dashboardPath("overview", boundaryToday, "America/Los_Angeles"))).staleApplications);
+
+  const monthBoundary = await createApplication({ role: "Local month boundary" });
+  await setStatusEventTimestamp(monthBoundary.id, "2026-09-30T22:30:00.000Z");
+  const octoberStale = await json(dashboardPath("stale", "2026-10-22", "Asia/Dhaka"));
+  assert.equal(octoberStale.applications.find((item) => item.id === monthBoundary.id)?.staleDays, 21);
+
+  const yearBoundary = await createApplication({ role: "Local year boundary" });
+  await setStatusEventTimestamp(yearBoundary.id, "2025-12-31T22:30:00.000Z");
+  const januaryStale = await json(dashboardPath("stale", "2026-01-22", "Asia/Dhaka"));
+  assert.equal(januaryStale.applications.find((item) => item.id === yearBoundary.id)?.staleDays, 21);
+
+  const dstBoundary = await createApplication({ role: "DST spring transition" });
+  await setStatusEventTimestamp(dstBoundary.id, "2026-03-08T04:30:00.000Z");
+  const marchStale = await json(dashboardPath("stale", "2026-03-28", "America/New_York"));
+  assert.equal(marchStale.applications.find((item) => item.id === dstBoundary.id)?.staleDays, 21,
+    "DST changes do not alter calendar-day age");
+
+  console.log("Passed: Dashboard API states, history, rates, stale boundaries and timezone conversion, Overview consistency, calendar dates, and analytics cohorts.");
 } finally {
   if (createdIds.length) await prisma.application.deleteMany({ where: { id: { in: createdIds } } });
   await prisma.$disconnect();

@@ -66,3 +66,4 @@ prisma/migrations/
 !prisma/migrations/
 !prisma/migrations/**
 prisma/migrations/.DS_Store
+/screenshots/

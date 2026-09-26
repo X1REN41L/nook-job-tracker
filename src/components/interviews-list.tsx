@@ -2,48 +2,9 @@
 
 import { useId, useState, type KeyboardEvent, type RefObject } from "react";
 
-import { interviewDateKey, type InterviewListItem } from "@/lib/interviews";
+import { groupUpcomingInterviews, interviewDateKey, type InterviewListItem } from "@/lib/interviews";
 
 type InterviewTab = "upcoming" | "past";
-
-type InterviewGroup = {
-  key: string;
-  label: string;
-  interviews: InterviewListItem[];
-};
-
-function addDays(dateKey: string, days: number) {
-  const date = new Date(`${dateKey}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function endOfCurrentWeek(today: string) {
-  const date = new Date(`${today}T00:00:00.000Z`);
-  return addDays(today, 6 - date.getUTCDay());
-}
-
-function getGroupLabel(date: string, today: string, weekEnd: string) {
-  if (date === today) return "Today";
-  if (date === addDays(today, 1)) return "Tomorrow";
-  if (date <= weekEnd) return "This Week";
-  return "Later";
-}
-
-function groupInterviews(interviews: InterviewListItem[], today: string) {
-  const weekEnd = endOfCurrentWeek(today);
-  const groups = new Map<string, InterviewGroup>();
-
-  for (const interview of interviews) {
-    const date = interviewDateKey(interview.date);
-    const label = getGroupLabel(date, today, weekEnd);
-    const group = groups.get(label) ?? { key: label.toLowerCase().replaceAll(" ", "-"), label, interviews: [] };
-    group.interviews.push(interview);
-    groups.set(label, group);
-  }
-
-  return [...groups.values()];
-}
 
 function formatInterviewDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -92,12 +53,11 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
     interview.role.toLocaleLowerCase().includes(query) ||
     interview.company.toLocaleLowerCase().includes(query);
   const upcoming = interviews
-    .filter((interview) => interviewDateKey(interview.date) >= today && matchesSearch(interview))
-    .sort((a, b) => interviewDateKey(a.date).localeCompare(interviewDateKey(b.date)));
+    .filter((interview) => interviewDateKey(interview.date) >= today && matchesSearch(interview));
   const past = interviews
     .filter((interview) => interviewDateKey(interview.date) < today && matchesSearch(interview))
     .sort((a, b) => (pastSort === "recent" ? -1 : 1) * interviewDateKey(a.date).localeCompare(interviewDateKey(b.date)));
-  const groups = groupInterviews(upcoming, today);
+  const groups = groupUpcomingInterviews(upcoming, today);
   const panelId = `${id}-panel`;
 
   function focusTab(tab: InterviewTab) {
@@ -172,7 +132,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
               <div className="flex flex-col gap-9 sm:gap-12">
                 {groups.map((group) => (
                   <section key={group.key} aria-labelledby={`${id}-${group.key}-heading`}>
-                    <h3 className={`mb-5 font-sans text-xs font-semibold uppercase tracking-[0.12em] ${group.label === "Today" ? "text-forest" : group.label === "Tomorrow" ? "text-gold" : group.label === "This Week" ? "text-clay" : "text-rose"}`} id={`${id}-${group.key}-heading`}>
+                    <h3 className={`mb-5 border-b border-line/70 pb-3 font-sans text-xs font-semibold uppercase tracking-[0.12em] ${group.key === "today" ? "text-forest" : group.key === "tomorrow" ? "text-gold" : group.key === "later-this-week" ? "text-clay" : "text-rose"}`} id={`${id}-${group.key}-heading`}>
                       {group.label}
                     </h3>
                     <div>

@@ -1,6 +1,7 @@
 import { Prisma, Status } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { calendarDateInTimeZone } from "@/lib/calendar-date";
 import { analyzeStatusHistory, type StatusHistoryEvent } from "@/lib/status-history";
 
 const ACTIVE_STATUSES = [Status.APPLIED, Status.ONLINE_ASSESSMENT, Status.INTERVIEW] as const;
@@ -209,7 +210,7 @@ async function loadApplications(where?: Prisma.ApplicationWhereInput): Promise<D
   });
 }
 
-function staleApplications(applications: DashboardApplication[], now: Date): StaleApplication[] {
+function staleApplications(applications: DashboardApplication[], today: string, timeZone: string): StaleApplication[] {
   const result: StaleApplication[] = [];
   for (const application of applications) {
     if (application.archived || !ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number])) continue;
@@ -217,7 +218,7 @@ function staleApplications(applications: DashboardApplication[], now: Date): Sta
     const lastStatusEvent = history.latestStatusEvent;
     if (!lastStatusEvent) continue;
 
-    const staleDays = Math.max(0, Math.floor((now.getTime() - new Date(lastStatusEvent.createdAt).getTime()) / 86_400_000));
+    const staleDays = Math.max(0, daysBetween(calendarDateInTimeZone(new Date(lastStatusEvent.createdAt), timeZone), today));
     if (staleDays < 21) continue;
     const severity = staleDays >= 60 ? "CRITICAL" : staleDays >= 30 ? "HIGH" : "MEDIUM";
     result.push({
@@ -271,7 +272,7 @@ function staleGroups(applications: StaleApplication[]) {
   };
 }
 
-export async function getDashboardOverview(today: string, now = new Date()) {
+export async function getDashboardOverview(today: string, timeZone: string) {
   const applications = await loadApplications();
   const upcoming = applications
     .filter((application) =>
@@ -283,7 +284,7 @@ export async function getDashboardOverview(today: string, now = new Date()) {
     .sort((left, right) =>
       dateKey(left.interviewDate!).localeCompare(dateKey(right.interviewDate!)) || left.id.localeCompare(right.id),
     );
-  const stale = staleApplications(applications, now);
+  const stale = staleApplications(applications, today, timeZone);
 
   return {
     totalApplications: applications.length,
@@ -310,13 +311,13 @@ export async function getDashboardOverview(today: string, now = new Date()) {
   };
 }
 
-export async function getStaleApplications(now = new Date()) {
+export async function getStaleApplications(today: string, timeZone: string) {
   const applications = await loadApplications({
     archived: false,
     status: { in: [...ACTIVE_STATUSES] },
   });
   return {
-    ...staleGroups(staleApplications(applications, now)),
+    ...staleGroups(staleApplications(applications, today, timeZone)),
     timingCoverage: staleTimingCoverage(applications),
   };
 }

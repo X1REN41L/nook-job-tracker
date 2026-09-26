@@ -12,7 +12,7 @@ type ShortcutBinding =
   | { kind: "combo"; code: string; primary?: boolean; shift?: boolean; alt?: boolean }
   | { kind: "sequence"; keys: readonly [string, string] };
 
-export type ShortcutSection = "Global" | "Job Board" | "Dashboard" | "Interviews" | "Navigation";
+export type ShortcutSection = "Global" | "Job Board" | "Interviews" | "Navigation";
 
 type ShortcutDefinition = {
   id: string;
@@ -40,17 +40,7 @@ const shortcutDefinitions = [
     pages: ["job-board"],
     section: "Job Board",
   },
-  {
-    id: "archive-focused",
-    displayId: "archive-focused-row",
-    action: "Archive focused row",
-    bindings: [{ kind: "combo", code: "KeyA", alt: true, shift: true }],
-    macBindings: [{ kind: "combo", code: "KeyA", alt: true }],
-    pages: ["dashboard"],
-    section: "Dashboard",
-  },
   { id: "delete-focused", displayId: "delete-focused-card", action: "Delete focused card", bindings: [{ kind: "key", key: "Delete" }, { kind: "key", key: "Backspace" }], pages: ["job-board"], section: "Job Board" },
-  { id: "delete-focused", displayId: "delete-focused-row", action: "Delete focused row", bindings: [{ kind: "key", key: "Delete" }, { kind: "key", key: "Backspace" }], pages: ["dashboard"], section: "Dashboard" },
   { id: "toggle-sidebar", action: "Toggle sidebar", bindings: [{ kind: "key", key: "b" }], section: "Global" },
   { id: "undo", action: "Undo latest status change, archive, or delete", bindings: [{ kind: "key", key: "u" }], section: "Global", scopeNote: "All pages" },
   { id: "close", action: "Close or cancel", bindings: [{ kind: "key", key: "Escape" }], section: "Global" },
@@ -59,8 +49,8 @@ const shortcutDefinitions = [
   { id: "go-interviews", action: "Go to Interviews", bindings: [{ kind: "sequence", keys: ["g", "i"] }], section: "Navigation" },
   { id: "interview-tab-left", action: "Switch Interviews tabs", bindings: [{ kind: "key", key: "ArrowLeft" }], pages: ["interviews"], section: "Interviews", displayId: "interview-tabs" },
   { id: "interview-tab-right", action: "Switch Interviews tabs", bindings: [{ kind: "key", key: "ArrowRight" }], pages: ["interviews"], section: "Interviews", displayId: "interview-tabs" },
-  { id: "focus-application-up", action: "Focus previous application", bindings: [{ kind: "key", key: "ArrowUp" }], pages: ["job-board", "dashboard"], section: "Navigation", scopeNote: "Job Board & Dashboard" },
-  { id: "focus-application-down", action: "Focus next application", bindings: [{ kind: "key", key: "ArrowDown" }], pages: ["job-board", "dashboard"], section: "Navigation", scopeNote: "Job Board & Dashboard" },
+  { id: "focus-application-up", action: "Focus previous application", bindings: [{ kind: "key", key: "ArrowUp" }], pages: ["job-board"], section: "Navigation", scopeNote: "Job Board" },
+  { id: "focus-application-down", action: "Focus next application", bindings: [{ kind: "key", key: "ArrowDown" }], pages: ["job-board"], section: "Navigation", scopeNote: "Job Board" },
   { id: "focus-column-left", action: "Focus card in previous column", bindings: [{ kind: "key", key: "ArrowLeft" }], pages: ["job-board"], section: "Navigation" },
   { id: "focus-column-right", action: "Focus card in next column", bindings: [{ kind: "key", key: "ArrowRight" }], pages: ["job-board"], section: "Navigation" },
 ] as const satisfies readonly ShortcutDefinition[];

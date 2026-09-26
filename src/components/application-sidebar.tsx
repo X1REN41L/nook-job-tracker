@@ -15,13 +15,13 @@ import type { ApplicationRecord } from "@/types/application";
 type ApplicationSidebarProps = {
   boards: BoardConfiguration[];
   sidebarItems: ApplicationRecord[];
-  recentItems: ApplicationRecord[];
   archivedItems: ApplicationRecord[];
   totalApplications: number;
   upcomingInterviewCount: number;
   collapsed: boolean;
   width: number;
   page: "job-board" | "dashboard" | "interviews";
+  dashboardSection?: "overview" | "analytics" | "stale";
   archivedExpanded: boolean;
   allApplicationsExpanded: boolean;
   movingId: string | null;
@@ -49,13 +49,13 @@ const mainNavItemClass = "box-border flex h-9 w-full min-w-0 cursor-pointer item
 export function ApplicationSidebar({
   boards,
   sidebarItems,
-  recentItems,
   archivedItems,
   totalApplications,
   upcomingInterviewCount,
   collapsed,
   width,
   page,
+  dashboardSection = "overview",
   archivedExpanded,
   allApplicationsExpanded,
   movingId,
@@ -165,7 +165,6 @@ export function ApplicationSidebar({
           <nav aria-label="Main navigation" className="sidebar-main-nav shrink-0 border-b border-line py-3">
             <div className="flex flex-col gap-1">
               <Link
-                aria-current={page === "dashboard" ? "page" : undefined}
                 className={`${mainNavItemClass} ${page === "dashboard" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
                 href="/dashboard"
               >
@@ -327,30 +326,26 @@ export function ApplicationSidebar({
             </>
           )}
 
-          {page === "dashboard" && !collapsed && (
-            <section className="flex min-h-0 flex-1 flex-col px-3 py-4" aria-labelledby="recent-applications-heading">
-              <h2 id="recent-applications-heading" className="shrink-0 px-2 font-serif text-base font-semibold">
-                Recent applications
-              </h2>
-              <div className="scrollbar-styled mt-2 min-h-0 flex-1 overflow-y-auto">
-                {recentItems.length === 0 ? (
-                  <p className="px-3 py-10 text-center text-sm leading-6 text-ink-soft">No recent applications yet.</p>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {recentItems.map((application) => (
-                      <SidebarApplicationRow
-                        key={application.id}
-                        application={application}
-                        boards={boards}
-                        disabled={movingId !== null}
-                        draggable={false}
-                        onEdit={onEdit}
-                      />
-                    ))}
-                  </div>
-                )}
+          {page === "dashboard" && (
+            <nav aria-label="Dashboard sections" className="min-h-0 overflow-y-auto px-3 py-4">
+              <h2 className="px-2 font-serif text-base font-semibold">Dashboard</h2>
+              <div className="mt-2 flex flex-col gap-1">
+                {([
+                  { section: "overview", label: "Overview", href: "/dashboard" },
+                  { section: "analytics", label: "Analytics", href: "/dashboard/analytics" },
+                  { section: "stale", label: "Stale Applications", href: "/dashboard/stale" },
+                ] as const).map(({ section, label, href }) => (
+                  <Link
+                    key={section}
+                    aria-current={dashboardSection === section ? "page" : undefined}
+                    className={`${mainNavItemClass} border ${dashboardSection === section ? "border-forest bg-forest font-semibold text-cream" : "border-transparent text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                    href={href}
+                  >
+                    <span>{label}</span>
+                  </Link>
+                ))}
               </div>
-            </section>
+            </nav>
           )}
           </div>
         </aside>
