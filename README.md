@@ -1,69 +1,34 @@
 # Nook
 
-Nook is a local job and internship application tracker. It provides a focused
-Kanban workspace for recording applications, moving them through the hiring
-process, and backing up or restoring application data.
+Nook is a local-first job application tracker for organizing opportunities, following your progress, and keeping your application data on your computer.
 
 ## Features
 
-- Track company, role, status, applied date, source, job link, and notes
-- Manage applications in an editable Kanban board
-- Use five statuses: Applied, Online assessment, Interview, Offer, and Rejected
-- Drag applications with pointer, touch, or keyboard controls
-- Archive applications separately from their application status, and restore
-  them to the active board
-- Search by company or role and filter active board statuses
-- Create, edit, and delete applications with client- and server-side validation
-- Detect likely duplicate company-and-role entries before saving
-- Undo a deletion, status change, or archive action from the confirmation toast
-- Back up and restore applications with JSON import and export
-- Switch between light and dark themes, including system-theme support
-- Use keyboard shortcuts for common actions, search, archiving, deletion, and
-  undo
-- Persist sidebar and archive panel preferences in the browser
+- **Overview dashboard:** See your application pipeline, upcoming interviews, and applications that need attention.
+- **Job Board:** Move applications through a Kanban workflow, with drag-and-drop and keyboard controls.
+- **Application management:** Add, edit, search, filter, and delete applications. Keep company, role, dates, source, notes, and posting links together; open saved links from board cards.
+- **Duplicate-entry warnings:** Review possible matches before saving a similar application.
+- **Interviews:** Record interview dates and browse upcoming and past interviews.
+- **Analytics:** Review application activity and outcomes over selected time periods.
+- **Stale application tracking:** Find applications that have gone without a status update, with a configurable threshold.
+- **Archive and restore:** Move applications out of the active board and bring them back when needed.
+- **Undo:** Reverse recent status changes, archive actions, and deletions.
+- **Keyboard shortcuts:** Use shortcuts for common actions, search, navigation, and undo.
+- **Customizable boards:** Change board names, colors, order, and empty-state messages.
+- **Themes and motion:** Choose light, dark, or system theme and adjust motion preferences.
+- **JSON Backup & Restore:** Export your data and import a Nook backup from Settings.
 
-## Architecture
+## Architecture / Tech Stack
 
-Nook is a Next.js application using React and TypeScript. The page is rendered
-from the local SQLite database, while the interactive dashboard runs on the
-client. Application changes use the built-in `/api/applications` routes and are
-validated with Zod.
+Nook uses Next.js, React, TypeScript, and Tailwind CSS. Prisma stores application data in a local SQLite database. The app is local-first; normal use requires no external database or cloud service.
 
-```text
-src/
-  app/
-    page.tsx                  Loads applications for the dashboard
-    api/applications/         Application CRUD and status-update routes
-  components/
-    application-dashboard.tsx Client workspace, dialogs, settings, and export
-    kanban-board.tsx          Board columns and draggable application cards
-    job-modal.tsx             Application form
-  lib/                        Validation, status metadata, dates, and API helpers
-prisma/
-  schema.prisma               SQLite application and event models
-  migrations/                 Database migrations
-```
+## Local Data & Privacy
 
-Application records are stored in SQLite through Prisma. Status changes create
-an associated event record. The UI uses dnd-kit for drag-and-drop,
-next-themes for appearance preferences, and Tailwind CSS for styling.
+Nook runs locally and stores application data in a SQLite database on your computer. No account or authentication is required. Normal use does not send your job or application data to an external service. Use Backup & Restore to preserve your data or move it to another installation.
 
-## Backup & Restore
+## Setup
 
-Open Settings, then Backup & Restore. Select **Export JSON** to download a
-version 1 backup of all stored applications, IDs, timestamps, event history,
-prompt state, and browser settings. Select **Import JSON** to merge a current version 1
-backup. Import creates missing IDs, skips identical IDs, and rejects changed
-records with the same ID (HTTP 409) without making partial changes. Existing
-applications are never deleted. Similar applications with different IDs require
-confirmation. An empty application list can restore settings alone. Outdated
-development backups and array backups are unsupported. Settings are stored in this
-browser; if browser storage fails, the import reports the application result
-separately.
-
-## Run locally
-
-Requires Node.js 20.9 or newer and npm.
+Install Node.js and npm, then run:
 
 ```bash
 git clone https://github.com/X1REN41L/nook-job-tracker.git
@@ -73,36 +38,35 @@ npm run setup
 npm run dev
 ```
 
-After `npm run dev` starts, open [http://127.0.0.1:3000](http://127.0.0.1:3000).
-`npm run setup` copies `.env.example` only when `.env` is absent, then runs
-`prisma db push` to create or sync the local SQLite database. You can run setup
-again without replacing an existing `.env` or resetting application data. Setup
-does not start the development server. Development and production
-servers bind to this loopback address. Remote access requires a separate
-authentication and trusted proxy design; forwarded headers are not used for
-rate limiting.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000) after the development server starts.
 
-The default environment configuration uses a local SQLite database:
+`npm run setup` creates local configuration when needed, initializes or syncs the SQLite database, and prepares Prisma for local use. It keeps existing local configuration and data when they do not need to change.
 
-```dotenv
-DATABASE_URL="file:./dev.db"
-```
+## Running Nook
 
-## Commands
+After setup, start Nook again with:
 
 ```bash
-npm run setup            # Create local configuration and sync the database
-npm run dev              # Start the development server
-npm run build            # Create a production build
-npm run start            # Run the production build
-npm run lint             # Run ESLint
-npm run typecheck        # Check TypeScript
-npm run test:keyboard    # Run keyboard interaction tests
-npm run test:duplicates  # Run duplicate-matching tests
-npm run test:smoke       # Run application API smoke tests
-npm run test:backup      # Run backup and restore API tests
-npm run db:studio        # Open Prisma Studio
+npm run dev
 ```
+
+## Common Commands
+
+```bash
+npm run setup      # Create local configuration and sync the database
+npm run dev        # Start the development server
+npm run build      # Create a production build
+npm run start      # Run the production build
+npm run lint       # Run ESLint
+npm run typecheck  # Check TypeScript
+npm run db:studio  # Open Prisma Studio
+```
+
+Additional development scripts are listed in `package.json`.
+
+## Backup & Restore
+
+In Settings, use Backup & Restore to export a JSON backup or import one. Backups are the recommended way to preserve or transfer your application data.
 
 ## License
 
