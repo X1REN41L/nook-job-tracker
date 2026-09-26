@@ -66,14 +66,18 @@ separately.
 Requires Node.js 20.9 or newer and npm.
 
 ```bash
+git clone https://github.com/X1REN41L/nook-job-tracker.git
+cd nook-job-tracker
 npm install
-cp .env.example .env
-npm run db:generate
-npm run db:migrate
+npm run setup
 npm run dev
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Development and production
+After `npm run dev` starts, open [http://127.0.0.1:3000](http://127.0.0.1:3000).
+`npm run setup` copies `.env.example` only when `.env` is absent, then runs
+`prisma db push` to create or sync the local SQLite database. You can run setup
+again without replacing an existing `.env` or resetting application data. Setup
+does not start the development server. Development and production
 servers bind to this loopback address. Remote access requires a separate
 authentication and trusted proxy design; forwarded headers are not used for
 rate limiting.
@@ -87,6 +91,7 @@ DATABASE_URL="file:./dev.db"
 ## Commands
 
 ```bash
+npm run setup            # Create local configuration and sync the database
 npm run dev              # Start the development server
 npm run build            # Create a production build
 npm run start            # Run the production build

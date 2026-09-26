@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "dev": "next dev -H 127.0.0.1",
     "build": "next build",
     "start": "next start -H 127.0.0.1",
@@ -11,6 +12,7 @@
     "test:keyboard": "bash scripts/run-playwright.sh",
     "test:shortcuts": "node --test scripts/keyboard-shortcuts-test.mjs",
     "test:duplicates": "node scripts/duplicate-match-test.mjs",
+    "test:setup": "node --test scripts/setup-test.mjs",
     "test:smoke": "bash scripts/run-backup-api-test.sh scripts/smoke-test.mjs",
     "test:backup": "bash scripts/run-backup-api-test.sh",
     "db:generate": "prisma generate",
