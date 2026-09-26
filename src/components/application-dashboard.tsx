@@ -860,20 +860,22 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onRequestDelete={(application, trigger) => requestDelete(application, trigger, false)}
           onRestore={(application) => moveApplication(application, application.status, true, undefined, false)}
         />
-        <div ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto px-4.5 py-6">
-          {page === "job-board" ? (
-            <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingId={movingId} onEdit={startEdit} />
-          ) : page === "interviews" ? (
-            <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} searchInputRef={interviewSearchRef} upcomingTabRef={upcomingTabRef} pastTabRef={pastTabRef} />
-          ) : (
-            dashboardSection === "overview" ? (
-              <DashboardOverview today={today} refreshKey={applications} />
-            ) : dashboardSection === "analytics" ? (
-              <DashboardAnalytics today={today} refreshKey={applications} />
+        <div ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto py-6">
+          <div className="page-shell">
+            {page === "job-board" ? (
+              <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingId={movingId} onEdit={startEdit} />
+            ) : page === "interviews" ? (
+              <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} searchInputRef={interviewSearchRef} upcomingTabRef={upcomingTabRef} pastTabRef={pastTabRef} />
             ) : (
-              <DashboardStaleApplications today={today} refreshKey={applications} applications={applications} onEdit={startEdit} />
-            )
-          )}
+              dashboardSection === "overview" ? (
+                <DashboardOverview today={today} refreshKey={applications} />
+              ) : dashboardSection === "analytics" ? (
+                <DashboardAnalytics today={today} refreshKey={applications} />
+              ) : (
+                <DashboardStaleApplications today={today} refreshKey={applications} applications={applications} onEdit={startEdit} />
+              )
+            )}
+          </div>
         </div>
 
         </div>

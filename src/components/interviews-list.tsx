@@ -76,7 +76,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
   }
 
   return (
-    <section className="mx-auto w-full max-w-6xl" aria-labelledby={`${id}-heading`}>
+    <section className="w-full min-w-0" aria-labelledby={`${id}-heading`}>
       <h1 className="font-serif text-[clamp(1.875rem,calc(1.65rem_+_0.15vw),2.125rem)] font-semibold leading-tight tracking-tight" id={`${id}-heading`}>
         Interviews
       </h1>

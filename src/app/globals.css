@@ -295,6 +295,12 @@ body.nook-dragging * {
     visibility 0s linear var(--motion-standard);
 }
 
+.sidebar-collapsed .sidebar-dashboard-content {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .sidebar-flex-section {
   display: flex;
   flex: 0 0 0%;
@@ -382,10 +388,17 @@ body.nook-dragging * {
   opacity: 0;
 }
 
-/* Keep the final board column clear of the sidebar's edge, in either state. */
+/* Shared page geometry is measured inside the workspace column, after the sidebar. */
 .board-scroll {
-  /* Matches the sidebar header/list px-4.5 rhythm (18px). */
-  --board-side-padding: 1.125rem;
+  --board-side-padding: clamp(1.125rem, 1.5vw, 2rem);
+  padding-inline: var(--board-side-padding);
+}
+
+.page-shell {
+  width: 100%;
+  min-width: 0;
+  max-width: 100rem;
+  margin-inline: auto;
 }
 
 /* Flex overflow can omit a scroll container's end padding from scrollWidth.

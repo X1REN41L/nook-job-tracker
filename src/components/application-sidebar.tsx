@@ -4,7 +4,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Status } from "@prisma/client";
 import Link from "next/link";
-import { Archive, CalendarClock, Columns3, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
+import { Archive, CalendarClock, ChartNoAxesCombined, ClockAlert, Columns3, LayoutDashboard, PanelsTopLeft, Settings, type LucideIcon } from "lucide-react";
 import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
@@ -225,7 +225,7 @@ export function ApplicationSidebar({
             </div>
           </nav>
 
-          <div className="sidebar-content flex min-h-0 flex-1 flex-col" inert={collapsed}>
+          <div className={`sidebar-content flex min-h-0 flex-1 flex-col ${page === "dashboard" ? "sidebar-dashboard-content" : ""}`} inert={collapsed && page !== "dashboard"}>
 
           {page === "job-board" && (
             <>
@@ -349,21 +349,24 @@ export function ApplicationSidebar({
           )}
 
           {page === "dashboard" && (
-            <nav aria-label="Dashboard sections" className="min-h-0 overflow-y-auto px-3 py-4">
-              <h2 className="px-2 font-serif text-base font-semibold">Dashboard</h2>
-              <div className="mt-2 flex flex-col gap-1">
+            <nav aria-label="Dashboard sections" className={`relative z-10 min-h-0 overflow-y-auto py-4 ${collapsed ? "px-[7px]" : "px-3"}`}>
+              {!collapsed && <h2 className="px-2 font-serif text-base font-semibold">Dashboard</h2>}
+              <div className={`${collapsed ? "" : "mt-2"} flex flex-col gap-1`}>
                 {([
-                  { section: "overview", label: "Overview", href: "/dashboard" },
-                  { section: "analytics", label: "Analytics", href: "/dashboard/analytics" },
-                  { section: "stale", label: "Stale Applications", href: "/dashboard/stale" },
-                ] as const).map(({ section, label, href }) => (
+                  { section: "overview", label: "Overview", href: "/dashboard", icon: PanelsTopLeft },
+                  { section: "analytics", label: "Analytics", href: "/dashboard/analytics", icon: ChartNoAxesCombined },
+                  { section: "stale", label: "Stale Applications", href: "/dashboard/stale", icon: ClockAlert },
+                ] as const).map(({ section, label, href, icon }) => (
                   <Link
                     key={section}
                     aria-current={dashboardSection === section ? "page" : undefined}
-                    className={`${dashboardSectionItemClass} ${dashboardSection === section ? "border-forest bg-forest font-semibold text-cream" : "border-transparent text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                    aria-label={label}
+                    className={`${collapsed ? mainNavItemClass : dashboardSectionItemClass} ${dashboardSection === section ? `${collapsed ? "" : "border-forest "}bg-forest font-semibold text-cream` : `${collapsed ? "" : "border-transparent "}text-ink-soft hover:bg-cream-2 hover:text-ink`}`}
                     href={href}
+                    title={collapsed ? label : undefined}
                   >
-                    <span>{label}</span>
+                    <span className={collapsed ? "sidebar-nav-icon" : "-ml-1.5 flex h-5 w-5 shrink-0 items-center justify-center"}><MainNavIcon Icon={icon} /></span>
+                    {!collapsed && <span className="ml-5 whitespace-nowrap">{label}</span>}
                   </Link>
                 ))}
               </div>
