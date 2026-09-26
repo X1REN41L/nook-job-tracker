@@ -91,7 +91,9 @@ function ApplicationsTrend({ trend }: { trend: AnalyticsData["applicationsTrend"
           <div aria-hidden="true" className="relative flex h-full items-end gap-1 px-1 sm:gap-2">
             {trend.buckets.map((bucket) => (
               <div className="flex h-full min-w-0 flex-1 items-end justify-center" key={bucket.startDate}>
-                <div className="w-full max-w-9 rounded-t-[3px] bg-forest" style={{ height: `${(bucket.count / scale) * 100}%` }} />
+                <div className="relative w-full max-w-9 rounded-t-[3px] bg-forest" style={{ height: `${(bucket.count / scale) * 100}%` }}>
+                  {bucket.count > 0 && <span className="absolute bottom-full left-1/2 -translate-x-1/2 pb-1 text-[11px] leading-none tabular-nums text-ink">{bucket.count}</span>}
+                </div>
               </div>
             ))}
           </div>
@@ -121,7 +123,7 @@ function StatusBreakdown({ counts }: { counts: AnalyticsData["statusBreakdown"] 
               <span className="shrink-0 tabular-nums text-ink" aria-label={`${counts[status]} applications`}>{counts[status]}</span>
             </div>
             <div aria-hidden="true" className="mt-1.5 h-2 rounded-full bg-cream-2">
-              <div className={`h-full rounded-full ${STATUS_META[status].dot}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 100 : 0}%` }} />
+              <div className={`h-full rounded-full ${STATUS_META[status].dot}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 90 : 0}%` }} />
             </div>
           </li>
         ))}
