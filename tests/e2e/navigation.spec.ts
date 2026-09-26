@@ -59,14 +59,14 @@ test("loads and navigates among the shared Job Board, Dashboard, and Interviews 
 
   await navigation.getByRole("link", { name: "Interviews" }).click();
   await expect(page).toHaveURL(/\/interviews$/);
-  await expect(page.getByRole("heading", { name: "0 Upcoming Interview", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming Interviews (0)" })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Interviews" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search by company or role" })).toBeVisible();
   await expect(dashboardRecent).toHaveCount(0);
 
   await page.goto("/interviews");
-  await expect(page.getByRole("heading", { name: "0 Upcoming Interview", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming Interviews (0)" })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Interviews" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search by company or role" })).toBeVisible();

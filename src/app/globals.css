@@ -248,6 +248,7 @@ body.nook-dragging * {
 .app-workspace {
   --sidebar-motion-duration: 220ms;
   --sidebar-motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+  --sidebar-width: 320px;
   --sidebar-rail-width: 50px;
   --sidebar-nav-inset: 14px;
   grid-template-columns: minmax(0, 1fr);
@@ -261,6 +262,10 @@ body.nook-dragging * {
   width: min(320px, calc(100vw - 48px));
   transition: transform var(--sidebar-motion-duration) var(--sidebar-motion-easing);
   will-change: transform;
+}
+
+.sidebar-resize-handle {
+  display: none;
 }
 
 .sidebar-collapsed .sidebar-panel {
@@ -359,14 +364,60 @@ body.nook-dragging * {
 
 @media (min-width: 768px) {
   .app-workspace {
-    --sidebar-width: 320px;
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-drag-width, var(--sidebar-width)) minmax(0, 1fr);
     transition: grid-template-columns var(--sidebar-motion-duration) var(--sidebar-motion-easing);
     will-change: grid-template-columns;
   }
 
   .app-workspace.sidebar-collapsed {
-    --sidebar-width: var(--sidebar-rail-width);
+    grid-template-columns: var(--sidebar-rail-width) minmax(0, 1fr);
+  }
+
+  .app-workspace.sidebar-resizing {
+    transition: none;
+  }
+
+  .sidebar-collapsed .sidebar-edge-rail {
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .sidebar-resize-handle {
+    position: absolute;
+    inset-block: 0;
+    right: 0;
+    z-index: 30;
+    display: block;
+    width: 6px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .sidebar-resize-handle::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    right: 0;
+    width: 4px;
+    background: transparent;
+    transition: background-color 120ms ease;
+  }
+
+  .sidebar-resize-handle:hover::after,
+  .sidebar-resize-handle:focus-visible::after,
+  .sidebar-resizing .sidebar-resize-handle::after {
+    background: var(--color-forest);
+  }
+
+  .sidebar-resize-handle:focus-visible {
+    outline: 2px solid var(--color-forest);
+    outline-offset: -2px;
+  }
+
+  @media (pointer: coarse) {
+    .sidebar-resize-handle {
+      width: 18px;
+    }
   }
 
   .sidebar-panel {
@@ -374,6 +425,12 @@ body.nook-dragging * {
     width: auto;
     transform: none !important;
   }
+}
+
+body.sidebar-resizing-active,
+body.sidebar-resizing-active * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 @media (max-width: 767px) {

@@ -6,8 +6,9 @@ import {
   DragOverlay,
 } from "@dnd-kit/core";
 import { Status } from "@prisma/client";
-import { FormEvent, useCallback, useId, useRef, useState, useSyncExternalStore } from "react";
+import { FormEvent, useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 
 import { ApplicationSidebar } from "@/components/application-sidebar";
@@ -37,6 +38,13 @@ import type { ApplicationRecord } from "@/types/application";
 
 const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), interviewDate: "", notes: "", jobUrl: "" });
 type DragSource = "board" | "sidebar" | "archived";
+const SIDEBAR_WIDTH_KEY = "nook-sidebar-width";
+const DEFAULT_SIDEBAR_WIDTH = 320;
+// 254.08px for the first three filter pills + 12px gaps + 36px padding + 1px border.
+const MIN_SIDEBAR_WIDTH = 304;
+const MAX_SIDEBAR_WIDTH = 420;
+const SIDEBAR_COLLAPSE_THRESHOLD = 180;
+const SIDEBAR_REOPEN_THRESHOLD = 80;
 export type ApplicationPageName = "job-board" | "dashboard" | "interviews";
 type PendingDuplicate = {
   candidate: JobFormState;
@@ -58,6 +66,17 @@ function getSidebarPreference() {
     return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
   } catch {
     return false;
+  }
+}
+
+function getSidebarWidth() {
+  try {
+    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    if (saved === null) return DEFAULT_SIDEBAR_WIDTH;
+    const width = Number(saved);
+    return Number.isFinite(width) ? Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)) : DEFAULT_SIDEBAR_WIDTH;
+  } catch {
+    return DEFAULT_SIDEBAR_WIDTH;
   }
 }
 
@@ -107,6 +126,7 @@ function getServerLocalDate() {
 }
 
 export function ApplicationDashboard({ initialApplications, page }: { initialApplications: ApplicationRecord[]; page: ApplicationPageName }) {
+  const router = useRouter();
   const boardScrollRef = useScrollbarActivity<HTMLDivElement>();
   const { theme, setTheme } = useTheme();
   const boards = useBoards();
@@ -131,6 +151,7 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
   const sidebarCollapsed = useSyncExternalStore(subscribeToSidebarPreference, getSidebarPreference, () => false);
+  const sidebarWidth = useSyncExternalStore(subscribeToSidebarPreference, getSidebarWidth, () => DEFAULT_SIDEBAR_WIDTH);
   const archivedExpanded = useSyncExternalStore(subscribeToArchivedPreference, getArchivedPreference, () => false);
   const allApplicationsExpanded = useSyncExternalStore(subscribeToAllApplicationsPreference, getAllApplicationsPreference, () => true);
   const today = useSyncExternalStore(subscribeToLocalDate, currentLocalDate, getServerLocalDate);
@@ -146,7 +167,12 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
   const reopenModalAfterDelete = useRef(false);
   const sidebarHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const interviewSearchRef = useRef<HTMLInputElement | null>(null);
+  const upcomingTabRef = useRef<HTMLButtonElement | null>(null);
+  const pastTabRef = useRef<HTMLButtonElement | null>(null);
   const shortcutTriggerRef = useRef<HTMLElement | null>(null);
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const submissionInFlight = useRef(false);
@@ -174,6 +200,91 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
   function toggleSidebar() {
     setSidebarCollapsed(!sidebarCollapsed);
   }
+
+  function saveSidebarWidth(width: number) {
+    const nextWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.round(width)));
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(nextWidth));
+      window.dispatchEvent(new Event(SIDEBAR_CHANGE_EVENT));
+    } catch {
+      // Keep the current width when storage is unavailable.
+    }
+  }
+
+  function handleSidebarResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!event.isPrimary || event.button !== 0 || window.innerWidth < 768 || !workspaceRef.current) return;
+    event.preventDefault();
+    resizeCleanupRef.current?.();
+
+    const workspace = workspaceRef.current;
+    const pointerId = event.pointerId;
+    const handle = event.currentTarget;
+    handle.setPointerCapture(pointerId);
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    const startedCollapsed = sidebarCollapsed;
+    let currentWidth = startWidth;
+    let changed = false;
+
+    workspace.classList.add("sidebar-resizing");
+    document.body.classList.add("sidebar-resizing-active");
+
+    const move = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== pointerId) return;
+      if (startedCollapsed) {
+        const distanceFromLeft = pointer.clientX - workspace.getBoundingClientRect().left;
+        if (distanceFromLeft <= SIDEBAR_REOPEN_THRESHOLD) return;
+        cleanup();
+        setSidebarCollapsed(false);
+        return;
+      }
+
+      const proposed = startWidth + pointer.clientX - startX;
+      currentWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, proposed));
+      workspace.style.setProperty("--sidebar-drag-width", `${currentWidth}px`);
+      changed = true;
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", cancel);
+      workspace.classList.remove("sidebar-resizing");
+      document.body.classList.remove("sidebar-resizing-active");
+      if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+      resizeCleanupRef.current = null;
+    };
+    const finish = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== pointerId) return;
+      cleanup();
+      if (startedCollapsed) return;
+      const proposed = startWidth + pointer.clientX - startX;
+      if (proposed < SIDEBAR_COLLAPSE_THRESHOLD) {
+        setSidebarCollapsed(true);
+      } else if (changed || pointer.clientX !== startX) {
+        saveSidebarWidth(proposed);
+      }
+      window.requestAnimationFrame(() => workspace.style.removeProperty("--sidebar-drag-width"));
+    };
+    const cancel = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== pointerId) return;
+      cleanup();
+      workspace.style.removeProperty("--sidebar-drag-width");
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", cancel);
+    resizeCleanupRef.current = cleanup;
+  }
+
+  function handleSidebarResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    saveSidebarWidth(sidebarWidth + (event.key === "ArrowRight" ? 10 : -10));
+  }
+
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
 
   function toggleArchived() {
     try {
@@ -527,9 +638,75 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
   }
 
   function focusSearch() {
+    if (page === "interviews") {
+      if (!interviewSearchRef.current) return false;
+      interviewSearchRef.current.focus();
+      return true;
+    }
+    if (page !== "job-board") return false;
+    if (!searchInputRef.current) return false;
     if (sidebarCollapsed) setSidebarCollapsed(false);
     if (!allApplicationsExpanded) toggleAllApplications();
     requestAnimationFrame(() => requestAnimationFrame(() => searchInputRef.current?.focus()));
+    return true;
+  }
+
+  function switchInterviewTab(direction: "left" | "right") {
+    if (page !== "interviews") return false;
+    const target = direction === "left" ? upcomingTabRef.current : pastTabRef.current;
+    if (!target) return false;
+    target.click();
+    target.focus();
+    return true;
+  }
+
+  function moveApplicationFocus(direction: "up" | "down" | "left" | "right") {
+    const focus = (element: HTMLElement | undefined) => {
+      if (!element) return false;
+      element.focus();
+      element.scrollIntoView({ block: "nearest", inline: "nearest" });
+      return true;
+    };
+    if (page === "dashboard") {
+      if (direction === "left" || direction === "right") return false;
+      if (sidebarCollapsed) {
+        setSidebarCollapsed(false);
+        requestAnimationFrame(() => document.querySelector<HTMLElement>("#recent-applications-heading + div [data-application-id]")?.focus());
+        return true;
+      }
+      const rows = Array.from(document.querySelectorAll<HTMLElement>("#recent-applications-heading + div [data-application-id]"));
+      const focused = document.activeElement?.closest("[data-application-id]");
+      const index = rows.findIndex((row) => row === focused);
+      return focus(rows[index < 0 ? direction === "up" ? rows.length - 1 : 0 : index + (direction === "down" ? 1 : -1)]);
+    }
+    if (page !== "job-board") return false;
+    const columns = Array.from(document.querySelectorAll<HTMLElement>(".board-columns .kanban-column"));
+    const focused = document.activeElement?.closest<HTMLElement>("[data-kanban-card-id]");
+    const columnIndex = columns.findIndex((column) => focused && column.contains(focused));
+    if (direction === "up" || direction === "down") {
+      if (columnIndex < 0) {
+        const ordered = direction === "up" ? [...columns].reverse() : columns;
+        const firstCards = Array.from(ordered.find((column) => column.querySelector("[data-kanban-card-id]"))?.querySelectorAll<HTMLElement>("[data-kanban-card-id]") ?? []);
+        return focus(direction === "up" ? firstCards.at(-1) : firstCards[0]);
+      }
+      const column = columns[columnIndex];
+      const cards = Array.from(column?.querySelectorAll<HTMLElement>("[data-kanban-card-id]") ?? []);
+      const index = cards.findIndex((card) => card === focused);
+      return focus(cards[index < 0 ? direction === "up" ? cards.length - 1 : 0 : index + (direction === "down" ? 1 : -1)]);
+    }
+    const step = direction === "right" ? 1 : -1;
+    for (let index = columnIndex < 0 ? direction === "right" ? 0 : columns.length - 1 : columnIndex + step; index >= 0 && index < columns.length; index += step) {
+      const cards = Array.from(columns[index].querySelectorAll<HTMLElement>("[data-kanban-card-id]"));
+      if (!cards.length) continue;
+      if (!focused) return focus(cards[0]);
+      const center = focused.getBoundingClientRect().top + focused.getBoundingClientRect().height / 2;
+      return focus(cards.reduce((nearest, card) => {
+        const cardRect = card.getBoundingClientRect();
+        const nearestRect = nearest.getBoundingClientRect();
+        return Math.abs(cardRect.top + cardRect.height / 2 - center) < Math.abs(nearestRect.top + nearestRect.height / 2 - center) ? card : nearest;
+      }));
+    }
+    return false;
   }
 
   function openShortcuts() {
@@ -539,6 +716,7 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
 
   useDashboardShortcuts({
     isMac,
+    page,
     applications,
     isModalOpen,
     hasPendingDuplicate: pendingDuplicate !== null,
@@ -557,6 +735,9 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
     onShowShortcuts: openShortcuts,
     onUndo: () => { void undoLatestChange(true); },
     onToggleSidebar: toggleSidebar,
+    onNavigate: (path) => router.push(path),
+    onSwitchInterviewTab: switchInterviewTab,
+    onMoveApplicationFocus: moveApplicationFocus,
     onArchiveFocused: (application) => {
       if (application.archived) return;
       void moveApplication(application, application.status, true, undefined, true);
@@ -615,7 +796,9 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
         sensors={sensors}
       >
         <div
+          ref={workspaceRef}
           className={`app-workspace relative grid min-h-0 flex-1 overflow-hidden ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}
+          style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
         >
         <ApplicationSidebar
           boards={boards}
@@ -625,6 +808,7 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
           totalApplications={applications.length}
           upcomingInterviewCount={upcomingInterviewCount}
           collapsed={sidebarCollapsed}
+          width={sidebarWidth}
           page={page}
           archivedExpanded={archivedExpanded}
           allApplicationsExpanded={allApplicationsExpanded}
@@ -637,6 +821,8 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
           onSearchTermChange={setSearchTerm}
           onFilterChange={setActiveFilter}
           onToggleSidebar={toggleSidebar}
+          onResizePointerDown={handleSidebarResizeStart}
+          onResizeKeyDown={handleSidebarResizeKeyDown}
           onOpenArchive={() => {
             setSidebarCollapsed(false);
             if (!archivedExpanded) toggleArchived();
@@ -652,7 +838,7 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
           {page === "job-board" ? (
             <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingId={movingId} onEdit={startEdit} />
           ) : page === "interviews" ? (
-            <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} />
+            <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} searchInputRef={interviewSearchRef} upcomingTabRef={upcomingTabRef} pastTabRef={pastTabRef} />
           ) : (
             <section className="flex min-h-full flex-col items-center justify-center text-center">
               <h1 className="font-serif text-3xl font-semibold tracking-tight">Dashboard</h1>
@@ -732,6 +918,7 @@ export function ApplicationDashboard({ initialApplications, page }: { initialApp
           error={interviewDateError}
           onAddDate={() => void saveInterviewDate(false)}
           onChangeDate={setInterviewDateDraft}
+          onClose={() => setPendingInterviewDate(null)}
           onSkip={() => void saveInterviewDate(true)}
           saving={savingInterviewDate}
           value={interviewDateDraft}

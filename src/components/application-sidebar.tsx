@@ -5,7 +5,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Status } from "@prisma/client";
 import Link from "next/link";
 import { Archive, CalendarClock, Columns3, LayoutDashboard, Settings } from "lucide-react";
-import { useId, useLayoutEffect, useRef, type RefObject } from "react";
+import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { ARCHIVED_DROP_ID, SIDEBAR_EDGE_DROP_ID } from "@/hooks/use-board-drag";
@@ -20,6 +20,7 @@ type ApplicationSidebarProps = {
   totalApplications: number;
   upcomingInterviewCount: number;
   collapsed: boolean;
+  width: number;
   page: "job-board" | "dashboard" | "interviews";
   archivedExpanded: boolean;
   allApplicationsExpanded: boolean;
@@ -32,6 +33,8 @@ type ApplicationSidebarProps = {
   onSearchTermChange: (value: string) => void;
   onFilterChange: (filter: "all" | Status) => void;
   onToggleSidebar: () => void;
+  onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void;
+  onResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   onOpenArchive: () => void;
   onOpenSettings: () => void;
   onToggleArchived: () => void;
@@ -41,7 +44,7 @@ type ApplicationSidebarProps = {
   onRestore: (application: ApplicationRecord) => Promise<void>;
 };
 
-const mainNavItemClass = "box-border flex h-9 w-full cursor-pointer items-center gap-3 rounded-nook-sm px-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
+const mainNavItemClass = "box-border flex h-9 w-full min-w-0 cursor-pointer items-center gap-3 rounded-nook-sm px-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest [&>svg]:shrink-0 [&>span:first-of-type]:min-w-0 [&>span:first-of-type]:truncate";
 
 export function ApplicationSidebar({
   boards,
@@ -51,6 +54,7 @@ export function ApplicationSidebar({
   totalApplications,
   upcomingInterviewCount,
   collapsed,
+  width,
   page,
   archivedExpanded,
   allApplicationsExpanded,
@@ -63,6 +67,8 @@ export function ApplicationSidebar({
   onSearchTermChange,
   onFilterChange,
   onToggleSidebar,
+  onResizePointerDown,
+  onResizeKeyDown,
   onOpenArchive,
   onOpenSettings,
   onToggleArchived,
@@ -112,9 +118,25 @@ export function ApplicationSidebar({
 
   return (
         <aside className="sidebar-panel flex h-full min-h-0 flex-col overflow-hidden border-r border-line bg-paper shadow-nook md:shadow-none">
+          {!collapsed && (
+            <div
+              aria-label="Resize sidebar"
+              aria-orientation="vertical"
+              aria-valuemax={420}
+              aria-valuemin={304}
+              aria-valuenow={width}
+              aria-valuetext={`${width} pixels`}
+              className="sidebar-resize-handle"
+              onKeyDown={onResizeKeyDown}
+              onPointerDown={onResizePointerDown}
+              role="separator"
+              tabIndex={0}
+            />
+          )}
           <SidebarEdgeRail
             archivedCount={archivedItems.length}
             collapsed={collapsed}
+            onRailPointerDown={onResizePointerDown}
             onOpenArchive={onOpenArchive}
             onOpenSettings={onOpenSettings}
             onToggle={handleToggleSidebar}
@@ -244,7 +266,7 @@ export function ApplicationSidebar({
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
                       <button
                         aria-pressed={activeFilter === "all"}
-                        className={`rounded-full border px-2.5 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === "all" ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
+                        className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === "all" ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
                         onClick={() => onFilterChange("all")}
                         tabIndex={0}
                         type="button"
@@ -255,7 +277,7 @@ export function ApplicationSidebar({
                         <button
                           key={board.status}
                           aria-pressed={activeFilter === board.status}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === board.status ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
+                          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === board.status ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
                           onClick={() => onFilterChange(board.status)}
                           tabIndex={0}
                           type="button"
@@ -509,6 +531,7 @@ function ArchivedRow({ application, boards, disabled, onEdit, onRequestDelete, o
 function SidebarEdgeRail({
   archivedCount,
   collapsed,
+  onRailPointerDown,
   onOpenArchive,
   onOpenSettings,
   onToggle,
@@ -518,6 +541,7 @@ function SidebarEdgeRail({
 }: {
   archivedCount: number;
   collapsed: boolean;
+  onRailPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onOpenArchive: () => void;
   onOpenSettings: () => void;
   onToggle: () => void;
@@ -528,7 +552,14 @@ function SidebarEdgeRail({
   const { isOver, setNodeRef } = useDroppable({ id: SIDEBAR_EDGE_DROP_ID, disabled: !collapsed || page !== "job-board" });
 
   return (
-    <div ref={setNodeRef} className={`sidebar-edge-rail absolute inset-y-0 left-0 z-10 w-[var(--sidebar-rail-width)] transition-colors ${isOver ? "bg-forest-tint ring-2 ring-inset ring-forest" : ""}`} inert={!collapsed}>
+    <div
+      ref={setNodeRef}
+      className={`sidebar-edge-rail absolute inset-y-0 left-0 z-10 w-[var(--sidebar-rail-width)] transition-colors ${isOver ? "bg-forest-tint ring-2 ring-inset ring-forest" : ""}`}
+      inert={!collapsed}
+      onPointerDown={(event) => {
+        if (collapsed && event.target === event.currentTarget) onRailPointerDown(event);
+      }}
+    >
       <button
         ref={toggleButtonRef}
         aria-label="Expand sidebar"

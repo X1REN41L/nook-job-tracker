@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent, type RefObject } from "react";
 
 import { interviewDateKey, type InterviewListItem } from "@/lib/interviews";
 
@@ -23,27 +23,20 @@ function endOfCurrentWeek(today: string) {
   return addDays(today, 6 - date.getUTCDay());
 }
 
-function getGroupLabel(date: string, today: string, tab: InterviewTab, weekEnd: string) {
-  if (tab === "upcoming") {
-    if (date === today) return "Today";
-    if (date === addDays(today, 1)) return "Tomorrow";
-    if (date <= weekEnd) return "This week";
-    return "Later";
-  }
-
-  if (date === addDays(today, -1)) return "Yesterday";
-  const weekStart = addDays(weekEnd, -6);
-  if (date >= weekStart) return "This week";
-  return "Earlier";
+function getGroupLabel(date: string, today: string, weekEnd: string) {
+  if (date === today) return "Today";
+  if (date === addDays(today, 1)) return "Tomorrow";
+  if (date <= weekEnd) return "This Week";
+  return "Later";
 }
 
-function groupInterviews(interviews: InterviewListItem[], tab: InterviewTab, today: string) {
+function groupInterviews(interviews: InterviewListItem[], today: string) {
   const weekEnd = endOfCurrentWeek(today);
   const groups = new Map<string, InterviewGroup>();
 
   for (const interview of interviews) {
     const date = interviewDateKey(interview.date);
-    const label = getGroupLabel(date, today, tab, weekEnd);
+    const label = getGroupLabel(date, today, weekEnd);
     const group = groups.get(label) ?? { key: label.toLowerCase().replaceAll(" ", "-"), label, interviews: [] };
     group.interviews.push(interview);
     groups.set(label, group);
@@ -70,7 +63,7 @@ function InterviewRow({ interview }: { interview: InterviewListItem }) {
         {formatInterviewDate(interview.date)}
       </time>
       <div className="min-w-0">
-        <h3 className="break-words text-base font-semibold leading-6 text-ink">
+        <h3 className="break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">
           <span>{interview.role}</span>
           <span aria-hidden="true" className="mx-1.5 text-ink-soft">—</span>
           <span className="font-medium text-ink-soft">{interview.company}</span>
@@ -81,31 +74,30 @@ function InterviewRow({ interview }: { interview: InterviewListItem }) {
   );
 }
 
-export function InterviewsList({ interviews, upcomingCount, today }: {
+export function InterviewsList({ interviews, upcomingCount, today, searchInputRef, upcomingTabRef, pastTabRef }: {
   interviews: InterviewListItem[];
   upcomingCount: number;
   today: string;
+  searchInputRef: RefObject<HTMLInputElement | null>;
+  upcomingTabRef: RefObject<HTMLButtonElement | null>;
+  pastTabRef: RefObject<HTMLButtonElement | null>;
 }) {
   const [selectedTab, setSelectedTab] = useState<InterviewTab>("upcoming");
   const [searchQuery, setSearchQuery] = useState("");
-  const upcomingTabRef = useRef<HTMLButtonElement>(null);
-  const pastTabRef = useRef<HTMLButtonElement>(null);
+  const [pastSort, setPastSort] = useState<"recent" | "oldest">("recent");
   const id = useId();
 
   const query = searchQuery.trim().toLocaleLowerCase();
-  const visibleInterviews = interviews
-    .filter((interview) => selectedTab === "upcoming"
-      ? interviewDateKey(interview.date) >= today
-      : interviewDateKey(interview.date) < today)
-    .filter((interview) => !query ||
-      interview.role.toLocaleLowerCase().includes(query) ||
-      interview.company.toLocaleLowerCase().includes(query))
-    .sort((a, b) => {
-      const dateOrder = interviewDateKey(a.date).localeCompare(interviewDateKey(b.date));
-      return selectedTab === "upcoming" ? dateOrder : -dateOrder;
-    });
-  const groups = groupInterviews(visibleInterviews, selectedTab, today);
-  const tabListId = `${id}-tabs`;
+  const matchesSearch = (interview: InterviewListItem) => !query ||
+    interview.role.toLocaleLowerCase().includes(query) ||
+    interview.company.toLocaleLowerCase().includes(query);
+  const upcoming = interviews
+    .filter((interview) => interviewDateKey(interview.date) >= today && matchesSearch(interview))
+    .sort((a, b) => interviewDateKey(a.date).localeCompare(interviewDateKey(b.date)));
+  const past = interviews
+    .filter((interview) => interviewDateKey(interview.date) < today && matchesSearch(interview))
+    .sort((a, b) => (pastSort === "recent" ? -1 : 1) * interviewDateKey(a.date).localeCompare(interviewDateKey(b.date)));
+  const groups = groupInterviews(upcoming, today);
   const panelId = `${id}-panel`;
 
   function focusTab(tab: InterviewTab) {
@@ -126,20 +118,14 @@ export function InterviewsList({ interviews, upcomingCount, today }: {
     }
   }
 
-  const emptyMessage = query
-    ? "No interviews match your search."
-    : selectedTab === "upcoming"
-      ? "All caught up — no interviews on the horizon."
-      : "No past interviews.";
-
   return (
-    <section className="mx-auto w-full max-w-5xl" aria-labelledby={`${id}-heading`}>
-      <h1 className="font-serif text-3xl font-semibold leading-tight tracking-tight" id={`${id}-heading`}>
-        {upcomingCount} Upcoming Interview
+    <section className="mx-auto w-full max-w-6xl" aria-labelledby={`${id}-heading`}>
+      <h1 className="font-serif text-[clamp(1.875rem,calc(1.65rem_+_0.15vw),2.125rem)] font-semibold leading-tight tracking-tight" id={`${id}-heading`}>
+        Interviews
       </h1>
 
       <div className="mt-7 flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div aria-label="Interview status" className="flex shrink-0 gap-5" id={tabListId} role="tablist">
+        <div aria-label="Interview status" className="flex shrink-0 gap-5" role="tablist">
           {(["upcoming", "past"] as const).map((tab) => (
             <button
               key={tab}
@@ -151,14 +137,12 @@ export function InterviewsList({ interviews, upcomingCount, today }: {
               onClick={() => setSelectedTab(tab)}
               onKeyDown={handleTabKeyDown}
               role="tab"
-              tabIndex={selectedTab === tab ? 0 : -1}
               type="button"
             >
               {tab === "upcoming" ? "Upcoming" : "Past"}
             </button>
           ))}
         </div>
-
         <label className="relative block w-full sm:max-w-xs">
           <span className="sr-only">Search by company or role</span>
           <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -166,6 +150,7 @@ export function InterviewsList({ interviews, upcomingCount, today }: {
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
+            ref={searchInputRef}
             className="input pl-9 text-sm"
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search by company or role"
@@ -175,22 +160,48 @@ export function InterviewsList({ interviews, upcomingCount, today }: {
         </label>
       </div>
 
-      <div aria-labelledby={`${id}-${selectedTab}-tab`} className="pb-10 pt-7" id={panelId} role="tabpanel" tabIndex={0}>
-        {groups.length === 0 ? (
-          <p className="py-8 text-sm text-ink-soft">{emptyMessage}</p>
+      <div aria-labelledby={`${id}-${selectedTab}-tab`} className="pb-10 pt-7" id={panelId} role="tabpanel">
+        {selectedTab === "upcoming" ? (
+          <section aria-labelledby={`${id}-upcoming-heading`}>
+            <h2 className="mb-7 font-serif text-2xl font-semibold text-ink" id={`${id}-upcoming-heading`}>
+              Upcoming Interviews <span className="font-sans text-base font-medium text-ink-soft">({upcomingCount})</span>
+            </h2>
+            {groups.length === 0 ? (
+              <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "All caught up — no interviews on the horizon."}</p>
+            ) : (
+              <div className="flex flex-col gap-9 sm:gap-12">
+                {groups.map((group) => (
+                  <section key={group.key} aria-labelledby={`${id}-${group.key}-heading`}>
+                    <h3 className={`mb-5 font-sans text-xs font-semibold uppercase tracking-[0.12em] ${group.label === "Today" ? "text-forest" : group.label === "Tomorrow" ? "text-gold" : group.label === "This Week" ? "text-clay" : "text-rose"}`} id={`${id}-${group.key}-heading`}>
+                      {group.label}
+                    </h3>
+                    <div>
+                      {group.interviews.map((interview) => <InterviewRow key={interview.id} interview={interview} />)}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </section>
         ) : (
-          <div className="flex flex-col gap-9 sm:gap-12">
-            {groups.map((group) => (
-              <section key={group.key} aria-labelledby={`${id}-${group.key}-heading`}>
-                <h2 className="mb-5 font-sans text-xs font-semibold uppercase tracking-[0.12em] text-forest" id={`${id}-${group.key}-heading`}>
-                  {group.label}
-                </h2>
-                <div>
-                  {group.interviews.map((interview) => <InterviewRow key={interview.id} interview={interview} />)}
-                </div>
-              </section>
-            ))}
-          </div>
+          <section aria-labelledby={`${id}-past-heading`}>
+            <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
+              <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-past-heading`}>Past Interviews</h2>
+              <button
+                aria-label={`Sort past interviews: ${pastSort === "recent" ? "most recent first" : "oldest first"}`}
+                className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+                onClick={() => setPastSort((current) => current === "recent" ? "oldest" : "recent")}
+                type="button"
+              >
+                {pastSort === "recent" ? "Most recent first" : "Oldest first"} <span aria-hidden="true">↕</span>
+              </button>
+            </div>
+            {past.length === 0 ? (
+              <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "No past interviews."}</p>
+            ) : (
+              <div>{past.map((interview) => <InterviewRow key={interview.id} interview={interview} />)}</div>
+            )}
+          </section>
         )}
       </div>
     </section>

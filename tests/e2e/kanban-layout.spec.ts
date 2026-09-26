@@ -6,7 +6,7 @@ test("keeps board columns readable across zoom-equivalent viewport sizes", async
   const measurements: string[] = [];
 
   await page.addInitScript(() => localStorage.removeItem("nook-sidebar-collapsed"));
-  await page.goto("/");
+  await page.goto("/jobs");
   await page.addStyleTag({
     content: ".app-workspace, .sidebar-panel, .sidebar-content, .sidebar-edge-tab { transition-duration: 0s !important; transition-delay: 0s !important; }",
   });
