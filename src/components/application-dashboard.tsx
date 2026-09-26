@@ -861,7 +861,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onRestore={(application) => moveApplication(application, application.status, true, undefined, false)}
         />
         <div ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto py-6">
-          <div className="page-shell">
+          <div className={`page-shell ${page === "job-board" ? "h-full" : ""}`}>
             {page === "job-board" ? (
               <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingId={movingId} onEdit={startEdit} />
             ) : page === "interviews" ? (
