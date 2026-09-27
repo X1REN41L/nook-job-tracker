@@ -36,10 +36,15 @@ export async function POST(request: Request) {
       if (occupiedEvents.length) return { conflicts: occupiedEvents.map((event) => event.id), created: [], skippedIds: [] };
       const created = [];
       for (const { events, ...data } of newRecords) created.push(await tx.application.create({ data: { ...data, events: { create: events } } }));
-      return { conflicts: [], created, skippedIds: existing.map((item) => item.id) };
+      const row = await tx.settings.upsert({
+        where: { id: 1 },
+        create: { id: 1, value: JSON.stringify(parsed.data.settings), revision: 1 },
+        update: { value: JSON.stringify(parsed.data.settings), revision: { increment: 1 } },
+      });
+      return { conflicts: [], created, skippedIds: existing.map((item) => item.id), settings: parsed.data.settings, settingsRevision: row.revision };
     }, { timeout: 60_000 });
     if (result.conflicts.length) return NextResponse.json({ error: `Conflicting IDs: ${result.conflicts.join(", ")}`, conflicts: result.conflicts }, { status: 409 });
-    return NextResponse.json({ applications: result.created, createdIds: result.created.map((item) => item.id), skippedIds: result.skippedIds }, { status: 201 });
+    return NextResponse.json({ applications: result.created, createdIds: result.created.map((item) => item.id), skippedIds: result.skippedIds, settings: result.settings, settingsRevision: result.settingsRevision }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ error: "Backup ID conflicts with an existing record" }, { status: 409 });
     return apiError(error);

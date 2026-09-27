@@ -118,6 +118,7 @@ export const applicationSnapshotSchema = z.object({
   }
 
   let possiblePreviousStatuses: Set<Status> | null = null;
+  let completeHistory = initialEvents.length === 1;
   for (const group of timestampGroups) {
     const groupHasUnknownTransition = group.some(({ event }) => event.toStatus === null);
     const initial = group.find(({ event }) => event.fromStatus === null && event.toStatus != null);
@@ -128,6 +129,7 @@ export const applicationSnapshotSchema = z.object({
     );
 
     if (groupHasUnknownTransition) {
+      completeHistory = false;
       possiblePreviousStatuses = null;
       continue;
     }
@@ -145,9 +147,13 @@ export const applicationSnapshotSchema = z.object({
         message: "Status transitions must form a consistent sequence",
       });
       possiblePreviousStatuses = null;
+      completeHistory = false;
       continue;
     }
     possiblePreviousStatuses = ends;
+  }
+  if (completeHistory && possiblePreviousStatuses && !possiblePreviousStatuses.has(application.status)) {
+    context.addIssue({ code: "custom", path: ["status"], message: "Saved status must match the final status in history" });
   }
 });
 export const applicationRestoreSnapshotSchema = applicationSnapshotSchema.extend({

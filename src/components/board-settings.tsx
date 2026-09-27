@@ -32,7 +32,7 @@ export function BoardSettings() {
   );
 
   function update(status: BoardStatus, patch: Partial<BoardConfiguration>) {
-    saveBoards(boards.map((board) => board.status === status ? { ...board, ...patch } : board));
+    saveBoards((current) => current.map((board) => board.status === status ? { ...board, ...patch } : board));
   }
 
   function reorder(event: DragEndEvent) {
@@ -40,9 +40,14 @@ export function BoardSettings() {
     const from = boards.findIndex((board) => `reorder:${board.status}` === event.active.id);
     const to = boards.findIndex((board) => board.status === event.over?.id);
     if (from < 0 || to < 0 || from === to) return;
-    const next = [...boards];
-    next.splice(to, 0, next.splice(from, 1)[0]);
-    saveBoards(next);
+    saveBoards((current) => {
+      const next = [...current];
+      const currentFrom = next.findIndex((board) => `reorder:${board.status}` === event.active.id);
+      const currentTo = next.findIndex((board) => board.status === event.over?.id);
+      if (currentFrom < 0 || currentTo < 0 || currentFrom === currentTo) return next;
+      next.splice(currentTo, 0, next.splice(currentFrom, 1)[0]);
+      return next;
+    });
   }
 
   function startDrag(event: DragStartEvent) {

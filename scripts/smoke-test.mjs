@@ -25,9 +25,13 @@ try {
   const page = await request("/");
   assert.equal(page.status, 200, "Dashboard must open without authentication");
   assert.doesNotMatch(await page.text(), /Signed in as|Sign in with Google/);
-  assert.equal((await request("/login")).status, 404);
-  assert.equal((await request("/api/auth/session")).status, 404);
-  assert.equal((await request("/dashboard")).status, 404);
+  const login = await request("/login");
+  assert.equal(login.status, 307);
+  assert.equal(new URL(login.headers.get("location"), base).pathname, "/dashboard");
+  const oldSession = await request("/api/auth/session");
+  assert.equal(oldSession.status, 307);
+  assert.equal(new URL(oldSession.headers.get("location"), base).pathname, "/dashboard");
+  assert.equal((await request("/dashboard")).status, 200);
 
   const rejectedInput = {
     company: "Blocked request", role: "Must not be saved", status: "APPLIED", appliedDate: "2026-09-21",

@@ -14,11 +14,15 @@ const compiledPreferences = ts.transpileModule(preferencesSource, { compilerOpti
 const preferencesModule = { exports: {} };
 const statuses = Object.fromEntries(["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW", "OFFER", "REJECTED"].map((status) => [status, status]));
 new Function("require", "module", "exports", compiledPreferences)(
-  (specifier) => specifier === "@prisma/client" ? { Status: statuses } : motionModule.exports,
+  (specifier) => specifier === "@prisma/client" ? { Status: statuses }
+    : specifier === "@/lib/motion-mode" ? motionModule.exports
+      : specifier === "@/lib/settings-store" ? { getSettingsState: () => ({ settings: { motion: stored } }), subscribeSettings: () => {}, updateSettings: () => Promise.resolve() }
+        : { settingsSchema: { partial: () => ({ parse: (value) => value }) } },
   preferencesModule,
   preferencesModule.exports,
 );
-const { getMotionMode, migrateLegacyMotionPreference, motionIsCurrentlyOff, MOTION_KEY } = preferencesModule.exports;
+const { getMotionMode, motionIsCurrentlyOff } = preferencesModule.exports;
+let stored = "system";
 
 test("Motion resolves System, On, and Off against the OS preference", () => {
   assert.deepEqual(MOTION_MODES, ["system", "on", "off"]);
@@ -30,18 +34,14 @@ test("Motion resolves System, On, and Off against the OS preference", () => {
   assert.equal(motionIsOff("off", true), true);
 });
 
-test("stored Motion choice drives effective motion, including the current legacy local value", () => {
+test("database Motion choice drives effective motion when browser storage is unavailable", () => {
   const previousStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-  let stored = null;
   let osReduced = false;
-  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
-    getItem: (key) => key === MOTION_KEY ? stored : null,
-    setItem: (key, value) => { if (key === MOTION_KEY) stored = value; },
-  } });
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, get: () => { throw new Error("Browser storage unavailable"); } });
   Object.defineProperty(globalThis, "window", { configurable: true, value: { matchMedia: () => ({ matches: osReduced }) } });
   try {
-    for (const [value, expected] of [[null, "system"], ["system", "system"], ["on", "on"], ["off", "off"], ["reduced", "off"], ["invalid", "system"]]) {
+    for (const [value, expected] of [["system", "system"], ["on", "on"], ["off", "off"]]) {
       stored = value;
       assert.equal(getMotionMode(), expected, `stored ${value}`);
     }
@@ -53,9 +53,6 @@ test("stored Motion choice drives effective motion, including the current legacy
     osReduced = false;
     stored = "off";
     assert.equal(motionIsCurrentlyOff(), true);
-    stored = "reduced";
-    migrateLegacyMotionPreference();
-    assert.equal(stored, "off");
   } finally {
     if (previousStorage) Object.defineProperty(globalThis, "localStorage", previousStorage);
     else delete globalThis.localStorage;

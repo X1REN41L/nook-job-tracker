@@ -51,6 +51,12 @@ model UndoSnapshot {
   @@index([expiresAt])
 }
 
+model Settings {
+  id Int @id @default(1)
+  value String
+  revision Int @default(0)
+}
+
 enum Status {
   APPLIED
   ONLINE_ASSESSMENT

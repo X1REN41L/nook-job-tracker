@@ -3,7 +3,6 @@ import type { JobFormState } from "@/components/job-modal";
 import { currentLocalDate } from "@/lib/application-date";
 import { BACKUP_FILE_TOO_LARGE_ERROR, MAX_BACKUP_FILE_BYTES } from "@/lib/backup-limits";
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
-import { applyBackupSettings, readBackupSettings } from "@/lib/backup-settings";
 import { normalizeDuplicateText, type DuplicateMatch } from "@/lib/duplicate-match";
 import { ImportDuplicateIndex } from "@/lib/import-duplicate-index";
 import type { ApplicationRecord } from "@/types/application";
@@ -13,13 +12,11 @@ type CompanyGroup = ImportDuplicateIndex<ApplicationRecord>;
 type PendingImport = { records: RecordSnapshot[]; index: number; groups: Map<string, CompanyGroup>; ids: Set<string>; settings: BackupSnapshot["settings"] };
 const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-export function useApplicationBackup({ applications, insertApplications, onDuplicate, showToast, theme, setTheme }: {
+export function useApplicationBackup({ applications, insertApplications, onDuplicate, showToast }: {
   applications: ApplicationRecord[];
   insertApplications: (backup: BackupSnapshot) => Promise<{ created: ApplicationRecord[]; skippedIds: string[] }>;
   onDuplicate: (candidate: JobFormState, match: DuplicateMatch<ApplicationRecord>) => void;
   showToast: (message: string) => void;
-  theme: string | undefined;
-  setTheme: (theme: string) => void;
 }) {
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
@@ -29,7 +26,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
     try {
       const response = await fetch("/api/applications/export");
       if (!response.ok) throw new Error();
-      const backup = { ...await response.json(), settings: readBackupSettings(theme) };
+      const backup = await response.json();
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -103,12 +100,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
       }
       setImportProgress({ current: next.records.length, total: next.records.length });
       const result = await insertApplications({ version: 1, applications: next.records, settings: next.settings });
-      try {
-        applyBackupSettings(next.settings, setTheme);
-        showToast(`Imported ${result.created.length} applications; skipped ${result.skippedIds.length}; settings restored`);
-      } catch {
-        showToast(`Imported ${result.created.length} applications; skipped ${result.skippedIds.length}; settings could not be restored`);
-      }
+      showToast(`Imported ${result.created.length} applications; skipped ${result.skippedIds.length}; settings restored`);
     } catch (caught) {
       showToast(`Import failed: ${caught instanceof Error ? caught.message : "Could not import the backup"}`);
     } finally {

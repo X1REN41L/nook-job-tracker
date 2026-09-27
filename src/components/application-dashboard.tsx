@@ -9,7 +9,6 @@ import { Status } from "@prisma/client";
 import { FormEvent, useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 
 import { ApplicationSidebar } from "@/components/application-sidebar";
 import { KanbanBoard, KanbanCardOverlay } from "@/components/kanban-board";
@@ -30,7 +29,7 @@ import { useDashboardShortcuts } from "@/hooks/use-dashboard-shortcuts";
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { useToastUndo, type ToastUndo } from "@/hooks/use-toast-undo";
 import { currentLocalDate } from "@/lib/application-date";
-import { ALL_APPLICATIONS_CHANGE_EVENT, ALL_APPLICATIONS_STORAGE_KEY, ARCHIVED_CHANGE_EVENT, ARCHIVED_STORAGE_KEY, SIDEBAR_CHANGE_EVENT, SIDEBAR_STORAGE_KEY } from "@/lib/backup-settings";
+import { getSettingsState, subscribeSettings, setSettingsState, updateSettings } from "@/lib/settings-store";
 import { BOARD_STATUSES, boardLabel, useBoards } from "@/lib/board-preferences";
 import { applicationInputSchema, interviewDateSchema } from "@/lib/application-schema";
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
@@ -43,6 +42,7 @@ import type { ApplicationRecord } from "@/types/application";
 const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), interviewDate: "", notes: "", jobUrl: "" });
 type DragSource = "board" | "sidebar" | "archived";
 const SIDEBAR_WIDTH_KEY = "nook-sidebar-width";
+const SIDEBAR_WIDTH_EVENT = "nook-sidebar-width-change";
 const DEFAULT_SIDEBAR_WIDTH = 320;
 // 254.08px for the first three filter pills + 12px gaps + 36px padding + 1px border.
 const MIN_SIDEBAR_WIDTH = 304;
@@ -59,19 +59,15 @@ type PendingDuplicate = {
 
 function subscribeToSidebarPreference(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
-  window.addEventListener(SIDEBAR_CHANGE_EVENT, onStoreChange);
+  window.addEventListener(SIDEBAR_WIDTH_EVENT, onStoreChange);
   return () => {
     window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener(SIDEBAR_CHANGE_EVENT, onStoreChange);
+    window.removeEventListener(SIDEBAR_WIDTH_EVENT, onStoreChange);
   };
 }
 
 function getSidebarPreference() {
-  try {
-    return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
+  return getSettingsState().settings.sidebarCollapsed;
 }
 
 function getSidebarWidth() {
@@ -85,38 +81,12 @@ function getSidebarWidth() {
   }
 }
 
-function subscribeToArchivedPreference(onStoreChange: () => void) {
-  window.addEventListener("storage", onStoreChange);
-  window.addEventListener(ARCHIVED_CHANGE_EVENT, onStoreChange);
-  return () => {
-    window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener(ARCHIVED_CHANGE_EVENT, onStoreChange);
-  };
-}
-
 function getArchivedPreference() {
-  try {
-    return localStorage.getItem(ARCHIVED_STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function subscribeToAllApplicationsPreference(onStoreChange: () => void) {
-  window.addEventListener("storage", onStoreChange);
-  window.addEventListener(ALL_APPLICATIONS_CHANGE_EVENT, onStoreChange);
-  return () => {
-    window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener(ALL_APPLICATIONS_CHANGE_EVENT, onStoreChange);
-  };
+  return getSettingsState().settings.archivedExpanded;
 }
 
 function getAllApplicationsPreference() {
-  try {
-    return localStorage.getItem(ALL_APPLICATIONS_STORAGE_KEY) !== "false";
-  } catch {
-    return true;
-  }
+  return getSettingsState().settings.allApplicationsExpanded;
 }
 
 function subscribeToLocalDate(onStoreChange: () => void) {
@@ -133,7 +103,6 @@ function getServerLocalDate() {
 export function ApplicationDashboard({ initialApplications, page, dashboardSection = "overview" }: { initialApplications: ApplicationRecord[]; page: ApplicationPageName; dashboardSection?: DashboardSection }) {
   const router = useRouter();
   const boardScrollRef = useScrollbarActivity<HTMLDivElement>();
-  const { theme, setTheme } = useTheme();
   const boards = useBoards();
   const [applications, setApplications] = useState(initialApplications);
   const [form, setForm] = useState<JobFormState>(blankForm);
@@ -156,10 +125,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const isMac = typeof navigator !== "undefined" && isMacPlatform();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
-  const sidebarCollapsed = useSyncExternalStore(subscribeToSidebarPreference, getSidebarPreference, () => false);
+  const sidebarCollapsed = useSyncExternalStore(subscribeSettings, getSidebarPreference, () => false);
   const sidebarWidth = useSyncExternalStore(subscribeToSidebarPreference, getSidebarWidth, () => DEFAULT_SIDEBAR_WIDTH);
-  const archivedExpanded = useSyncExternalStore(subscribeToArchivedPreference, getArchivedPreference, () => false);
-  const allApplicationsExpanded = useSyncExternalStore(subscribeToAllApplicationsPreference, getAllApplicationsPreference, () => true);
+  const archivedExpanded = useSyncExternalStore(subscribeSettings, getArchivedPreference, () => false);
+  const allApplicationsExpanded = useSyncExternalStore(subscribeSettings, getAllApplicationsPreference, () => true);
   const today = useSyncExternalStore(subscribeToLocalDate, currentLocalDate, getServerLocalDate);
   const { toast, deleteRecovery, undoing, showToast, clearApplicationUndo, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
   const lastToastRef = useRef(toast);
@@ -168,8 +137,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const { importProgress, hasPendingImport, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport } = useApplicationBackup({
     applications,
     insertApplications,
-    theme,
-    setTheme,
     onDuplicate: (candidate, match) => setPendingDuplicate({ candidate, editingId: null, match }),
     showToast,
   });
@@ -198,12 +165,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }, []);
 
   function setSidebarCollapsed(nextCollapsed: boolean) {
-    try {
-      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(nextCollapsed));
-      window.dispatchEvent(new Event(SIDEBAR_CHANGE_EVENT));
-    } catch {
-      // Leave the current preference unchanged when storage is unavailable.
-    }
+    void updateSettings({ sidebarCollapsed: nextCollapsed }).catch((error) => showToast(error.message));
   }
 
   function toggleSidebar() {
@@ -214,7 +176,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     const nextWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.round(width)));
     try {
       localStorage.setItem(SIDEBAR_WIDTH_KEY, String(nextWidth));
-      window.dispatchEvent(new Event(SIDEBAR_CHANGE_EVENT));
+      window.dispatchEvent(new Event(SIDEBAR_WIDTH_EVENT));
     } catch {
       // Keep the current width when storage is unavailable.
     }
@@ -296,21 +258,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   useEffect(() => () => resizeCleanupRef.current?.(), []);
 
   function toggleArchived() {
-    try {
-      localStorage.setItem(ARCHIVED_STORAGE_KEY, String(!archivedExpanded));
-      window.dispatchEvent(new Event(ARCHIVED_CHANGE_EVENT));
-    } catch {
-      // Leave the current preference unchanged when storage is unavailable.
-    }
+    void updateSettings({ archivedExpanded: !archivedExpanded }).catch((error) => showToast(error.message));
   }
 
   function toggleAllApplications() {
-    try {
-      localStorage.setItem(ALL_APPLICATIONS_STORAGE_KEY, String(!allApplicationsExpanded));
-      window.dispatchEvent(new Event(ALL_APPLICATIONS_CHANGE_EVENT));
-    } catch {
-      // Leave the current preference unchanged when storage is unavailable.
-    }
+    void updateSettings({ allApplicationsExpanded: !allApplicationsExpanded }).catch((error) => showToast(error.message));
   }
 
   async function insertApplications(backup: BackupSnapshot) {
@@ -322,6 +274,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? "Could not import the applications");
     const imported = body.applications as ApplicationRecord[];
+    setSettingsState({ settings: body.settings, revision: body.settingsRevision });
     setApplications((current) => [...current, ...imported].sort((a, b) => b.appliedDate.localeCompare(a.appliedDate)));
     return { created: imported, skippedIds: body.skippedIds as string[] };
   }

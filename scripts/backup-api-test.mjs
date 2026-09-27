@@ -11,6 +11,8 @@ const post = (path, body) => fetch(`${base}${path}`, { method: "POST", headers: 
 const input = (role) => ({ company: "Backup API test", role, status: "APPLIED", appliedDate: "2026-09-24" });
 const settings = { theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15, motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true };
 const backup = (applications) => ({ version: 1, applications, settings });
+const boardStatuses = ["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW", "OFFER", "REJECTED"];
+const boards = boardStatuses.map((status, index) => ({ status, color: ["gold", "sage", "forest", "clay", "rose"][index], label: `Board ${index + 1}`, emptyText: `Nothing in ${status}` }));
 const record = (role) => ({ id: randomUUID(), company: "Backup API test", role, status: "APPLIED", source: null,
   appliedDate: "2026-09-24T00:00:00.000Z", interviewDate: null, interviewDatePromptDismissed: true,
   notes: "Preserved note", jobUrl: null, createdAt: "2026-09-24T01:00:00.000Z", lastUpdated: "2026-09-24T02:00:00.000Z",
@@ -111,6 +113,19 @@ try {
   await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, startupPage: undefined } }), ["settings.startupPage"]);
   await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, allApplicationsExpanded: undefined } }), ["settings.allApplicationsExpanded"]);
   await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, motion: "reduced" } }), ["settings.motion"]);
+  for (const invalidBoards of [
+    boards.slice(1), [...boards.slice(0, 4), boards[0]],
+    boards.map((board, index) => index ? board : { ...board, color: "invalid" }),
+    boards.map((board, index) => index ? board : { ...board, label: " " }),
+    boards.map((board, index) => index ? board : { ...board, emptyText: "x".repeat(241) }),
+    boards.map((board, index) => index ? board : { ...board, extra: true }),
+  ]) {
+    const response = await post("/api/applications/import", { ...backup([]), settings: { ...settings, boards: invalidBoards } });
+    assert.equal(response.status, 400, "Invalid board configuration must be rejected");
+  }
+  const initial = { id: randomUUID(), type: "STATUS_CHANGE", fromStatus: null, toStatus: "APPLIED", detail: "null → APPLIED", emailSnippet: null, createdAt: "2026-09-24T01:00:00.000Z" };
+  const complete = { ...record("complete history"), archived: false, events: [initial] };
+  await assertValidationIssues(await post("/api/applications/import", backup([{ ...complete, status: "OFFER" }])), ["applications[0].status"]);
   await assertValidationIssues(await post("/api/applications/import", backup([{ ...record("missing archived"), archived: undefined }])), ["applications[0].archived"]);
   await assertValidationIssues(await post("/api/applications/import", backup([{ ...record("missing transition"), events: [{ ...record("event").events[0], fromStatus: undefined }] }])), ["applications[0].events[0].fromStatus"]);
   assert.equal(await prisma.application.count(), 1, "Outdated backups must not create records");
@@ -121,6 +136,33 @@ try {
   assert.equal((await post("/api/applications/import", { version: 1, applications: [], settings: { ...settings, staleApplicationThreshold: 21 } })).status, 400);
   assert.equal((await post("/api/applications/import", [])).status, 400);
   assert.equal((await post("/api/applications/import", backup([]))).status, 201);
+  assert.equal((await post("/api/applications/import", backup([{ ...complete, id: randomUUID(), events: [{ ...initial, id: randomUUID(), toStatus: null, detail: null }] }]))).status, 201, "Incomplete legacy history remains importable");
+  const beforeSettings = await (await fetch(`${base}/api/settings`)).json();
+  const changedSettingsResponse = await fetch(`${base}/api/settings`, { method: "PATCH", headers: mutationHeaders, body: JSON.stringify({ revision: beforeSettings.revision, changes: { theme: "dark", boards: [...boards].reverse() } }) });
+  assert.equal(changedSettingsResponse.status, 200);
+  const changedSettings = await changedSettingsResponse.json();
+  assert.deepEqual(changedSettings.settings.boards, [...boards].reverse());
+  assert.equal(changedSettings.revision, beforeSettings.revision + 1);
+  const staleSettings = await fetch(`${base}/api/settings`, { method: "PATCH", headers: mutationHeaders, body: JSON.stringify({ revision: beforeSettings.revision, changes: { theme: "light" } }) });
+  assert.equal(staleSettings.status, 409);
+  assert.deepEqual(await staleSettings.json(), changedSettings);
+  assert.deepEqual((await (await fetch(`${base}/api/applications/export`)).json()).settings, changedSettings.settings);
+  const failedRestore = await post("/api/applications/import", { ...backup([record("atomic failure")]), settings: { ...settings, boards: boards.slice(1) } });
+  assert.equal(failedRestore.status, 400);
+  assert.deepEqual(await (await fetch(`${base}/api/settings`)).json(), changedSettings);
+  assert.equal(await prisma.application.count(), 2, "Invalid settings must not import applications");
+  await prisma.$executeRawUnsafe("CREATE TRIGGER reject_settings_restore BEFORE UPDATE ON Settings BEGIN SELECT RAISE(ABORT, 'forced settings failure'); END");
+  try {
+    const failedWrite = await post("/api/applications/import", backup([{ ...record("rolled back with settings"), archived: false }]));
+    assert.equal(failedWrite.status, 500);
+    assert.equal(await prisma.application.count(), 2, "A failed settings write must roll back application inserts");
+    assert.deepEqual(await (await fetch(`${base}/api/settings`)).json(), changedSettings);
+  } finally {
+    await prisma.$executeRawUnsafe("DROP TRIGGER reject_settings_restore");
+  }
+  const customizedRestore = await post("/api/applications/import", { ...backup([]), settings: changedSettings.settings });
+  assert.equal(customizedRestore.status, 201);
+  assert.deepEqual((await (await fetch(`${base}/api/applications/export`)).json()).settings, changedSettings.settings);
   const deleted = await fetch(`${base}/api/applications/${seedId}?undoable=1`, { method: "DELETE", headers: mutationHeaders });
   assert.equal(deleted.status, 200);
   const { token } = await deleted.json();

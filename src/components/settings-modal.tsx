@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 import { Columns3, DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
 
 import { ShortcutList } from "@/components/shortcut-list";

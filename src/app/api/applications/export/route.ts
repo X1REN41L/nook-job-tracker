@@ -1,23 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
-import { settingsSchema } from "@/lib/backup-settings-schema";
-
-const defaultSettings = settingsSchema.parse({
-  theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15,
-  motion: "system", boards: [], sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true,
-});
+import { readSettings } from "@/lib/database-settings";
 
 export async function GET() {
   try {
-    const applications = await prisma.application.findMany({ include: { events: { orderBy: { id: "asc" } } }, orderBy: { id: "asc" } });
+    const [applications, stored] = await Promise.all([
+      prisma.application.findMany({ include: { events: { orderBy: { id: "asc" } } }, orderBy: { id: "asc" } }),
+      readSettings(),
+    ]);
     return NextResponse.json({
       version: 1,
       applications: applications.map(({ events, revision, ...application }) => {
         void revision;
         return { ...application, events: events.map(({ id, type, fromStatus, toStatus, detail, emailSnippet, createdAt }) => ({ id, type, fromStatus, toStatus, detail, emailSnippet, createdAt })) };
       }),
-      settings: defaultSettings,
+      settings: stored.settings,
     });
   } catch (error) { return apiError(error); }
 }
