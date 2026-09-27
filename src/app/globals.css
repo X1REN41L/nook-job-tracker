@@ -566,6 +566,29 @@ body.sidebar-resizing-active * {
     opacity var(--motion-fast) var(--motion-ease);
 }
 
+.stale-row-archive {
+  transition: opacity var(--motion-standard) var(--motion-ease),
+    transform var(--motion-standard) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .stale-row-archive {
+    opacity: 0;
+    transform: translateX(8px);
+    pointer-events: none;
+  }
+
+  .stale-application-row:hover .stale-row-archive,
+  .stale-application-row:focus-within .stale-row-archive {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+}
+
 .motion-surface {
   transition: background-color var(--motion-fast) var(--motion-ease),
     border-color var(--motion-fast) var(--motion-ease),

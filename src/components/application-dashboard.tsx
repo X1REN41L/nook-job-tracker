@@ -872,7 +872,14 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
               ) : dashboardSection === "analytics" ? (
                 <DashboardAnalytics today={today} refreshKey={applications} />
               ) : (
-                <DashboardStaleApplications today={today} refreshKey={applications} applications={applications} onEdit={startEdit} />
+                <DashboardStaleApplications
+                  today={today}
+                  refreshKey={applications}
+                  applications={applications}
+                  onEdit={startEdit}
+                  onArchive={(application) => { void moveApplication(application, application.status, true, undefined, true); }}
+                  archiveDisabled={movingId !== null}
+                />
               )
             )}
           </div>

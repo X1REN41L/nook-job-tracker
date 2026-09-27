@@ -18,69 +18,73 @@ const severityColor: Record<Severity, string> = {
   MEDIUM: "text-gold",
 };
 
-function StaleApplicationRow({ application, onEdit }: {
+function StaleApplicationRow({ application, onEdit, onArchive, archiveDisabled }: {
   application: StaleApplication;
-  onEdit?: () => void;
+  onEdit: () => void;
+  onArchive: () => void;
+  archiveDisabled: boolean;
 }) {
-  const content = (
-    <>
-      <span className="block break-words text-sm font-semibold leading-5 text-ink">
-        {application.role} <span className="font-medium text-ink-soft">— {application.company}</span>
-      </span>
-      <span className="mt-1.5 flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm text-ink-soft">
-        <span>{application.status === "ONLINE_ASSESSMENT" ? "Online Assessment" : STATUS_META[application.status].label}</span>
-        <span>Last status update {application.staleDays} {application.staleDays === 1 ? "day" : "days"} ago</span>
-      </span>
-    </>
-  );
-
   return (
-    <li className="min-w-0">
-      {onEdit ? (
-        <button
-          className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
-          onClick={onEdit}
-          type="button"
-        >
-          {content}
-        </button>
-      ) : (
-        <div className="px-2 py-4">{content}</div>
-      )}
+    <li className="stale-application-row relative min-w-0">
+      <button
+        className="block w-full min-w-0 rounded-nook-sm py-4 pl-2 pr-24 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
+        onClick={onEdit}
+        type="button"
+      >
+        <span className="block break-words text-sm font-semibold leading-5 text-ink">
+          {application.role} <span className="font-medium text-ink-soft">— {application.company}</span>
+        </span>
+        <span className="mt-1.5 flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm text-ink-soft">
+          <span>{application.status === "ONLINE_ASSESSMENT" ? "Online Assessment" : STATUS_META[application.status].label}</span>
+          <span>Last status update {application.staleDays} {application.staleDays === 1 ? "day" : "days"} ago</span>
+        </span>
+      </button>
+      <button
+        className="stale-row-archive btn-ghost absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+        disabled={archiveDisabled}
+        onClick={onArchive}
+        type="button"
+      >
+        Archive
+      </button>
     </li>
   );
 }
 
-function StaleSeveritySection({ severity, data, applicationById, onEdit }: {
+function StaleSeveritySection({ severity, items, applicationById, onEdit, onArchive, archiveDisabled }: {
   severity: Severity;
-  data: StaleData;
+  items: StaleApplication[];
   applicationById: Map<string, ApplicationRecord>;
   onEdit: (application: ApplicationRecord) => void;
+  onArchive: (application: ApplicationRecord) => void;
+  archiveDisabled: boolean;
 }) {
-  const items = data.applicationsBySeverity[severity];
   if (items.length === 0) return null;
 
   const headingId = `stale-${severity.toLowerCase()}`;
   return (
     <section aria-labelledby={headingId} className="min-w-0">
       <h2 className={`border-b border-line pb-3 text-sm font-semibold tracking-wide ${severityColor[severity]}`} id={headingId}>
-        {severity} <span className="text-ink-soft">· {data.counts[severity]}</span>
+        {severity} <span className="text-ink-soft">· {items.length}</span>
       </h2>
       <ul className="divide-y divide-line/70">
         {items.map((item) => {
           const record = applicationById.get(item.id);
-          return <StaleApplicationRow application={item} key={item.id} onEdit={record ? () => onEdit(record) : undefined} />;
+          if (!record) return null;
+          return <StaleApplicationRow application={item} archiveDisabled={archiveDisabled} key={item.id} onArchive={() => onArchive(record)} onEdit={() => onEdit(record)} />;
         })}
       </ul>
     </section>
   );
 }
 
-export function DashboardStaleApplications({ today, refreshKey, applications, onEdit }: {
+export function DashboardStaleApplications({ today, refreshKey, applications, onEdit, onArchive, archiveDisabled }: {
   today: string;
   refreshKey: unknown;
   applications: ApplicationRecord[];
   onEdit: (application: ApplicationRecord) => void;
+  onArchive: (application: ApplicationRecord) => void;
+  archiveDisabled: boolean;
 }) {
   const staleApplicationThreshold = useSyncExternalStore(subscribeToPreferences, getStaleApplicationThreshold, () => 15);
   const [result, setResult] = useState<{ today: string; threshold: number; data: StaleData } | null>(null);
@@ -111,6 +115,11 @@ export function DashboardStaleApplications({ today, refreshKey, applications, on
   const error = failedToday === today;
   const loading = !data && !error;
   const applicationById = new Map(applications.map((application) => [application.id, application]));
+  const visibleGroups = severityOrder.map((severity) => ({
+    severity,
+    items: data?.applicationsBySeverity[severity].filter((item) => applicationById.get(item.id)?.archived === false) ?? [],
+  }));
+  const visibleCount = visibleGroups.reduce((count, group) => count + group.items.length, 0);
   const excluded = data?.timingCoverage.withoutReliableStatusTimestamp ?? 0;
 
   return (
@@ -125,12 +134,12 @@ export function DashboardStaleApplications({ today, refreshKey, applications, on
       {error && <p className="mt-5 rounded-nook-sm border border-rose bg-rose-tint px-4 py-3 text-sm text-ink" role="alert">Stale Applications could not be loaded. Please try again later.</p>}
       {loading && <p className="mt-7 text-sm text-ink-soft" role="status">Loading applications…</p>}
       {data && !error && (
-        data.counts.total === 0 ? (
+        visibleCount === 0 ? (
           <p className="mt-8 text-sm text-ink-soft">{"Nothing's gone quiet yet — good sign."}</p>
         ) : (
           <div className="mt-9 space-y-8">
-            {severityOrder.map((severity) => (
-              <StaleSeveritySection applicationById={applicationById} data={data} key={severity} onEdit={onEdit} severity={severity} />
+            {visibleGroups.map(({ severity, items }) => (
+              <StaleSeveritySection applicationById={applicationById} archiveDisabled={archiveDisabled} items={items} key={severity} onArchive={onArchive} onEdit={onEdit} severity={severity} />
             ))}
           </div>
         )
