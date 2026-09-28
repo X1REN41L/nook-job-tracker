@@ -22,6 +22,8 @@ import { getBoards } from "@/lib/board-preferences";
 
 export const ARCHIVED_DROP_ID = "archived";
 export const SIDEBAR_EDGE_DROP_ID = "sidebar-edge";
+// Shared by the board and board-settings reorder so touch drags start the same way in both.
+export const TOUCH_ACTIVATION_CONSTRAINT = { delay: 200, tolerance: 6 };
 const SIDEBAR_EDGE_DWELL_MS = 450;
 type DragSource = "board" | "sidebar" | "archived";
 
@@ -90,7 +92,7 @@ export function useBoardDrag({ sidebarCollapsed, onDrop }: {
   };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION_CONSTRAINT }),
     useSensor(KeyboardSensor, {
       coordinateGetter: kanbanKeyboardCoordinates,
       keyboardCodes: { start: [KeyboardCode.Space], end: [KeyboardCode.Space], cancel: [KeyboardCode.Esc] },

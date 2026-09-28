@@ -4,7 +4,9 @@ import { closestCenter, DndContext, type Announcements, KeyboardSensor, PointerS
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { BOARD_COLORS, BOARD_COLOR_CLASSES, saveBoards, resetBoards, type BoardConfiguration, type BoardStatus } from "@/lib/board-preferences";
+import { BOARD_COLOR_CLASSES, saveBoards, resetBoards, type BoardConfiguration, type BoardStatus } from "@/lib/board-preferences";
+import { BOARD_COLORS } from "@/lib/settings-values";
+import { TOUCH_ACTIVATION_CONSTRAINT } from "@/hooks/use-board-drag";
 import { useBoards } from "@/hooks/use-boards";
 
 const keyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
@@ -28,7 +30,7 @@ export function BoardSettings({ showToast }: { showToast: (message: string) => v
   const cancelResetRef = useRef<HTMLButtonElement>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION_CONSTRAINT }),
     useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
   );
 

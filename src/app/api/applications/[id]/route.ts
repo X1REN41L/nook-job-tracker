@@ -7,7 +7,7 @@ import { applicationEditSchema, applicationMutationSchema } from "@/lib/applicat
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma } from "@/lib/prisma";
 import { nextStatusEventTime, statusTransitionDetail } from "@/lib/status-history";
-import { cleanupExpiredUndoSnapshots } from "@/lib/undo-snapshots";
+import { cleanupExpiredUndoSnapshots, UNDO_SNAPSHOT_TTL_MS } from "@/lib/undo-snapshots";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -127,7 +127,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const { id } = await params;
     if (new URL(request.url).searchParams.get("undoable") === "1") {
       const token = randomUUID();
-      const expiresAt = new Date(Date.now() + 10 * 60_000);
+      const expiresAt = new Date(Date.now() + UNDO_SNAPSHOT_TTL_MS);
       const deleted = await prisma.$transaction(async (transaction) => {
         const application = await transaction.application.findUnique({ where: { id }, include: { events: true } });
         if (!application) return null;

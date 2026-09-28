@@ -1,5 +1,6 @@
-import { ApplicationDashboard, type ApplicationPageName, type DashboardSection } from "@/components/application-dashboard";
+import { ApplicationDashboard } from "@/components/application-dashboard";
 import { prisma } from "@/lib/prisma";
+import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
 export async function ApplicationPage({ page, dashboardSection }: { page: ApplicationPageName; dashboardSection?: DashboardSection }) {
   const applications = await prisma.application.findMany({

@@ -20,7 +20,7 @@ import { InterviewsList } from "@/components/interviews-list";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
 import { DashboardStaleApplications } from "@/components/dashboard-stale-applications";
-import { JobModal, type JobFormState } from "@/components/job-modal";
+import { JobModal } from "@/components/job-modal";
 import { SettingsModal } from "@/components/settings-modal";
 import { ShortcutOverlay } from "@/components/shortcut-overlay";
 import { useApplicationBackup } from "@/hooks/use-application-backup";
@@ -43,7 +43,8 @@ import { findPossibleDuplicate, type DuplicateMatch } from "@/lib/duplicate-matc
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";
 import { getDefaultBoard } from "@/lib/general-preferences";
 import { getInterviewListItems, getUpcomingInterviewCount } from "@/lib/interviews";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationRecord, JobFormState } from "@/types/application";
+import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
 const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), interviewDate: "", notes: "", jobUrl: "" });
 type DragSource = "board" | "sidebar" | "archived";
@@ -55,8 +56,6 @@ const MIN_SIDEBAR_WIDTH = 304;
 const MAX_SIDEBAR_WIDTH = 420;
 const SIDEBAR_COLLAPSE_THRESHOLD = 180;
 const SIDEBAR_REOPEN_THRESHOLD = 80;
-export type ApplicationPageName = "job-board" | "dashboard" | "interviews";
-export type DashboardSection = "overview" | "analytics" | "stale";
 type MoveResult = "moved" | "unchanged" | "busy" | "conflict" | "failed";
 type PendingDuplicate = {
   candidate: JobFormState;
@@ -867,6 +866,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           upcomingInterviewCount={upcomingInterviewCount}
           collapsed={effectiveSidebarCollapsed}
           width={sidebarWidth}
+          minWidth={MIN_SIDEBAR_WIDTH}
+          maxWidth={MAX_SIDEBAR_WIDTH}
           page={page}
           dashboardSection={dashboardSection}
           archivedExpanded={archivedExpanded}

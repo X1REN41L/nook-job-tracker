@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { PrismaClient, Status } from "@prisma/client";
 
-// Run against a running local app; only this script's own record is removed.
+// Run only through `npm run test:smoke`, which starts an isolated test server on a temporary SQLite database.
 const base = process.env.SMOKE_BASE_URL;
 assert.ok(base, "SMOKE_BASE_URL is required");
 const origin = new URL(base).origin;
@@ -52,12 +52,12 @@ try {
   const page = await request(startupPath);
   assert.equal(page.status, 200, "The startup page must open without authentication");
   assert.doesNotMatch(await page.text(), /Signed in as|Sign in with Google/);
-  const login = await request("/login");
-  assert.equal(login.status, 307);
-  assert.equal(new URL(login.headers.get("location"), base).pathname, "/dashboard");
-  const oldSession = await request("/api/auth/session");
-  assert.equal(oldSession.status, 307);
-  assert.equal(new URL(oldSession.headers.get("location"), base).pathname, "/dashboard");
+  // The [...slug] catch-all sends unknown page and API paths to the dashboard.
+  for (const unknownPath of ["/no-such-page", "/api/no-such-route"]) {
+    const unknown = await request(unknownPath);
+    assert.equal(unknown.status, 307, `${unknownPath} must redirect`);
+    assert.equal(new URL(unknown.headers.get("location"), base).pathname, "/dashboard");
+  }
   assert.equal((await request("/dashboard")).status, 200);
 
   const rejectedInput = {
@@ -216,7 +216,7 @@ try {
   assert.equal((await request(path, "PATCH", { revision: application.revision, status: "ONLINE_ASSESSMENT" })).status, 404);
   assert.equal((await request(path, "DELETE")).status, 404);
   assert.equal(await prisma.applicationEvent.count({ where: { applicationId } }), 0);
-  console.log("Passed: no-login routing, CRUD, all status moves, SQLite persistence, event history, validation, and cascade deletion.");
+  console.log("Passed: startup and unknown-route redirects, CRUD, all status moves, SQLite persistence, event history, validation, and cascade deletion.");
 } finally {
   if (applicationId) await prisma.application.deleteMany({ where: { id: applicationId } });
   await prisma.$disconnect();

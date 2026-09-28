@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { analyzeStatusHistory, nextStatusEventTime, parseStatusTransitionDetail, statusTransitionDetail } from "../src/lib/status-history.ts";
+import { analyzeStatusHistory, nextStatusEventTime, statusTransitionDetail } from "../src/lib/status-history.ts";
 
 const at = (value) => new Date(value);
 const event = (id, fromStatus, toStatus, createdAt) => ({ id, type: "STATUS_CHANGE", fromStatus, toStatus, detail: statusTransitionDetail(fromStatus, toStatus), createdAt });
@@ -40,6 +40,4 @@ test("removed undo move restores the prior milestone trail", () => {
   assert.equal(undone.complete, true);
   assert.equal(undone.knownStatuses.has("OFFER"), false);
   assert.equal(undone.latestStatusEvent.id, "a");
-  assert.deepEqual(parseStatusTransitionDetail("APPLIED → OFFER"), { fromStatus: "APPLIED", toStatus: "OFFER" });
-  assert.equal(parseStatusTransitionDetail("APPLIED → APPLIED"), null);
 });

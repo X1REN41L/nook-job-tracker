@@ -41,7 +41,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# prisma development files
+# prisma: the schema is applied with `prisma db push`; migrations are not used
 prisma/migrations/
 *.db
 *.db-journal
@@ -64,9 +64,6 @@ prisma/migrations/
 
 #restructure-plan
 /restructure-plan/
-!prisma/migrations/
-!prisma/migrations/**
-prisma/migrations/.DS_Store
 /screenshots/
-AGENTS.md
+
 CLAUDE.md

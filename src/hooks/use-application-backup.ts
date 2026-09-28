@@ -1,11 +1,10 @@
 import { useRef, useState } from "react";
-import type { JobFormState } from "@/components/job-modal";
 import { currentLocalDate } from "@/lib/application-date";
 import { BACKUP_FILE_TOO_LARGE_ERROR, MAX_BACKUP_FILE_BYTES } from "@/lib/backup-limits";
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { normalizeDuplicateText, type DuplicateMatch } from "@/lib/duplicate-match";
 import { ImportDuplicateIndex } from "@/lib/import-duplicate-index";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationRecord, JobFormState } from "@/types/application";
 
 type RecordSnapshot = BackupSnapshot["applications"][number];
 type CompanyGroup = ImportDuplicateIndex<ApplicationRecord>;

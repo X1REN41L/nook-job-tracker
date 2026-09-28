@@ -2,15 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-import type { getStaleApplications, StaleApplication } from "@/lib/dashboard-analytics";
 import { currentBrowserTimeZone } from "@/lib/application-date";
 import { useSettings } from "@/hooks/use-settings";
 import { useBoards } from "@/hooks/use-boards";
 import { boardLabel } from "@/lib/board-preferences";
 import type { ApplicationRecord } from "@/types/application";
-
-type StaleData = Awaited<ReturnType<typeof getStaleApplications>>;
-type Severity = StaleApplication["severity"];
+import type { StaleApplication, StaleApplicationsData as StaleData, StaleSeverity as Severity } from "@/types/dashboard";
 
 const severityOrder: Severity[] = ["CRITICAL", "HIGH", "MEDIUM"];
 const severityColor: Record<Severity, string> = {

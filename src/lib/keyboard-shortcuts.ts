@@ -1,3 +1,5 @@
+import type { ApplicationPageName } from "@/types/navigation";
+
 export function isEditableShortcutTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])"));
@@ -14,14 +16,13 @@ type ShortcutBinding =
 
 export const shortcutSections = ["General", "Page Navigation", "Dashboard", "Job Board", "Interviews"] as const;
 export type ShortcutSection = (typeof shortcutSections)[number];
-export type ShortcutPage = "job-board" | "dashboard" | "interviews";
 
 type ShortcutDefinition = {
   id: string;
   action: string;
   bindings: readonly ShortcutBinding[];
   section: ShortcutSection;
-  page?: ShortcutPage;
+  page?: ApplicationPageName;
   destination?: string;
 };
 
@@ -63,17 +64,17 @@ function matchesBinding(binding: ShortcutBinding, event: KeyboardEvent, isMac: b
   return binding.key.length === 1 ? event.key.toLowerCase() === binding.key.toLowerCase() : event.key === binding.key;
 }
 
-function activeOnPage(definition: ShortcutDefinition, page: ShortcutPage) {
+function activeOnPage(definition: ShortcutDefinition, page: ApplicationPageName) {
   return !definition.page || definition.page === page;
 }
 
-export function startsShortcutSequence(event: KeyboardEvent, page: ShortcutPage) {
+export function startsShortcutSequence(event: KeyboardEvent, page: ApplicationPageName) {
   if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || isEditableShortcutTarget(event.target)) return false;
   return shortcutDefinitions.some((definition) => activeOnPage(definition, page) &&
     definition.bindings.some((binding) => binding.kind === "sequence" && binding.keys[0] === event.key.toLowerCase()));
 }
 
-export function matchDashboardShortcut(event: KeyboardEvent, isMac: boolean, page: ShortcutPage, pendingPrefix: string | null = null): DashboardShortcut | null {
+export function matchDashboardShortcut(event: KeyboardEvent, isMac: boolean, page: ApplicationPageName, pendingPrefix: string | null = null): DashboardShortcut | null {
   if (isEditableShortcutTarget(event.target) && event.key !== "Escape") return null;
   return shortcutDefinitions.find((definition) => activeOnPage(definition, page) &&
     definition.bindings.some((binding) => matchesBinding(binding, event, isMac, pendingPrefix)))?.id ?? null;

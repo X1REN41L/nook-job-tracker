@@ -1,4 +1,4 @@
-import { EventType, Status } from "@prisma/client";
+import { EventType, type Status } from "@prisma/client";
 
 export type ParsedStatusTransition = {
   fromStatus: Status | null;
@@ -14,23 +14,8 @@ export type StatusHistoryEvent = {
   createdAt: Date | string;
 };
 
-const statusNames = Object.values(Status);
-const transitionDetailPattern = new RegExp(
-  `^(null|${statusNames.join("|")}) → (${statusNames.join("|")})$`,
-);
-
 export function statusTransitionDetail(fromStatus: Status | null, toStatus: Status) {
   return `${fromStatus ?? "null"} → ${toStatus}`;
-}
-
-export function parseStatusTransitionDetail(detail: string | null): ParsedStatusTransition | null {
-  if (detail === null) return null;
-  const match = transitionDetailPattern.exec(detail);
-  if (!match) return null;
-  const fromStatus = match[1] === "null" ? null : match[1] as Status;
-  const toStatus = match[2] as Status;
-  if (fromStatus === toStatus) return null;
-  return { fromStatus, toStatus };
 }
 
 // A new event must sort after the existing history even if the clock is behind its latest event.

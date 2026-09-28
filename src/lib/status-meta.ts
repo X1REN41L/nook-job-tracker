@@ -35,7 +35,3 @@ export const STATUS_META: Record<
     empty: "None yet — long may that continue.",
   },
 };
-
-export function statusLabel(status: Status) {
-  return STATUS_META[status].label;
-}

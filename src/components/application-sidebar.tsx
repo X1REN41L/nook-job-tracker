@@ -11,6 +11,7 @@ import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { ARCHIVED_DROP_ID, SIDEBAR_EDGE_DROP_ID } from "@/hooks/use-board-drag";
 import { formatAppliedDate } from "@/lib/application-date";
 import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
 type ApplicationSidebarProps = {
   boards: BoardConfiguration[];
@@ -20,8 +21,10 @@ type ApplicationSidebarProps = {
   upcomingInterviewCount: number;
   collapsed: boolean;
   width: number;
-  page: "job-board" | "dashboard" | "interviews";
-  dashboardSection?: "overview" | "analytics" | "stale";
+  minWidth: number;
+  maxWidth: number;
+  page: ApplicationPageName;
+  dashboardSection?: DashboardSection;
   archivedExpanded: boolean;
   allApplicationsExpanded: boolean;
   movingIds: ReadonlySet<string>;
@@ -65,6 +68,8 @@ export function ApplicationSidebar({
   upcomingInterviewCount,
   collapsed,
   width,
+  minWidth,
+  maxWidth,
   page,
   dashboardSection = "overview",
   archivedExpanded,
@@ -134,8 +139,8 @@ export function ApplicationSidebar({
             <div
               aria-label="Resize sidebar"
               aria-orientation="vertical"
-              aria-valuemax={420}
-              aria-valuemin={304}
+              aria-valuemax={maxWidth}
+              aria-valuemin={minWidth}
               aria-valuenow={width}
               aria-valuetext={`${width} pixels`}
               className="sidebar-resize-handle"
@@ -563,7 +568,7 @@ function SidebarEdgeRail({
   collapsed: boolean;
   onRailPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onOpenArchive: () => void;
-  page: "job-board" | "dashboard" | "interviews";
+  page: ApplicationPageName;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: SIDEBAR_EDGE_DROP_ID, disabled: !collapsed || page !== "job-board" });
 

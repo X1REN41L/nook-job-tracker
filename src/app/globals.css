@@ -253,7 +253,9 @@ body.nook-dragging * {
 }
 
 .app-workspace {
-  --sidebar-width: 320px;
+  /* Matches DEFAULT_SIDEBAR_WIDTH in application-dashboard.tsx. */
+  --sidebar-default-width: 320px;
+  --sidebar-width: var(--sidebar-default-width);
   --sidebar-rail-width: 50px;
   --sidebar-nav-inset: 14px;
   grid-template-columns: minmax(0, 1fr);
@@ -264,7 +266,7 @@ body.nook-dragging * {
   inset-block: 0;
   left: 0;
   z-index: 20;
-  width: min(320px, calc(100vw - 48px));
+  width: min(var(--sidebar-default-width), calc(100vw - 48px));
   transition: width var(--motion-structural) var(--motion-ease);
 }
 
@@ -495,7 +497,7 @@ body.sidebar-resizing-active * {
 
 @media (max-width: 767px) {
   .sidebar-brand-row {
-    width: min(320px, calc(100vw - 48px));
+    width: min(var(--sidebar-default-width), calc(100vw - 48px));
   }
 
   /* Keep the collapsed rail in its own column instead of covering the

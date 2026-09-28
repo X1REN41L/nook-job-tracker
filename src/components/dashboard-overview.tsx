@@ -4,11 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
-import type { getDashboardOverview } from "@/lib/dashboard-analytics";
+import type { DashboardOverviewData as OverviewData } from "@/types/dashboard";
 import { currentBrowserTimeZone } from "@/lib/application-date";
 import { useSettings } from "@/hooks/use-settings";
 
-type OverviewData = Awaited<ReturnType<typeof getDashboardOverview>>;
 type Rate = OverviewData["interviewRate"];
 
 function OverviewMetrics({ data }: { data: OverviewData | null }) {

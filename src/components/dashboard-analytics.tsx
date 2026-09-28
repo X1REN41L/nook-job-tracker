@@ -4,11 +4,10 @@ import { useEffect, useState } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
 import { analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod } from "@/lib/analytics-period";
-import type { getDashboardAnalytics } from "@/lib/dashboard-analytics";
+import type { DashboardAnalyticsData as AnalyticsData } from "@/types/dashboard";
 import { useBoards } from "@/hooks/use-boards";
 import { boardDot, boardLabel } from "@/lib/board-preferences";
 
-type AnalyticsData = Awaited<ReturnType<typeof getDashboardAnalytics>>;
 type Rate = AnalyticsData["interviewRate"];
 
 const PERIODS: { value: AnalyticsPeriod; label: string }[] = [

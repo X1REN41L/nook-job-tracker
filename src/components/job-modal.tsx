@@ -7,17 +7,7 @@ import { Status } from "@prisma/client";
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { Dialog } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
-
-export type JobFormState = {
-  company: string;
-  role: string;
-  status: Status;
-  source: string;
-  appliedDate: string;
-  interviewDate: string;
-  notes: string;
-  jobUrl: string;
-};
+import type { JobFormState } from "@/types/application";
 
 export function JobModal({
   boards,

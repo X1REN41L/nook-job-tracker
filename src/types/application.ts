@@ -5,3 +5,14 @@ export type ApplicationRecord = {
   source: string | null; appliedDate: string; interviewDate: string | null; interviewDatePromptDismissed: boolean; notes: string | null; jobUrl: string | null;
   lastUpdated: string; createdAt: string;
 };
+
+export type JobFormState = {
+  company: string;
+  role: string;
+  status: Status;
+  source: string;
+  appliedDate: string;
+  interviewDate: string;
+  notes: string;
+  jobUrl: string;
+};

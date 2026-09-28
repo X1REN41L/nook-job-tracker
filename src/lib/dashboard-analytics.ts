@@ -7,10 +7,16 @@ import {
   type AnalyticsSelection,
 } from "@/lib/analytics-period";
 import { analyzeStatusHistory, type StatusHistoryEvent } from "@/lib/status-history";
+import type {
+  DashboardAnalyticsData, DashboardOverviewData, HistoryCoverage, RateMetric, StaleApplication, StaleApplicationsData,
+  StaleTimingCoverage,
+} from "@/types/dashboard";
 
 const ACTIVE_STATUSES = [Status.APPLIED, Status.ONLINE_ASSESSMENT, Status.INTERVIEW] as const;
 const TERMINAL_INTERVIEW_STATUSES = [Status.OFFER, Status.REJECTED] as const;
 const STALE_SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM"] as const;
+const STALE_CRITICAL_DAYS = 60;
+const STALE_HIGH_DAYS = 30;
 
 type DashboardApplication = {
   id: string;
@@ -23,31 +29,6 @@ type DashboardApplication = {
   events: StatusHistoryEvent[];
 };
 type AnalyzedApplication = DashboardApplication & { history: ReturnType<typeof analyzeStatusHistory> };
-
-type HistoryCoverage = {
-  totalApplications: number;
-  completeApplications: number;
-  incompleteApplications: number;
-  percentageComplete: number;
-  isComplete: boolean;
-};
-
-type RateMetric = {
-  numerator: number;
-  denominator: number;
-  percentage: number;
-  historyCoverage: HistoryCoverage;
-};
-
-export type StaleApplication = {
-  id: string;
-  role: string;
-  company: string;
-  status: Status;
-  lastStatusChangedAt: string;
-  staleDays: number;
-  severity: "MEDIUM" | "HIGH" | "CRITICAL";
-};
 
 const eventSelection = {
   id: true,
@@ -175,7 +156,7 @@ function staleApplications(applications: AnalyzedApplication[], today: string, t
 
     const staleDays = Math.max(0, daysBetween(calendarDateInTimeZone(new Date(lastStatusEvent.createdAt), timeZone), today));
     if (staleDays < threshold) continue;
-    const severity = staleDays >= 60 ? "CRITICAL" : staleDays >= 30 ? "HIGH" : "MEDIUM";
+    const severity = staleDays >= STALE_CRITICAL_DAYS ? "CRITICAL" : staleDays >= STALE_HIGH_DAYS ? "HIGH" : "MEDIUM";
     result.push({
       id: application.id,
       role: application.role,
@@ -192,7 +173,7 @@ function staleApplications(applications: AnalyzedApplication[], today: string, t
   });
 }
 
-function staleTimingCoverage(applications: AnalyzedApplication[]) {
+function staleTimingCoverage(applications: AnalyzedApplication[]): StaleTimingCoverage {
   const eligibleApplications = applications.filter((application) =>
     !application.archived && ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number]),
   );
@@ -225,7 +206,7 @@ function staleGroups(applications: StaleApplication[]) {
   };
 }
 
-export async function getDashboardOverview(today: string, timeZone: string, staleApplicationThreshold = 15) {
+export async function getDashboardOverview(today: string, timeZone: string, staleApplicationThreshold = 15): Promise<DashboardOverviewData> {
   const applications = await loadApplications();
   const historyCoverage = coverageFor(applications);
   const upcoming = applications
@@ -265,7 +246,7 @@ export async function getDashboardOverview(today: string, timeZone: string, stal
   };
 }
 
-export async function getStaleApplications(today: string, timeZone: string, staleApplicationThreshold = 15) {
+export async function getStaleApplications(today: string, timeZone: string, staleApplicationThreshold = 15): Promise<StaleApplicationsData> {
   const applications = await loadApplications({
     archived: false,
     status: { in: [...ACTIVE_STATUSES] },
@@ -276,7 +257,7 @@ export async function getStaleApplications(today: string, timeZone: string, stal
   };
 }
 
-export async function getDashboardAnalytics(selection: AnalyticsSelection, today?: string) {
+export async function getDashboardAnalytics(selection: AnalyticsSelection, today?: string): Promise<DashboardAnalyticsData> {
   const range = analyticsPeriodRange(selection, today);
   const applications = await loadApplications({
     appliedDate: range.endDate === "9999-12-31"

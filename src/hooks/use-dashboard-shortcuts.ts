@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { matchDashboardShortcut, shortcutDestination, startsShortcutSequence } from "@/lib/keyboard-shortcuts";
-import type { ApplicationPageName } from "@/components/application-dashboard";
+import type { ApplicationPageName } from "@/types/navigation";
 import type { ApplicationRecord } from "@/types/application";
 
 type DashboardShortcutOptions = {

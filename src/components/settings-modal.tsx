@@ -12,7 +12,7 @@ import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-mod
 import { useBoards } from "@/hooks/use-boards";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
-import { STALE_THRESHOLDS, STARTUP_PAGES } from "@/lib/general-preferences";
+import { STALE_THRESHOLDS, STARTUP_PAGES } from "@/lib/settings-values";
 import { MOTION_MODES } from "@/lib/motion-mode";
 
 type SettingsCategory = "general" | "board" | "shortcuts" | "backup";

@@ -1,12 +1,12 @@
 import type { Status } from "@prisma/client";
 
-import { DEFAULT_BOARD_STATUSES } from "@/lib/general-preferences";
 import { getSettingsState, updateSettings } from "@/lib/settings-store";
+import { BOARD_COLORS } from "@/lib/settings-values";
 import { STATUS_META } from "@/lib/status-meta";
+import { STATUS_VALUES } from "@/lib/status-values";
 
-export const BOARD_STATUSES = DEFAULT_BOARD_STATUSES;
+export const BOARD_STATUSES = STATUS_VALUES;
 export type BoardStatus = (typeof BOARD_STATUSES)[number];
-export const BOARD_COLORS = ["gold", "sage", "forest", "clay", "rose", "neutral-dim"] as const;
 export type BoardColor = (typeof BOARD_COLORS)[number];
 export const BOARD_COLOR_CLASSES: Record<BoardColor, string> = {
   gold: "bg-gold", sage: "bg-sage", forest: "bg-forest", clay: "bg-clay", rose: "bg-rose", "neutral-dim": "bg-neutral-dim",
