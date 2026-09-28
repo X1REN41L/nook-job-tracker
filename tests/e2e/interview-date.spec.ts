@@ -110,6 +110,9 @@ test("preserves interview-date prompt behavior through skip, edit, direct creati
   await expect(prompt).toBeHidden();
   expect((await move(page, skipped, "Online assessment")).status()).toBe(200);
   expect((await move(page, skipped, "Interview")).status()).toBe(200);
+  // BIZ-004: leaving Interview clears the skip, so returning to Interview asks again.
+  await expect(prompt).toBeVisible();
+  await prompt.getByRole("button", { name: "Skip", exact: true }).click();
   await expect(prompt).toBeHidden();
 
   await card(page, skipped).click();

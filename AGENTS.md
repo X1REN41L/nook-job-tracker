@@ -19,9 +19,11 @@ Nook is a local-only job tracker built with Next.js, React, TypeScript, Tailwind
 
 ## Validation Commands
 
-- Typecheck, lint, build, focused/unit tests, API tests, and smoke tests are allowed. Use the scripts in `package.json` for the relevant check.
-- `npm run test:backup` and `npm run test:smoke` use `scripts/run-backup-api-test.sh`, which creates an isolated SQLite database and test server. Use this runner for API checks instead of targeting the user's running app.
-- Playwright and browser tests require an explicit user request, including `npm run test:keyboard` and tests in `tests/e2e/`. The user handles manual UI/browser testing; do not ask them to test the UI.
+- Typecheck, lint, build, focused/unit tests, API tests, and smoke tests are allowed. Use the scripts in `package.json` for the relevant check: `npm run typecheck`, `npm run lint`, `npm run build`.
+- `npm test` runs every non-browser suite: `test:unit`, `test:import-scale`, `test:setup`, `test:smoke`, `test:backup`, `test:dashboard`, and `test:contention`.
+- Unit tests (`test:unit`, `test:shortcuts`, `test:duplicates`, `test:import-scale`) load TypeScript through `scripts/unit-loader-register.mjs`, which needs the Node version in `package.json` `engines`.
+- `npm run test:smoke`, `test:backup`, `test:dashboard`, and `test:contention` use `scripts/run-backup-api-test.sh`, which creates an isolated SQLite database and test server. Use this runner for API checks instead of targeting the user's running app.
+- Playwright and browser tests require an explicit user request, including `npm run test:e2e` (alias `test:keyboard`) and tests in `tests/e2e/`. `scripts/run-playwright.sh` uses an isolated SQLite database and removes its `.next-playwright/` and `tsconfig.playwright.json` artifacts on exit. The user handles manual UI/browser testing; do not ask them to test the UI.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
