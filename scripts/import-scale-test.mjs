@@ -1,20 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
-import ts from "typescript";
-
-const duplicateSource = await readFile(new URL("../src/lib/duplicate-match.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(duplicateSource, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const duplicateUrl = `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`;
-const { findPossibleDuplicate } = await import(duplicateUrl);
-const indexSource = (await readFile(new URL("../src/lib/import-duplicate-index.ts", import.meta.url), "utf8"))
-  .replace('from "@/lib/duplicate-match"', `from "${duplicateUrl}"`);
-const indexCompiled = ts.transpileModule(indexSource, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const { ImportDuplicateIndex } = await import(`data:text/javascript;base64,${Buffer.from(indexCompiled).toString("base64")}`);
+import { findPossibleDuplicate } from "../src/lib/duplicate-match.ts";
+import { ImportDuplicateIndex } from "../src/lib/import-duplicate-index.ts";
 
 const applications = [];
 const duplicateIndex = new ImportDuplicateIndex();

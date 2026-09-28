@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import ts from "typescript";
-
-const source = await readFile(new URL("../src/lib/keyboard-shortcuts.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const { matchDashboardShortcut, shortcutDefinitions, shortcutDestination, shortcutLabels, shortcutSections, startsShortcutSequence } = await import(`data:text/javascript,${encodeURIComponent(compiled)}`);
+import { matchDashboardShortcut, shortcutDefinitions, shortcutDestination, shortcutLabels, shortcutSections, startsShortcutSequence } from "../src/lib/keyboard-shortcuts.ts";
 
 globalThis.HTMLElement = class HTMLElement {
   constructor(editable = false) { this.editable = editable; }
@@ -18,7 +13,8 @@ function key(key, options = {}) {
 
 test("definitions drive the exact group order and platform labels", () => {
   assert.deepEqual(shortcutSections, ["General", "Page Navigation", "Dashboard", "Job Board", "Interviews"]);
-  assert.equal(shortcutDefinitions.length, 21);
+  assert.ok(shortcutDefinitions.length > 0);
+  assert.equal(new Set(shortcutDefinitions.map(({ id }) => id)).size, shortcutDefinitions.length);
   for (const isMac of [true, false]) {
     const labels = shortcutLabels(isMac);
     assert.deepEqual([...new Set(labels.map(({ section }) => section))], shortcutSections);

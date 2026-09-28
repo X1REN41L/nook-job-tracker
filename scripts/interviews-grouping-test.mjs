@@ -1,27 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { test } from "node:test";
-import ts from "typescript";
-
-const require = createRequire(import.meta.url);
-
-function loadTypeScript(path, dependencies = {}) {
-  const source = readFileSync(new URL(path, import.meta.url), "utf8");
-  const { outputText } = ts.transpileModule(source, {
-    fileName: path,
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  });
-  const loadedModule = { exports: {} };
-  const load = (name) => dependencies[name] ?? require(name);
-  new Function("require", "module", "exports", outputText)(load, loadedModule, loadedModule.exports);
-  return loadedModule.exports;
-}
-
-const calendar = loadTypeScript("../src/lib/calendar-date.ts");
-const { groupUpcomingInterviews } = loadTypeScript("../src/lib/interviews.ts", {
-  "@/lib/calendar-date": calendar,
-});
+import * as calendar from "../src/lib/calendar-date.ts";
+import { groupUpcomingInterviews } from "../src/lib/interviews.ts";
 
 function item(id, date) {
   return { id, date: `${date}T00:00:00.000Z`, role: id, company: "Company", note: null };

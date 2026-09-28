@@ -1,28 +1,9 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import ts from "typescript";
-
-const motionSource = await readFile(new URL("../src/lib/motion-mode.ts", import.meta.url), "utf8");
-const compiledMotion = ts.transpileModule(motionSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-const motionModule = { exports: {} };
-new Function("module", "exports", compiledMotion)(motionModule, motionModule.exports);
-const { MOTION_MODES, motionIsOff } = motionModule.exports;
-
-const preferencesSource = await readFile(new URL("../src/lib/general-preferences.ts", import.meta.url), "utf8");
-const compiledPreferences = ts.transpileModule(preferencesSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
-const preferencesModule = { exports: {} };
-const statuses = Object.fromEntries(["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW", "OFFER", "REJECTED"].map((status) => [status, status]));
-new Function("require", "module", "exports", compiledPreferences)(
-  (specifier) => specifier === "@prisma/client" ? { Status: statuses }
-    : specifier === "@/lib/motion-mode" ? motionModule.exports
-      : specifier === "@/lib/settings-store" ? { getSettingsState: () => ({ settings: { motion: stored } }), subscribeSettings: () => {}, updateSettings: () => Promise.resolve() }
-        : { settingsSchema: { partial: () => ({ parse: (value) => value }) } },
-  preferencesModule,
-  preferencesModule.exports,
-);
-const { getMotionMode, motionIsCurrentlyOff } = preferencesModule.exports;
-let stored = "system";
+import { MOTION_MODES, motionIsOff } from "../src/lib/motion-mode.ts";
+import { getMotionMode, motionIsCurrentlyOff } from "../src/lib/general-preferences.ts";
+import { defaultSettings } from "../src/lib/settings-defaults.ts";
+import { setSettingsState } from "../src/lib/settings-store.ts";
 
 test("Motion resolves System, On, and Off against the OS preference", () => {
   assert.deepEqual(MOTION_MODES, ["system", "on", "off"]);
@@ -34,28 +15,24 @@ test("Motion resolves System, On, and Off against the OS preference", () => {
   assert.equal(motionIsOff("off", true), true);
 });
 
-test("database Motion choice drives effective motion when browser storage is unavailable", () => {
-  const previousStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+test("stored Motion choice drives effective motion with the OS preference", () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   let osReduced = false;
-  Object.defineProperty(globalThis, "localStorage", { configurable: true, get: () => { throw new Error("Browser storage unavailable"); } });
   Object.defineProperty(globalThis, "window", { configurable: true, value: { matchMedia: () => ({ matches: osReduced }) } });
   try {
     for (const [value, expected] of [["system", "system"], ["on", "on"], ["off", "off"]]) {
-      stored = value;
+      setSettingsState({ settings: { ...defaultSettings, motion: value }, revision: 0 });
       assert.equal(getMotionMode(), expected, `stored ${value}`);
     }
-    stored = "on";
+    setSettingsState({ settings: { ...defaultSettings, motion: "on" }, revision: 0 });
     osReduced = true;
     assert.equal(motionIsCurrentlyOff(), false);
-    stored = "system";
+    setSettingsState({ settings: { ...defaultSettings, motion: "system" }, revision: 0 });
     assert.equal(motionIsCurrentlyOff(), true);
     osReduced = false;
-    stored = "off";
+    setSettingsState({ settings: { ...defaultSettings, motion: "off" }, revision: 0 });
     assert.equal(motionIsCurrentlyOff(), true);
   } finally {
-    if (previousStorage) Object.defineProperty(globalThis, "localStorage", previousStorage);
-    else delete globalThis.localStorage;
     if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
     else delete globalThis.window;
   }

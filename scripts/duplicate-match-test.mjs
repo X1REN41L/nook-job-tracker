@@ -1,14 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import ts from "typescript";
-
-const source = await readFile(new URL("../src/lib/duplicate-match.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const { findPossibleDuplicate, normalizeDuplicateText } = await import(
-  `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
-);
+import { findPossibleDuplicate, normalizeDuplicateText } from "../src/lib/duplicate-match.ts";
 
 const application = (id, company, role) => ({ id, company, role });
 const existing = [
