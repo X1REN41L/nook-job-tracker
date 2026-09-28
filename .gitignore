@@ -69,3 +69,4 @@ prisma/migrations/
 prisma/migrations/.DS_Store
 /screenshots/
 AGENTS.md
+CLAUDE.md
