@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { RequestJsonError } from "@/lib/api";
 import { MAX_BACKUP_FILE_BYTES } from "@/lib/backup-limits";
 
 export const MAX_MUTATION_BODY_BYTES = MAX_BACKUP_FILE_BYTES;
@@ -63,7 +64,7 @@ export function parseMutationJson(body: Uint8Array): unknown {
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
   } catch {
-    throw new SyntaxError("Request body must be valid JSON");
+    throw new RequestJsonError("Request body must be valid JSON");
   }
 }
 

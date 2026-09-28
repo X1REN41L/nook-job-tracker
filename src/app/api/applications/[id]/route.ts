@@ -2,7 +2,7 @@ import { Prisma, Status } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
-import { apiError } from "@/lib/api";
+import { apiError, isDatabaseContention, parseRequest } from "@/lib/api";
 import { applicationEditSchema, applicationMutationSchema } from "@/lib/application-schema";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma } from "@/lib/prisma";
@@ -29,7 +29,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
     const checked = await checkMutationRequest(request);
     if (!checked.ok) return checked.response;
     const { id } = await params;
-    const { revision, ...input } = applicationEditSchema.parse(parseMutationJson(checked.body));
+    const { revision, ...input } = parseRequest(applicationEditSchema, parseMutationJson(checked.body));
     const result = await updateApplication(id, revision, input, input.status);
     if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
     if (result.conflict) return revisionConflict(result.application);
@@ -44,7 +44,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const checked = await checkMutationRequest(request);
     if (!checked.ok) return checked.response;
     const { id } = await params;
-    const mutation = applicationMutationSchema.parse(parseMutationJson(checked.body));
+    const mutation = parseRequest(applicationMutationSchema, parseMutationJson(checked.body));
     if ("archived" in mutation && !("status" in mutation)) {
       const result = await updateApplication(id, mutation.revision, { archived: mutation.archived });
       if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
@@ -67,13 +67,12 @@ async function updateApplication(
   data: Prisma.ApplicationUpdateManyMutationInput,
   nextStatus?: Status,
 ) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
     try {
+      const current = await prisma.application.findUnique({ where: { id } });
+      if (!current) return null;
+      if (current.revision !== expectedRevision) return { application: current, conflict: true as const };
       return await prisma.$transaction(async (transaction) => {
-        const current = await transaction.application.findUnique({ where: { id } });
-        if (!current) return null;
-        if (current.revision !== expectedRevision) return { application: current, conflict: true as const };
-
         const updated = await transaction.application.updateMany({
           where: { id: current.id, revision: expectedRevision },
           data: { ...data, revision: { increment: 1 } },
@@ -103,7 +102,7 @@ async function updateApplication(
         return { application, conflict: false as const };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
-      const canRetry = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034" && attempt < 2;
+      const canRetry = isDatabaseContention(error) && attempt < 5;
       if (!canRetry) throw error;
     }
   }

@@ -4,5 +4,15 @@ import { defaultSettings } from "@/lib/settings-defaults";
 
 export async function readSettings() {
   const row = await prisma.settings.findUnique({ where: { id: 1 } });
-  return row ? { settings: settingsSchema.parse(JSON.parse(row.value)), revision: row.revision } : { settings: defaultSettings, revision: 0 };
+  if (!row) return { settings: defaultSettings, revision: 0 };
+  return { settings: parseStoredSettings(row.value), revision: row.revision };
+}
+
+export function parseStoredSettings(value: string) {
+  try {
+    return settingsSchema.parse(JSON.parse(value));
+  } catch (error) {
+    console.error("Invalid persisted settings; using defaults", error);
+    return defaultSettings;
+  }
 }

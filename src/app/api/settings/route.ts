@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { apiError, validationErrorResponse } from "@/lib/api";
 import { settingsSchema } from "@/lib/backup-settings-schema";
-import { readSettings } from "@/lib/database-settings";
+import { parseStoredSettings, readSettings } from "@/lib/database-settings";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma } from "@/lib/prisma";
 import { defaultSettings } from "@/lib/settings-defaults";
@@ -24,7 +24,7 @@ export async function PATCH(request: Request) {
     const { revision, changes } = parsed.data;
     const result = await prisma.$transaction(async (tx) => {
       const row = await tx.settings.findUnique({ where: { id: 1 } });
-      const current = row ? settingsSchema.parse(JSON.parse(row.value)) : defaultSettings;
+      const current = row ? parseStoredSettings(row.value) : defaultSettings;
       if ((row?.revision ?? 0) !== revision) return { conflict: true, settings: current, revision: row?.revision ?? 0 };
       const settings = settingsSchema.parse({ ...current, ...changes });
       const value = JSON.stringify(settings);

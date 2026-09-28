@@ -1,9 +1,7 @@
 import { ApplicationDashboard, type ApplicationPageName, type DashboardSection } from "@/components/application-dashboard";
 import { prisma } from "@/lib/prisma";
-import { cleanupExpiredUndoSnapshots } from "@/lib/undo-snapshots";
 
 export async function ApplicationPage({ page, dashboardSection }: { page: ApplicationPageName; dashboardSection?: DashboardSection }) {
-  await cleanupExpiredUndoSnapshots();
   const applications = await prisma.application.findMany({
     orderBy: [{ appliedDate: "desc" }, { createdAt: "desc" }],
   });

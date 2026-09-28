@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { apiError } from "@/lib/api";
+import { apiError, parseRequest } from "@/lib/api";
 import { applicationRestoreSnapshotSchema } from "@/lib/backup-snapshot";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma } from "@/lib/prisma";
@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!checked.ok) return checked.response;
     await cleanupExpiredUndoSnapshots();
     const { id } = await params;
-    const { token } = z.object({ token: z.uuid() }).strict().parse(parseMutationJson(checked.body));
+    const { token } = parseRequest(z.object({ token: z.uuid() }).strict(), parseMutationJson(checked.body));
     const result = await prisma.$transaction(async (tx) => {
       const held = await tx.undoSnapshot.findUnique({ where: { token } });
       if (!held || held.applicationId !== id || held.expiresAt <= new Date()) return { status: 404 as const };

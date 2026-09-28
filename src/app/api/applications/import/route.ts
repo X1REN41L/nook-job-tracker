@@ -23,6 +23,10 @@ export async function POST(request: Request) {
     if (new Set(ids).size !== ids.length || new Set(eventIds).size !== eventIds.length) {
       return NextResponse.json({ error: "Backup contains duplicate IDs" }, { status: 400 });
     }
+    const prepared = records.map(({ events, ...application }) => ({
+      application,
+      events: events.map((event) => ({ ...event, applicationId: application.id })),
+    }));
     const result = await prisma.$transaction(async (tx) => {
       const existing = await tx.application.findMany({ where: { id: { in: ids } }, include: { events: true } });
       const byId = new Map(existing.map((item) => [item.id, item]));
@@ -31,16 +35,22 @@ export async function POST(request: Request) {
         return found && canonicalSnapshot(found) !== canonicalSnapshot(item);
       }).map((item) => item.id);
       if (conflicts.length) return { conflicts, created: [], skippedIds: [] };
-      const newRecords = records.filter((item) => !byId.has(item.id));
-      const occupiedEvents = await tx.applicationEvent.findMany({ where: { id: { in: newRecords.flatMap((item) => item.events.map((event) => event.id)) } }, select: { id: true } });
+      const newRecords = prepared.filter(({ application }) => !byId.has(application.id));
+      const occupiedEvents = await tx.applicationEvent.findMany({ where: { id: { in: newRecords.flatMap(({ events }) => events.map((event) => event.id)) } }, select: { id: true } });
       if (occupiedEvents.length) return { conflicts: occupiedEvents.map((event) => event.id), created: [], skippedIds: [] };
-      const created = [];
-      for (const { events, ...data } of newRecords) created.push(await tx.application.create({ data: { ...data, events: { create: events } } }));
+      if (newRecords.length) {
+        await tx.application.createMany({ data: newRecords.map(({ application }) => application) });
+        const events = newRecords.flatMap((item) => item.events);
+        if (events.length) await tx.applicationEvent.createMany({ data: events });
+      }
       const row = await tx.settings.upsert({
         where: { id: 1 },
         create: { id: 1, value: JSON.stringify(parsed.data.settings), revision: 1 },
         update: { value: JSON.stringify(parsed.data.settings), revision: { increment: 1 } },
       });
+      const inserted = await tx.application.findMany({ where: { id: { in: newRecords.map(({ application }) => application.id) } } });
+      const insertedById = new Map(inserted.map((application) => [application.id, application]));
+      const created = newRecords.map(({ application }) => insertedById.get(application.id)!);
       return { conflicts: [], created, skippedIds: existing.map((item) => item.id), settings: parsed.data.settings, settingsRevision: row.revision };
     }, { timeout: 60_000 });
     if (result.conflicts.length) return NextResponse.json({ error: `Conflicting IDs: ${result.conflicts.join(", ")}`, conflicts: result.conflicts }, { status: 409 });

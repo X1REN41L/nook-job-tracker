@@ -13,20 +13,52 @@ export function validationErrorResponse(error: ZodError, message = "Invalid requ
 }
 
 export function apiError(error: unknown) {
-  if (error instanceof SyntaxError) {
+  if (error instanceof RequestJsonError) {
     return NextResponse.json({ error: "Request body must be valid JSON" }, { status: 400 });
   }
 
-  if (error instanceof ZodError) {
-    return validationErrorResponse(error);
+  if (error instanceof RequestValidationError) {
+    return validationErrorResponse(error.validation);
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
   }
 
+  if (isDatabaseContention(error)) {
+    console.error("API database temporarily unavailable", error instanceof Error ? error.message : "Unknown error");
+    return NextResponse.json({ error: "Database is busy. Please try again shortly." }, { status: 503, headers: { "Retry-After": "1" } });
+  }
+
   console.error("API request failed", error instanceof Error ? error.message : "Unknown error");
   return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+}
+
+export class RequestJsonError extends Error {}
+
+export class RequestValidationError extends Error {
+  constructor(readonly validation: ZodError) {
+    super("Invalid request data");
+  }
+}
+
+export function parseRequest<T>(schema: { parse(value: unknown): T }, value: unknown): T {
+  try {
+    return schema.parse(value);
+  } catch (error) {
+    if (error instanceof ZodError) throw new RequestValidationError(error);
+    throw error;
+  }
+}
+
+export function isDatabaseContention(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error instanceof Prisma.PrismaClientKnownRequestError && ["P1008", "P2034"].includes(error.code)) return true;
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2028") {
+    return /Transaction not found|already closed|expired transaction|Unable to start a transaction/i.test(error.message);
+  }
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError || error instanceof Prisma.PrismaClientUnknownRequestError || error instanceof Prisma.PrismaClientInitializationError)) return false;
+  return /socket timeout|database is locked|database is busy|SQLITE_BUSY|timed out|timeout for this transaction/i.test(error.message);
 }
 
 type CollectedValidationIssue = ValidationIssue & { weight: number };

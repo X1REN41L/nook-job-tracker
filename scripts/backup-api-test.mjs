@@ -199,8 +199,9 @@ try {
   await prisma.application.delete({ where: { id: seedId } });
   await prisma.undoSnapshot.update({ where: { token: secondToken }, data: { expiresAt: new Date(0) } });
   assert.equal(await prisma.undoSnapshot.count({ where: { token: secondToken } }), 1);
-  assert.equal((await fetch(`${base}/api/applications`)).status, 200, "Loading applications should trigger expired snapshot cleanup");
-  assert.equal(await prisma.undoSnapshot.count({ where: { token: secondToken } }), 0, "Expired snapshot payload should be deleted on application load");
+  assert.equal((await fetch(`${base}/api/applications`)).status, 200, "Loading applications must work with expired snapshots");
+  assert.equal((await fetch(`${base}/dashboard`)).status, 200, "Rendering a page must work with expired snapshots");
+  assert.equal(await prisma.undoSnapshot.count({ where: { token: secondToken } }), 1, "Reads must not clean up expired snapshots");
   assert.equal((await post(`/api/applications/${seedId}/restore`, { token: secondToken })).status, 404);
 
   const restoreCleanupCreated = await post("/api/applications", input("expired restore cleanup"));
@@ -220,6 +221,24 @@ try {
   await prisma.undoSnapshot.create({ data: { token: deleteCleanupToken, applicationId: "expired-delete", payload: "{}", expiresAt: new Date(0) } });
   assert.equal((await fetch(`${base}/api/applications/${deleteCleanupApplication.id}`, { method: "DELETE", headers: mutationHeaders })).status, 204);
   assert.equal(await prisma.undoSnapshot.count({ where: { token: deleteCleanupToken } }), 0, "Delete requests should purge expired snapshot payloads");
+
+  const settingsBeforeCorruption = await prisma.settings.findUniqueOrThrow({ where: { id: 1 } });
+  await prisma.settings.update({ where: { id: 1 }, data: { value: '{not json' } });
+  const corruptExport = await fetch(`${base}/api/applications/export`);
+  assert.equal(corruptExport.status, 200, "Export must survive malformed stored settings");
+  assert.ok((await corruptExport.json()).applications.length > 0);
+  assert.equal((await prisma.settings.findUniqueOrThrow({ where: { id: 1 } })).value, '{not json', "Read must not rewrite the corrupt row");
+  assert.equal((await fetch(`${base}/dashboard`)).status, 200, "Pages must survive malformed stored settings");
+  const repair = await fetch(`${base}/api/settings`, { method: "PATCH", headers: mutationHeaders,
+    body: JSON.stringify({ revision: settingsBeforeCorruption.revision, changes: { theme: "light" } }) });
+  assert.equal(repair.status, 200, "PATCH must repair malformed stored settings");
+  assert.equal((await repair.json()).settings.theme, "light");
+  assert.equal(JSON.parse((await prisma.settings.findUniqueOrThrow({ where: { id: 1 } })).value).theme, "light");
+  await prisma.settings.update({ where: { id: 1 }, data: { value: JSON.stringify({ theme: "neon" }) } });
+  assert.equal((await fetch(`${base}/api/applications/export`)).status, 200, "Export must survive schema-invalid stored settings");
+  const schemaRepair = await fetch(`${base}/api/settings`, { method: "PATCH", headers: mutationHeaders,
+    body: JSON.stringify({ revision: settingsBeforeCorruption.revision + 1, changes: { theme: "dark" } }) });
+  assert.equal(schemaRepair.status, 200, "PATCH must repair schema-invalid stored settings");
 
   // BAK-001: the server clock is behind the latest stored event (clock skew). Import now rejects
   // future-dated events, so the state is seeded directly.
@@ -334,5 +353,5 @@ try {
   const legacyConflict = await post("/api/applications/import", backup([{ ...conforming(), id: legacy.id }]));
   assert.equal(legacyConflict.status, 409, await legacyConflict.clone().text());
   assert.deepEqual((await legacyConflict.json()).conflicts, [legacy.id]);
-  console.log("Passed: version 1 backup round trip, outdated backup rejection, identical merge, conflicts, malformed atomicity, settings-only import, one-time restore, expiry cleanup on load/delete/restore, collision, invalid status, chunked size limit, clock-skewed status events, out-of-order undo restore, future-dated import rejection, shared import field rules, legacy-row conflict detection.");
+  console.log("Passed: version 1 backup round trip, outdated backup rejection, identical merge, conflicts, malformed atomicity, settings-only import, one-time restore, expiry enforcement and mutation cleanup, corrupt settings recovery, collision, invalid status, chunked size limit, clock-skewed status events, out-of-order undo restore, future-dated import rejection, shared import field rules, legacy-row conflict detection.");
 } finally { await prisma.$disconnect(); }
