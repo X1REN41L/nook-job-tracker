@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { apiError, isDatabaseContention, parseRequest } from "@/lib/api";
 import { applicationStatusUndoSchema } from "@/lib/application-schema";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
-import { prisma } from "@/lib/prisma";
+import { prisma, serializeWrite } from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ id: string }> };
 class StaleStatusEvent extends Error {}
@@ -29,7 +29,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         if (!current) return NextResponse.json({ error: "Application not found" }, { status: 404 });
         if (current.revision !== undo.revision) return revisionConflict(current);
 
-        const result = await prisma.$transaction(async (transaction) => {
+        const result = await serializeWrite(() => prisma.$transaction(async (transaction) => {
           const updated = await transaction.application.updateMany({
             where: { id, revision: undo.revision },
             data: { revision: { increment: 1 } },
@@ -53,7 +53,7 @@ export async function POST(request: Request, { params }: RouteContext) {
               interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
             },
           });
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 
         if (result) return NextResponse.json({ application: result });
         const latest = await prisma.application.findUnique({ where: { id } });

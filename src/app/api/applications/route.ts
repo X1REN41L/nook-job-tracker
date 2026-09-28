@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { apiError, parseRequest } from "@/lib/api";
 import { applicationInputSchema } from "@/lib/application-schema";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
-import { prisma } from "@/lib/prisma";
+import { prisma, serializeWrite } from "@/lib/prisma";
 import { statusTransitionDetail } from "@/lib/status-history";
 
 export async function GET() {
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const checked = await checkMutationRequest(request);
     if (!checked.ok) return checked.response;
     const input = parseRequest(applicationInputSchema, parseMutationJson(checked.body));
-    const application = await prisma.application.create({
+    const application = await serializeWrite(() => prisma.application.create({
       data: {
         ...input,
         events: {
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
           },
         },
       },
-    });
+    }));
     return NextResponse.json({ application }, { status: 201 });
   } catch (error) {
     return apiError(error);

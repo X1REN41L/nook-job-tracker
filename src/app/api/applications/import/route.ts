@@ -5,7 +5,7 @@ import { apiError, validationErrorResponse } from "@/lib/api";
 import { BACKUP_TOO_MANY_APPLICATIONS_ERROR, MAX_BACKUP_APPLICATIONS } from "@/lib/backup-limits";
 import { backupSnapshotSchema, canonicalSnapshot } from "@/lib/backup-snapshot";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
-import { prisma } from "@/lib/prisma";
+import { prisma, serializeWrite } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   try {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       application,
       events: events.map((event) => ({ ...event, applicationId: application.id })),
     }));
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await serializeWrite(() => prisma.$transaction(async (tx) => {
       const existing = await tx.application.findMany({ where: { id: { in: ids } }, include: { events: true } });
       const byId = new Map(existing.map((item) => [item.id, item]));
       const conflicts = records.filter((item) => {
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       const insertedById = new Map(inserted.map((application) => [application.id, application]));
       const created = newRecords.map(({ application }) => insertedById.get(application.id)!);
       return { conflicts: [], conflictNames: [], created, skippedIds: existing.map((item) => item.id), settings: parsed.data.settings, settingsRevision: row.revision };
-    }, { timeout: 60_000 });
+    }, { timeout: 60_000 }));
     if (result.conflicts.length) return NextResponse.json({ error: result.conflictNames.length
       ? `Import stopped: ${result.conflictNames.slice(0, 3).join(", ")}${result.conflictNames.length > 3 ? ` and ${result.conflictNames.length - 3} more` : ""} changed since this backup. No applications or settings were imported.`
       : `Import stopped: an event ID already exists (${result.conflicts[0]}). No applications or settings were imported.`, conflicts: result.conflicts }, { status: 409 });

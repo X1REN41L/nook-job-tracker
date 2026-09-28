@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start -H 127.0.0.1",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "bash scripts/run-playwright.sh",
     "test:keyboard": "npm run test:e2e",
     "test:unit": "node --import ./scripts/unit-loader-register.mjs --test scripts/application-list-test.mjs scripts/local-date-subscription-test.mjs scripts/backup-snapshot-test.mjs scripts/status-history-test.mjs scripts/analytics-period-test.mjs scripts/calendar-date-test.mjs scripts/duplicate-match-test.mjs scripts/interviews-grouping-test.mjs scripts/keyboard-shortcuts-test.mjs scripts/motion-preference-test.mjs scripts/settings-store-test.mjs && TZ=America/New_York node --import ./scripts/unit-loader-register.mjs --test scripts/calendar-date-test.mjs scripts/local-date-subscription-test.mjs && TZ=Asia/Dhaka node --import ./scripts/unit-loader-register.mjs --test scripts/calendar-date-test.mjs scripts/local-date-subscription-test.mjs",

@@ -5,7 +5,7 @@ import { apiError, validationErrorResponse } from "@/lib/api";
 import { settingsSchema } from "@/lib/backup-settings-schema";
 import { parseStoredSettings, readSettings } from "@/lib/database-settings";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
-import { prisma } from "@/lib/prisma";
+import { prisma, serializeWrite } from "@/lib/prisma";
 import { defaultSettings } from "@/lib/settings-defaults";
 
 const patchSchema = z.object({ revision: z.number().int().nonnegative(), changes: settingsSchema.partial().strict() }).strict();
@@ -22,7 +22,7 @@ export async function PATCH(request: Request) {
     const parsed = patchSchema.safeParse(parseMutationJson(checked.body));
     if (!parsed.success) return validationErrorResponse(parsed.error);
     const { revision, changes } = parsed.data;
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await serializeWrite(() => prisma.$transaction(async (tx) => {
       const row = await tx.settings.findUnique({ where: { id: 1 } });
       const current = row ? parseStoredSettings(row.value) : defaultSettings;
       if ((row?.revision ?? 0) !== revision) return { conflict: true, settings: current, revision: row?.revision ?? 0 };
@@ -34,7 +34,7 @@ export async function PATCH(request: Request) {
       }
       await tx.settings.create({ data: { id: 1, value, revision: 1 } });
       return { conflict: false, settings, revision: 1 };
-    });
+    }));
     return NextResponse.json({ settings: result.settings, revision: result.revision }, { status: result.conflict ? 409 : 200 });
   } catch (error) { return apiError(error); }
 }

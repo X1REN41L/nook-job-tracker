@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { apiError, isDatabaseContention, parseRequest } from "@/lib/api";
 import { applicationEditSchema, applicationMutationSchema } from "@/lib/application-schema";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
-import { prisma } from "@/lib/prisma";
+import { prisma, serializeWrite } from "@/lib/prisma";
 import { nextStatusEventTime, statusTransitionDetail } from "@/lib/status-history";
 import { cleanupExpiredUndoSnapshots, UNDO_SNAPSHOT_TTL_MS } from "@/lib/undo-snapshots";
 
@@ -73,7 +73,7 @@ async function updateApplication(
       if (!current) return null;
       if (current.revision !== expectedRevision) return { application: current, conflict: true as const };
       const leavingInterview = current.status === Status.INTERVIEW && nextStatus !== undefined && nextStatus !== Status.INTERVIEW;
-      return await prisma.$transaction(async (transaction) => {
+      return await serializeWrite(() => prisma.$transaction(async (transaction) => {
         const updated = await transaction.application.updateMany({
           where: { id: current.id, revision: expectedRevision },
           data: { ...data, ...(leavingInterview && { interviewDatePromptDismissed: false }), revision: { increment: 1 } },
@@ -103,7 +103,7 @@ async function updateApplication(
         }
         const application = await transaction.application.findUniqueOrThrow({ where: { id } });
         return { application, conflict: false as const, latestStatusEventId };
-      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
     } catch (error) {
       const canRetry = isDatabaseContention(error) && attempt < 5;
       if (!canRetry) throw error;
@@ -128,18 +128,18 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     if (new URL(request.url).searchParams.get("undoable") === "1") {
       const token = randomUUID();
       const expiresAt = new Date(Date.now() + UNDO_SNAPSHOT_TTL_MS);
-      const deleted = await prisma.$transaction(async (transaction) => {
+      const deleted = await serializeWrite(() => prisma.$transaction(async (transaction) => {
         const application = await transaction.application.findUnique({ where: { id }, include: { events: true } });
         if (!application) return null;
         await transaction.undoSnapshot.create({ data: { token, applicationId: id, payload: JSON.stringify(application), expiresAt } });
         await transaction.application.delete({ where: { id } });
         return true;
-      });
+      }));
       if (!deleted) return NextResponse.json({ error: "Application not found" }, { status: 404 });
       return NextResponse.json({ token, expiresAt: expiresAt.toISOString() });
     }
     // Plain DELETE is retained for callers that need permanent deletion; the UI uses ?undoable=1.
-    const result = await prisma.application.deleteMany({ where: { id } });
+    const result = await serializeWrite(() => prisma.application.deleteMany({ where: { id } }));
     if (!result.count) return NextResponse.json({ error: "Application not found" }, { status: 404 });
     return new NextResponse(null, { status: 204 });
   } catch (error) {

@@ -88,9 +88,54 @@ try {
   assert.equal(lockedPatch.status, 503, "A temporary SQLite write lock must return 503");
   assert.equal(lockedPatch.headers.get("retry-after"), "1");
 
+  const send = (path, method, body) => fetch(`${base}${path}`, { method, headers, body: JSON.stringify(body) });
+  const [undoTarget, restoreTarget, putTarget, ...patchTargets] = records.slice(1, 8).map((record) => record.id);
+  const moved = await send(`/api/applications/${undoTarget}`, "PATCH", { revision: 0, status: "INTERVIEW" });
+  assert.equal(moved.status, 200);
+  const { latestStatusEventId } = await moved.json();
+  const restorable = await fetch(`${base}/api/applications/${restoreTarget}?undoable=1`, { method: "DELETE", headers });
+  assert.equal(restorable.status, 200);
+  const { token: restoreToken } = await restorable.json();
+  const putRecord = await prisma.application.findUniqueOrThrow({ where: { id: putTarget } });
+  const settingsRevision = (await prisma.settings.findUniqueOrThrow({ where: { id: 1 } })).revision;
+  const newApplication = (index) => ({ company: "Mixed write", role: `New ${index}`, status: "APPLIED", appliedDate: "2026-09-24" });
+  const mixedWrites = [
+    ["undo-status", send(`/api/applications/${undoTarget}/undo-status`, "POST", { revision: 1, expectedLatestStatusEventId: latestStatusEventId,
+      archived: false, interviewDate: null, interviewDatePromptDismissed: false }), 200],
+    ["restore", send(`/api/applications/${restoreTarget}/restore`, "POST", { token: restoreToken }), 201],
+    ["put", send(`/api/applications/${putTarget}`, "PUT", { revision: 0, company: putRecord.company, role: "Edited",
+      status: "OFFER", source: "", appliedDate: "2026-09-24", interviewDate: "", notes: "", jobUrl: "" }), 200],
+    ...patchTargets.map((target) => ["patch", send(`/api/applications/${target}`, "PATCH", { revision: 0, status: "REJECTED" }), 200]),
+    ["settings", send("/api/settings", "PATCH", { revision: settingsRevision, changes: { theme: "dark" } }), 200],
+    ["delete", fetch(`${base}/api/applications/${records[8].id}?undoable=1`, { method: "DELETE", headers }), 200],
+    ["plain-delete", fetch(`${base}/api/applications/${records[9].id}`, { method: "DELETE", headers }), 204],
+    ...[0, 1, 2].map((index) => ["create", send("/api/applications", "POST", newApplication(index)), 201]),
+    ["import", send("/api/applications/import", "POST", { version: 1, settings, applications: records.slice(10, 12).map((record) => ({
+      ...record, id: randomUUID(), events: record.events.map((event) => ({ ...event, id: randomUUID() })) })) }), 201],
+  ];
+  const mixedResults = await Promise.all(mixedWrites.map(async ([route, pending, expected]) => {
+    const response = await pending;
+    return { route, expected, status: response.status, body: (await response.text()).slice(0, 300) };
+  }));
+  for (const { route, expected, status, body } of mixedResults) {
+    assert.equal(status, expected, `Concurrent ${route} write returned ${status}: ${body}`);
+  }
+  assert.equal((await prisma.application.findUniqueOrThrow({ where: { id: undoTarget } })).status, "APPLIED");
+  assert.equal(await prisma.applicationEvent.count({ where: { applicationId: undoTarget } }), 1);
+  assert.ok(await prisma.application.findUnique({ where: { id: restoreTarget } }), "Restore must recreate the application");
+  assert.equal((await prisma.application.findUniqueOrThrow({ where: { id: putTarget } })).status, "OFFER");
+  for (const target of patchTargets) {
+    const patched = await prisma.application.findUniqueOrThrow({ where: { id: target }, include: { events: true } });
+    assert.equal(patched.status, "REJECTED");
+    assert.equal(patched.events.length, 2);
+  }
+  assert.equal(await prisma.application.count({ where: { id: { in: [records[8].id, records[9].id] } } }), 0);
+  assert.equal(await prisma.application.count({ where: { company: "Mixed write" } }), 3);
+
   console.log(JSON.stringify({ importRecords: records.length, importMs, listStatus: list.status,
     pageStatus: page.status, patchStatuses: statuses, exportStatus: exportResponse.status,
-    repairStatus: repair.status, expiredRestoreStatus: expiredRestore.status, lockedPatchStatus: lockedPatch.status }));
+    repairStatus: repair.status, expiredRestoreStatus: expiredRestore.status, lockedPatchStatus: lockedPatch.status,
+    mixedWriteStatuses: mixedResults.map(({ route, status }) => `${route}:${status}`) }));
 } finally {
   await prisma.$disconnect();
 }

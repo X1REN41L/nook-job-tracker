@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { apiError } from "@/lib/api";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
-import { prisma } from "@/lib/prisma";
+import { prisma, serializeWrite } from "@/lib/prisma";
 
 export async function DELETE(request: Request) {
   try {
@@ -13,11 +13,11 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Request body must be an empty JSON object" }, { status: 400 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    await serializeWrite(() => prisma.$transaction(async (tx) => {
       await tx.applicationEvent.deleteMany();
       await tx.undoSnapshot.deleteMany();
       await tx.application.deleteMany();
-    });
+    }));
     return NextResponse.json({ success: true });
   } catch (error) {
     return apiError(error);
