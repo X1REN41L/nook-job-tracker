@@ -42,8 +42,15 @@ function hostRequest(host, path, method = "GET", body) {
 
 try {
   assert.deepEqual(Object.values(Status), ["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW", "OFFER", "REJECTED"]);
-  const page = await request("/");
-  assert.equal(page.status, 200, "Dashboard must open without authentication");
+  // `/` is a server redirect to the saved startup page, not a page of its own.
+  const { settings } = await (await request("/api/settings")).json();
+  const startupPath = { dashboard: "/dashboard", "job-board": "/jobs", interviews: "/interviews" }[settings.startupPage];
+  assert.ok(startupPath, `Unknown startup page ${settings.startupPage}`);
+  const root = await request("/");
+  assert.equal(root.status, 307, "`/` must redirect to the startup page");
+  assert.equal(new URL(root.headers.get("location"), base).pathname, startupPath);
+  const page = await request(startupPath);
+  assert.equal(page.status, 200, "The startup page must open without authentication");
   assert.doesNotMatch(await page.text(), /Signed in as|Sign in with Google/);
   const login = await request("/login");
   assert.equal(login.status, 307);

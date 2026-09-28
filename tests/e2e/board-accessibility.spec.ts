@@ -1,6 +1,6 @@
 import { type APIRequestContext, type Page } from "@playwright/test";
 
-import { expect, readSettings, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
+import { expect, gotoReady, readSettings, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
 import { DEFAULT_BOARDS, type BoardConfiguration } from "../../src/lib/board-preferences";
 
 type ApplicationInput = {
@@ -34,8 +34,7 @@ async function createApplication(request: APIRequestContext, input: Omit<Applica
 }
 
 async function openJobBoard(page: Page) {
-  await page.goto("/jobs");
-  await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
+  await gotoReady(page, "/jobs");
 }
 
 function boardCard(page: Page, application: { company: string; role: string }) {
@@ -49,6 +48,22 @@ async function waitForKeyboardSensor(page: Page) {
   await page.evaluate(() => new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)));
   }));
+}
+
+// Kanban keyboard drags have two readiness points; keys sent early are ignored or drop in place.
+// Before an arrow: dnd-kit must have measured the droppable rects (the app's coordinate getter ignores
+// arrows until the target column's rect exists) and attached the sensor's keydown listener in a
+// setTimeout(0). The origin column turns "over" (bg-forest-tint) only after the rects are measured, and
+// a timer queued after that runs after the sensor's own (equal-delay timers run in order).
+// Before the dropping Space: the arrow's move renders asynchronously (the sensor listens natively), and
+// the drop uses the last rendered `over`, so wait until the target column is the one that is over.
+function kanbanColumn(page: Page, status: ApplicationInput["status"]) {
+  return page.locator(`[data-board-status="${status}"]`);
+}
+
+async function waitForKanbanKeyboardDrag(page: Page, originStatus: ApplicationInput["status"]) {
+  await expect(kanbanColumn(page, originStatus)).toHaveClass(/(^|\s)bg-forest-tint(\s|$)/);
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
 }
 
 function customBoards(): BoardConfiguration[] {
@@ -122,8 +137,9 @@ test("A11Y-001: keyboard drag, Alt+A archive, and arrow focus still work from th
   );
   await page.keyboard.press("Space");
   await expect(card).toHaveAttribute("aria-pressed", "true");
-  await waitForKeyboardSensor(page);
+  await waitForKanbanKeyboardDrag(page, "APPLIED");
   await page.keyboard.press("ArrowRight");
+  await expect(kanbanColumn(page, "ONLINE_ASSESSMENT")).toHaveClass(/(^|\s)bg-forest-tint(\s|$)/);
   await page.keyboard.press("Space");
   const response = await moved;
   expect(response.status()).toBe(200);

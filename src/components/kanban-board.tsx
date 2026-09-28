@@ -14,11 +14,11 @@ import { BOARD_COLOR_CLASSES, type BoardConfiguration } from "@/lib/board-prefer
 import { motionIsCurrentlyOff } from "@/lib/general-preferences";
 import type { ApplicationRecord } from "@/types/application";
 
-export function KanbanBoard({ applications, boards, dropDisabled = false, movingId, onEdit }: {
+export function KanbanBoard({ applications, boards, dropDisabled = false, movingIds, onEdit }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
   dropDisabled?: boolean;
-  movingId: string | null;
+  movingIds: ReadonlySet<string>;
   onEdit: (application: ApplicationRecord) => void;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
@@ -60,17 +60,17 @@ export function KanbanBoard({ applications, boards, dropDisabled = false, moving
     <div ref={boardRef} className="board-columns flex h-full min-h-0 w-full items-stretch gap-4" aria-label="Application status board">
       {boards.map((board) => {
         const items = applications.filter((application) => !application.archived && application.status === board.status);
-        return <KanbanColumn key={board.status} board={board} applications={items} dropDisabled={dropDisabled} movingId={movingId} onEdit={onEdit} />;
+        return <KanbanColumn key={board.status} board={board} applications={items} dropDisabled={dropDisabled} movingIds={movingIds} onEdit={onEdit} />;
       })}
     </div>
   );
 }
 
-function KanbanColumn({ board, applications, dropDisabled, movingId, onEdit }: {
+function KanbanColumn({ board, applications, dropDisabled, movingIds, onEdit }: {
   board: BoardConfiguration;
   applications: ApplicationRecord[];
   dropDisabled: boolean;
-  movingId: string | null;
+  movingIds: ReadonlySet<string>;
   onEdit: (application: ApplicationRecord) => void;
 }) {
   const scrollRef = useScrollbarActivity<HTMLDivElement>();
@@ -84,7 +84,7 @@ function KanbanColumn({ board, applications, dropDisabled, movingId, onEdit }: {
       <div ref={scrollRef} className="kanban-column-scroll scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
         <div className="flex flex-col gap-2.5">
         {applications.map((application) => (
-          <KanbanCard key={application.id} application={application} disabled={movingId !== null} onEdit={onEdit} />
+          <KanbanCard key={application.id} application={application} disabled={movingIds.has(application.id)} onEdit={onEdit} />
         ))}
         {applications.length === 0 && (
           <p className="mt-1 rounded-nook border border-dashed border-line px-3 py-5 text-center text-xs leading-5 text-ink-soft">

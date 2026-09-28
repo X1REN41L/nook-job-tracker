@@ -1,8 +1,8 @@
-import { expect, test } from "./api-helpers";
+import { expect, gotoReady, test } from "./api-helpers";
 
 test("keeps the expanded sidebar and collapsed rail on the left at desktop and mobile widths", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/jobs");
+  await gotoReady(page, "/jobs");
   await page.addStyleTag({ content: ".app-workspace, .sidebar-panel, .sidebar-content, .sidebar-edge-tab { transition-duration: 0s !important; transition-delay: 0s !important; }" });
 
   const sidebar = page.locator(".sidebar-panel");
@@ -56,7 +56,7 @@ test("keeps the expanded sidebar and collapsed rail on the left at desktop and m
 
 test("keeps navigation and brand icons the same size and height when the sidebar collapses", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/dashboard");
+  await gotoReady(page, "/dashboard");
   await page.addStyleTag({ content: ".app-workspace, .sidebar-panel, .sidebar-content, .sidebar-edge-tab { transition-duration: 0s !important; transition-delay: 0s !important; }" });
 
   const geometry = () => page.evaluate(() => {

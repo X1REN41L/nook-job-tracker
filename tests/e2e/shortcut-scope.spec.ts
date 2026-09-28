@@ -1,6 +1,6 @@
 
 
-import { expect, readSettings, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
+import { expect, gotoReady, readSettings, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
 
 test("search is inert off the Job Board and application actions ignore Interviews", async ({ page, request }) => {
   const response = await request.post("/api/applications", {
@@ -22,7 +22,7 @@ test("search is inert off the Job Board and application actions ignore Interview
 
   for (const route of ["/interviews", "/dashboard"]) {
     await resetSettings(request, { sidebarCollapsed: true });
-    await page.goto(route);
+    await gotoReady(page, route);
     await page.keyboard.press("/");
     expect((await readSettings(request)).sidebarCollapsed).toBe(true);
     if (route === "/interviews") {

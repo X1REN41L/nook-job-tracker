@@ -24,7 +24,7 @@ type ApplicationSidebarProps = {
   dashboardSection?: "overview" | "analytics" | "stale";
   archivedExpanded: boolean;
   allApplicationsExpanded: boolean;
-  movingId: string | null;
+  movingIds: ReadonlySet<string>;
   searchTerm: string;
   activeFilter: "all" | Status;
   headingRef: RefObject<HTMLHeadingElement | null>;
@@ -69,7 +69,7 @@ export function ApplicationSidebar({
   dashboardSection = "overview",
   archivedExpanded,
   allApplicationsExpanded,
-  movingId,
+  movingIds,
   searchTerm,
   activeFilter,
   headingRef,
@@ -327,7 +327,7 @@ export function ApplicationSidebar({
                             key={application.id}
                             application={application}
                             boards={boards}
-                            disabled={movingId !== null}
+                            disabled={movingIds.has(application.id)}
                             onEdit={onEdit}
                           />
                         ))}
@@ -343,7 +343,7 @@ export function ApplicationSidebar({
                   applications={archivedItems}
                   className={archivedSectionClassName}
                   expanded={archivedExpanded}
-                  movingId={movingId}
+                  movingIds={movingIds}
                   onEdit={onEdit}
                   onRequestDelete={onRequestDelete}
                   onRestore={onRestore}
@@ -420,12 +420,12 @@ function SidebarApplicationRow({ application, boards, disabled, draggable = true
   );
 }
 
-function ArchivedSection({ applications, boards, className, expanded, movingId, onEdit, onRequestDelete, onRestore, onToggle }: {
+function ArchivedSection({ applications, boards, className, expanded, movingIds, onEdit, onRequestDelete, onRestore, onToggle }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
   className: string;
   expanded: boolean;
-  movingId: string | null;
+  movingIds: ReadonlySet<string>;
   onEdit: (application: ApplicationRecord) => void;
   onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
   onRestore: (application: ApplicationRecord) => Promise<void>;
@@ -478,7 +478,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingId, 
                   boards={boards}
                   key={application.id}
                   application={application}
-                  disabled={movingId !== null}
+                  disabled={movingIds.has(application.id)}
                   onEdit={onEdit}
                   onRequestDelete={onRequestDelete}
                   onRestore={onRestore}

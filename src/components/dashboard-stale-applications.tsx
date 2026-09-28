@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
 import type { getStaleApplications, StaleApplication } from "@/lib/dashboard-analytics";
 import { currentBrowserTimeZone } from "@/lib/application-date";
@@ -53,13 +53,13 @@ function StaleApplicationRow({ application, onEdit, onArchive, archiveDisabled }
   );
 }
 
-function StaleSeveritySection({ severity, items, applicationById, onEdit, onArchive, archiveDisabled }: {
+function StaleSeveritySection({ severity, items, applicationById, onEdit, onArchive, movingIds }: {
   severity: Severity;
   items: StaleApplication[];
   applicationById: Map<string, ApplicationRecord>;
   onEdit: (application: ApplicationRecord) => void;
   onArchive: (application: ApplicationRecord) => void;
-  archiveDisabled: boolean;
+  movingIds: ReadonlySet<string>;
 }) {
   if (items.length === 0) return null;
 
@@ -73,20 +73,20 @@ function StaleSeveritySection({ severity, items, applicationById, onEdit, onArch
         {items.map((item) => {
           const record = applicationById.get(item.id);
           if (!record) return null;
-          return <StaleApplicationRow application={item} archiveDisabled={archiveDisabled} key={item.id} onArchive={() => onArchive(record)} onEdit={() => onEdit(record)} />;
+          return <StaleApplicationRow application={item} archiveDisabled={movingIds.has(item.id)} key={item.id} onArchive={() => onArchive(record)} onEdit={() => onEdit(record)} />;
         })}
       </ul>
     </section>
   );
 }
 
-export function DashboardStaleApplications({ today, refreshKey, applications, onEdit, onArchive, archiveDisabled }: {
+export function DashboardStaleApplications({ today, refreshKey, applications, onEdit, onArchive, movingIds }: {
   today: string;
   refreshKey: unknown;
   applications: ApplicationRecord[];
   onEdit: (application: ApplicationRecord) => void;
   onArchive: (application: ApplicationRecord) => void;
-  archiveDisabled: boolean;
+  movingIds: ReadonlySet<string>;
 }) {
   const staleApplicationThreshold = useSettings().staleApplicationThreshold;
   const [result, setResult] = useState<{ today: string; threshold: number; data: StaleData } | null>(null);
@@ -141,7 +141,7 @@ export function DashboardStaleApplications({ today, refreshKey, applications, on
         ) : (
           <div className="mt-9 space-y-8">
             {visibleGroups.map(({ severity, items }) => (
-              <StaleSeveritySection applicationById={applicationById} archiveDisabled={archiveDisabled} items={items} key={severity} onArchive={onArchive} onEdit={onEdit} severity={severity} />
+              <StaleSeveritySection applicationById={applicationById} items={items} key={severity} onArchive={onArchive} movingIds={movingIds} onEdit={onEdit} severity={severity} />
             ))}
           </div>
         )
