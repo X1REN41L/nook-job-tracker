@@ -19,8 +19,6 @@ type DashboardShortcutOptions = {
   dragActive: boolean;
   canUndo: boolean;
   onResumeUndoToastOnTab: () => void;
-  onCloseShortcuts: () => void;
-  onCloseSettings: () => void;
   onNewJob: () => void;
   onOpenSettings: () => void;
   onFocusSearch: () => boolean;
@@ -47,8 +45,6 @@ export function useDashboardShortcuts({
   dragActive,
   canUndo,
   onResumeUndoToastOnTab,
-  onCloseShortcuts,
-  onCloseSettings,
   onNewJob,
   onOpenSettings,
   onFocusSearch,
@@ -71,16 +67,8 @@ export function useDashboardShortcuts({
       const prefix = pending && Date.now() - pending.at <= 1000 ? pending.key : null;
       const shortcut = matchDashboardShortcut(event, isMac, page, prefix);
 
-      if (shortcut === "close") {
-        if (shortcutsOpen) {
-          event.preventDefault();
-          onCloseShortcuts();
-        } else if (settingsOpen) {
-          event.preventDefault();
-          onCloseSettings();
-        }
-        return;
-      }
+      // Escape belongs to the dialog stack (use-dialog-stack.ts), which closes only the topmost dialog.
+      if (shortcut === "close") return;
 
       const anotherDialogIsOpen = isModalOpen || hasPendingDuplicate || hasPendingDelete || hasPendingInterviewDate || shortcutsOpen || settingsOpen;
       if (anotherDialogIsOpen || dragActive) return;

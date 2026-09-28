@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { motionIsCurrentlyOff } from "@/lib/general-preferences";
 
-/** Keeps a dialog mounted through its short exit so its focus trap restores focus afterwards. */
+const PresenceContext = createContext(true);
+
+/** False while a dialog is kept mounted only for its exit animation. */
+export function usePresence() {
+  return useContext(PresenceContext);
+}
+
+/** Keeps a dialog mounted through its short exit; dialogs read `usePresence()` to stop handling focus and keys as soon as they start closing. */
 export function MotionPresence({ open, children, immediateExit = false }: {
   open: boolean;
   children: ReactNode;
@@ -24,6 +31,8 @@ export function MotionPresence({ open, children, immediateExit = false }: {
 
   if (!open && (!mounted || immediateExit)) return null;
   return <div data-motion-presence={open ? "open" : "closing"} style={{ display: "contents" }}>
-    {open ? children : snapshot.children}
+    <PresenceContext value={open}>
+      {open ? children : snapshot.children}
+    </PresenceContext>
   </div>;
 }

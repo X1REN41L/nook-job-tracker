@@ -125,11 +125,11 @@ test("returns focus to Company when Edit follows a trapped and cancelled Add dia
   const addDialog = page.getByRole("dialog", { name: "Add a job" });
   await assertFocusCycle(page, addDialog, jobControls(addDialog, false), 1);
   await page.getByRole("button", { name: "Settings" }).evaluate((button: HTMLButtonElement) => button.focus());
-  await expect(addDialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+  // The shared dialog trap sends escaped focus back to the dialog's initial control.
+  await expect(addDialog.getByLabel("Company")).toBeFocused();
   await addDialog.getByRole("button", { name: "Cancel" }).click();
 
   const editDialog = await openEditModal(page, active);
-  test.fail(true, "UI-001: focus returns to Close when Edit follows a cancelled Add dialog after trap redirection");
   await expect(editDialog.getByLabel("Company")).toBeFocused();
 });
 

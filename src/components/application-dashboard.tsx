@@ -110,13 +110,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const [interviewDateError, setInterviewDateError] = useState("");
   const [savingInterviewDate, setSavingInterviewDate] = useState(false);
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicate | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsConfirmationOpen, setSettingsConfirmationOpen] = useState(false);
   const isMac = typeof navigator !== "undefined" && isMacPlatform();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
@@ -336,7 +336,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   function updateField<K extends keyof JobFormState>(field: K, value: JobFormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
   }
-  function resetForm() { setForm(blankForm()); setEditingId(null); setEditingRevision(null); setPendingDuplicate(null); setError(""); }
+  function resetForm() { setForm(blankForm()); setEditingId(null); setEditingRevision(null); setPendingDuplicate(null); setFormError(""); }
   function openAddModal() { resetForm(); setForm({ ...blankForm(), status: getDefaultBoard() }); setIsModalOpen(true); }
   function closeModal() { setIsModalOpen(false); resetForm(); }
   function startEdit(application: ApplicationRecord) {
@@ -344,16 +344,16 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setEditingId(application.id);
     setEditingRevision(application.revision);
     setForm({ company: application.company, role: application.role, status: application.status, source: application.source ?? "", appliedDate: application.appliedDate.slice(0, 10), interviewDate: application.interviewDate?.slice(0, 10) ?? "", notes: application.notes ?? "", jobUrl: application.jobUrl ?? "" });
-    setError("");
+    setFormError("");
     setIsModalOpen(true);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submissionInFlight.current) return;
-    setError("");
+    setFormError("");
     const parsed = applicationInputSchema.safeParse(form);
-    if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check the form and try again."); return; }
+    if (!parsed.success) { setFormError(parsed.error.issues[0]?.message ?? "Check the form and try again."); return; }
     const match = findPossibleDuplicate(form, applications, editingId ?? undefined);
     if (match) {
       setPendingDuplicate({ candidate: { ...form }, editingId, match });
@@ -381,7 +381,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         const latest = body.application as ApplicationRecord;
         setApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
         setEditingRevision(latest.revision);
-        setError("This application changed while you were editing. The latest saved version is loaded, and your form is still open with your changes. Review them, then save again to apply them.");
+        setFormError("This application changed while you were editing. The latest saved version is loaded, and your form is still open with your changes. Review them, then save again to apply them.");
         return false;
       }
       if (!response.ok) throw new Error(body.error ?? "Could not save the application");
@@ -397,7 +397,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       }
       return true;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not save the application");
+      setFormError(caught instanceof Error ? caught.message : "Could not save the application");
       return false;
     } finally {
       submissionInFlight.current = false;
@@ -467,8 +467,16 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       reopenModalAfterDelete.current = false;
       requestAnimationFrame(() => sidebarHeadingRef.current?.focus());
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not delete the application");
+      const message = caught instanceof Error ? caught.message : "Could not delete the application";
       setPendingDelete(null);
+      if (reopenModalAfterDelete.current) {
+        // The Edit form (with any unsaved changes) is still in state; bring it back with the error.
+        setFormError(message);
+        setIsModalOpen(true);
+      } else {
+        setError(message);
+      }
+      reopenModalAfterDelete.current = false;
     } finally {
       setDeleting(false);
     }
@@ -756,8 +764,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     dragActive: activeId !== null,
     canUndo: Boolean(toast?.undo || deleteRecovery),
     onResumeUndoToastOnTab: resumeUndoToastOnTab,
-    onCloseShortcuts: () => setShortcutsOpen(false),
-    onCloseSettings: () => { if (!settingsConfirmationOpen) setSettingsOpen(false); },
     onNewJob: openAddModal,
     onOpenSettings: () => setSettingsOpen(true),
     onFocusSearch: focusSearch,
@@ -904,7 +910,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         <JobModal
           boards={boards}
           editing={Boolean(editingId)}
-          error={error}
+          error={formError}
           form={form}
           onChangeField={updateField}
           onClose={closeModal}
@@ -948,11 +954,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onExport={exportApplications}
           onImport={importApplications}
           onDeleteAll={deleteAllApplicationData}
-          onConfirmationChange={setSettingsConfirmationOpen}
           deleteDisabled={hasPendingImport || undoing || saving || deleting || movingId !== null || savingInterviewDate}
           importProgress={importProgress}
           returnFocusRef={settingsTriggerRef}
-          suspendFocusTrap={pendingDuplicate !== null}
         />
       </MotionPresence>
 

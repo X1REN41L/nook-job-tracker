@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 import { Columns3, DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
 
 import { ShortcutList } from "@/components/shortcut-list";
 import { BoardSettings } from "@/components/board-settings";
 import { DeleteAllDataDialog } from "@/components/delete-all-data-dialog";
+import { Dialog } from "@/components/dialog";
 import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-modal-shell";
-import { useDialogFocusTrap } from "@/hooks/use-dialog-focus-trap";
 import { useBoards } from "@/hooks/use-boards";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
@@ -25,17 +25,15 @@ const SETTINGS_CATEGORIES = [
 ] satisfies Array<{ id: SettingsCategory; label: string; Icon: typeof SlidersHorizontal }>;
 const subscribeToMount = () => () => {};
 
-export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll, onConfirmationChange, deleteDisabled, importProgress, returnFocusRef, suspendFocusTrap, showToast }: {
+export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll, deleteDisabled, importProgress, returnFocusRef, showToast }: {
   isMac: boolean;
   onClose: () => void;
   onExport: () => void;
   onImport: (file: File) => Promise<string | null>;
   onDeleteAll: () => Promise<boolean>;
-  onConfirmationChange: (open: boolean) => void;
   deleteDisabled: boolean;
   importProgress: { current: number; total: number } | null;
   returnFocusRef: RefObject<HTMLElement | null>;
-  suspendFocusTrap: boolean;
   showToast: (message: string) => void;
 }) {
   const [category, setCategory] = useState<SettingsCategory>("general");
@@ -52,30 +50,20 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const deleteInFlight = useRef(false);
-  const dialogRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const deleteReturnFocusRef = useRef<HTMLElement | null>(null);
-  const wasSuspendedRef = useRef(false);
-  useDialogFocusTrap(dialogRef, closeRef, returnFocusRef, suspendFocusTrap || deleteConfirmationOpen);
-
-  useEffect(() => {
-    if (wasSuspendedRef.current && !suspendFocusTrap) closeRef.current?.focus();
-    wasSuspendedRef.current = suspendFocusTrap;
-  }, [suspendFocusTrap]);
 
   function openDeleteConfirmation() {
     if (deleteDisabled || importProgress || deleteInFlight.current) return;
     deleteReturnFocusRef.current = deleteTriggerRef.current;
     setDeleteConfirmationOpen(true);
-    onConfirmationChange(true);
   }
 
   function closeDeleteConfirmation() {
     if (deleteInFlight.current) return;
     setDeleteConfirmationOpen(false);
-    onConfirmationChange(false);
   }
 
   async function confirmDeleteAll() {
@@ -86,7 +74,6 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
       if (await onDeleteAll()) {
         setImportError("");
         setDeleteConfirmationOpen(false);
-        onConfirmationChange(false);
       }
     } finally {
       deleteInFlight.current = false;
@@ -102,8 +89,8 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
   }
 
   return (
-    <div className="motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleteConfirmationOpen) onClose(); }}>
-      <section ref={dialogRef} aria-labelledby="settings-title" aria-modal="true" className={MODAL_SHELL_CLASS} role="dialog" tabIndex={-1}>
+    <>
+      <Dialog backdropClassName="motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]" className={MODAL_SHELL_CLASS} closeDisabled={deleteConfirmationOpen} initialFocusRef={closeRef} labelledBy="settings-title" onClose={onClose} returnFocusRef={returnFocusRef}>
         <div className={MODAL_HEADER_CLASS}>
           <h2 className="font-serif text-xl font-semibold" id="settings-title">Settings</h2>
           <button ref={closeRef} aria-label="Close settings" className="icon-btn shrink-0" disabled={deleteConfirmationOpen} onClick={onClose} type="button">
@@ -214,9 +201,9 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
             )}
           </div>
         </div>
-      </section>
+      </Dialog>
       {deleteConfirmationOpen && <DeleteAllDataDialog deleting={deletingAll} onCancel={closeDeleteConfirmation} onConfirm={() => { void confirmDeleteAll(); }} returnFocusRef={deleteReturnFocusRef} />}
-    </div>
+    </>
   );
 }
 
