@@ -1,6 +1,10 @@
 import { EventType, Status } from "@prisma/client";
 import { z } from "zod";
 
+import {
+  applicationIdSchema, eventTextSchema, recordIdSchema, storedCalendarDateSchema, storedJobUrlSchema,
+  storedOptionalText, storedRequiredText,
+} from "@/lib/application-schema";
 import { MAX_BACKUP_APPLICATIONS } from "@/lib/backup-limits";
 import { settingsSchema } from "@/lib/backup-settings-schema";
 import { isValidStatusTransition, statusTransitionDetail } from "@/lib/status-history";
@@ -46,11 +50,12 @@ function possibleTrailEnds(edges: TypedTransition[], starts: Status[]) {
   return ends;
 }
 
-const date = z.iso.datetime({ offset: true }).transform((value) => new Date(value));
+// Real timestamps keep accepting any offset; calendar dates must be the UTC-midnight form Nook exports.
+const timestamp = z.iso.datetime({ offset: true }).transform((value) => new Date(value));
 const rawEventSnapshotSchema = z.object({
-  id: z.string().min(1), type: z.enum(EventType), detail: z.string().nullable(),
+  id: recordIdSchema, type: z.enum(EventType), detail: eventTextSchema,
   fromStatus: z.enum(Status).nullable(), toStatus: z.enum(Status).nullable(),
-  emailSnippet: z.string().nullable(), createdAt: date,
+  emailSnippet: eventTextSchema, createdAt: timestamp,
 }).strict();
 export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, context) => {
   if (event.type !== EventType.STATUS_CHANGE) {
@@ -89,11 +94,11 @@ export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, cont
   return event;
 });
 export const applicationSnapshotSchema = z.object({
-  id: z.string().min(1), company: z.string().trim().min(1).max(120), role: z.string().trim().min(1).max(120),
-  status: z.enum(Status), archived: z.boolean(), source: z.string().max(120).nullable(), appliedDate: date,
-  interviewDate: date.nullable(), interviewDatePromptDismissed: z.boolean(),
-  notes: z.string().max(5000).nullable(), jobUrl: z.string().max(2000).nullable(),
-  createdAt: date, lastUpdated: date, events: z.array(eventSnapshotSchema),
+  id: applicationIdSchema, company: storedRequiredText(120), role: storedRequiredText(120),
+  status: z.enum(Status), archived: z.boolean(), source: storedOptionalText(120), appliedDate: storedCalendarDateSchema,
+  interviewDate: storedCalendarDateSchema.nullable(), interviewDatePromptDismissed: z.boolean(),
+  notes: storedOptionalText(5_000), jobUrl: storedJobUrlSchema,
+  createdAt: timestamp, lastUpdated: timestamp, events: z.array(eventSnapshotSchema),
 }).strict().superRefine((application, context) => {
   const statusEvents = application.events
     .map((event, index) => ({ event, index }))
@@ -156,8 +161,9 @@ export const applicationSnapshotSchema = z.object({
     context.addIssue({ code: "custom", path: ["status"], message: "Saved status must match the final status in history" });
   }
 });
-// Undo restore re-inserts rows this server stored itself, so it checks field types only. It must not
-// reuse the import rules above: a stored history that fails them would otherwise be lost on undo.
+// Undo restore and the import duplicate comparison read rows this server stored itself, so they check
+// field types only. They must not reuse the import rules above: rows stored under older rules would
+// otherwise be lost on undo, or turn an import conflict into a validation error.
 const storedTimestamp = z.iso.datetime().transform((value) => new Date(value));
 const storedEventSchema = z.object({
   id: z.string().min(1), type: z.enum(EventType), detail: z.string().nullable(),
@@ -171,6 +177,7 @@ export const applicationRestoreSnapshotSchema = z.object({
   notes: z.string().nullable(), jobUrl: z.string().nullable(), createdAt: storedTimestamp, lastUpdated: storedTimestamp,
   events: z.array(storedEventSchema),
 }).strict();
+const storedComparisonSchema = applicationRestoreSnapshotSchema.omit({ revision: true });
 export const backupSnapshotSchema = z.object({
   version: z.literal(1), applications: z.array(applicationSnapshotSchema).max(MAX_BACKUP_APPLICATIONS), settings: settingsSchema,
 }).strict().superRefine((backup, context) => {
@@ -191,7 +198,7 @@ export function canonicalSnapshot(value: unknown) {
   const { revision, ...snapshotInput } = input;
   void revision;
   const asString = (date: unknown) => date instanceof Date ? date.toISOString() : date;
-  const record = applicationSnapshotSchema.parse({
+  const record = storedComparisonSchema.parse({
     ...snapshotInput,
     appliedDate: asString(snapshotInput.appliedDate),
     interviewDate: asString(snapshotInput.interviewDate),

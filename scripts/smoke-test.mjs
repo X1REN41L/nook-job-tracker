@@ -184,6 +184,19 @@ try {
   assert.equal((await request(path, "PATCH", { revision: application.revision, status: "INVALID", archived: true })).status, 400);
   assert.equal((await request(path, "PUT", { ...input, revision: application.revision, appliedDate: "2026-02-30" })).status, 400);
   assert.equal((await request(path, "PUT", { ...input, revision: application.revision, jobUrl: "javascript:alert(1)" })).status, 400);
+  // DATA-002: create and the status PATCH reject unknown keys instead of silently dropping them.
+  for (const [method, target, body, field] of [
+    ["POST", "/api/applications", { ...input, foo: 1 }, "foo"],
+    ["POST", "/api/applications", { ...input, id: "chosen-id" }, "id"],
+    ["PATCH", path, { revision: application.revision, status: "INTERVIEW", company: "Injected" }, "company"],
+    ["PATCH", path, { revision: application.revision, status: "INTERVIEW", archived: true, foo: 1 }, "foo"],
+  ]) {
+    const response = await request(target, method, body);
+    assert.equal(response.status, 400, `${method} with unknown key ${field} must be rejected`);
+    const issues = (await response.json()).issues ?? [];
+    assert.ok(issues.some((issue) => issue.path === field && issue.message === "Unrecognized field"), `${method} must name ${field}; received ${JSON.stringify(issues)}`);
+  }
+  assert.equal(await prisma.application.count(), 1, "Rejected unknown-key requests must not create records");
   const persisted = await prisma.application.findUniqueOrThrow({ where: { id: applicationId }, include: { events: true } });
   assert.equal(persisted.role, "Edited internship");
   assert.equal(persisted.status, "APPLIED");

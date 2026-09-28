@@ -268,5 +268,71 @@ try {
   const futureEvent = { ...initial, id: randomUUID(), createdAt: new Date(Date.now() + 86_400_000).toISOString() };
   await assertValidationIssues(await post("/api/applications/import", backup([{ ...record("future event"), archived: false, events: [futureEvent] }])), ["applications[0].events[0].createdAt"]);
   assert.equal(await prisma.application.count(), beforeFutureImport, "A future-dated backup must not create records");
-  console.log("Passed: version 1 backup round trip, outdated backup rejection, identical merge, conflicts, malformed atomicity, settings-only import, one-time restore, expiry cleanup on load/delete/restore, collision, invalid status, chunked size limit, clock-skewed status events, out-of-order undo restore, future-dated import rejection.");
+
+  // ARCH-001: import rejects field values the app itself never stores, and never normalizes them.
+  const beforeFieldRules = await prisma.application.count();
+  const fieldRuleFailures = [];
+  const conforming = () => ({ ...complete, id: randomUUID(), events: [{ ...initial, id: randomUUID() }] });
+  const note = (change) => ({ id: randomUUID(), type: "NOTE_ADDED", detail: null, fromStatus: null, toStatus: null, emailSnippet: null, createdAt: "2026-09-24T01:10:00.000Z", ...change });
+  for (const [path, change] of [
+    ["applications[0].appliedDate", { appliedDate: "2026-10-01T00:00:00+06:00" }],
+    ["applications[0].appliedDate", { appliedDate: "2026-10-01T15:45:00.000Z" }],
+    ["applications[0].appliedDate", { appliedDate: "2026-10-01T00:00:00Z" }],
+    ["applications[0].appliedDate", { appliedDate: "2026-02-30T00:00:00.000Z" }],
+    ["applications[0].interviewDate", { interviewDate: "2026-10-05T00:00:00+06:00" }],
+    ["applications[0].jobUrl", { jobUrl: "javascript:alert(document.domain)" }],
+    ["applications[0].jobUrl", { jobUrl: "data:text/html,<script>alert(1)</script>" }],
+    ["applications[0].jobUrl", { jobUrl: "ftp://example.test/job" }],
+    ["applications[0].jobUrl", { jobUrl: "not a url" }],
+    ["applications[0].jobUrl", { jobUrl: "  https://example.test/job  " }],
+    ["applications[0].jobUrl", { jobUrl: "" }],
+    ["applications[0].source", { source: "" }],
+    ["applications[0].source", { source: " Referral" }],
+    ["applications[0].notes", { notes: "   " }],
+    ["applications[0].company", { company: " Padded company" }],
+    ["applications[0].id", { id: "a/b" }],
+    ["applications[0].id", { id: "x?undoable=1" }],
+    ["applications[0].id", { id: "x".repeat(65) }],
+    ["applications[0].id", { id: "export" }],
+    ["applications[0].id", { id: "purge" }],
+    ["applications[0].events[1].id", { events: [{ ...initial, id: randomUUID() }, note({ id: "event/1" })] }],
+    ["applications[0].events[1].detail", { events: [{ ...initial, id: randomUUID() }, note({ detail: "x".repeat(5_001) })] }],
+    ["applications[0].events[1].emailSnippet", { events: [{ ...initial, id: randomUUID() }, note({ emailSnippet: "x".repeat(5_001) })] }],
+  ]) {
+    const response = await post("/api/applications/import", backup([{ ...conforming(), ...change }]));
+    if (response.status !== 400) {
+      fieldRuleFailures.push(`${JSON.stringify(change).slice(0, 80)} → ${response.status}`);
+      continue;
+    }
+    await assertValidationIssues(response, [path]);
+  }
+  assert.deepEqual(fieldRuleFailures, [], "Non-conforming import values must be rejected");
+  assert.equal(await prisma.application.count(), beforeFieldRules, "Rejected field values must not create records");
+  const fullyPopulated = {
+    ...conforming(), source: "Referral", notes: "Kept as written", jobUrl: "https://example.test/job?id=1",
+    appliedDate: "2026-09-01T00:00:00.000Z", interviewDate: "2026-10-05T00:00:00.000Z",
+    createdAt: "2026-09-24T07:00:00+06:00", lastUpdated: "2026-09-24T08:00:00+06:00",
+  };
+  fullyPopulated.events.push(note({ detail: "x".repeat(5_000), emailSnippet: "y".repeat(5_000), createdAt: "2026-09-24T07:10:00+06:00" }));
+  const fullyPopulatedImport = await post("/api/applications/import", backup([fullyPopulated]));
+  assert.equal(fullyPopulatedImport.status, 201, await fullyPopulatedImport.clone().text());
+  const storedPopulated = (await (await fetch(`${base}/api/applications/export`)).json()).applications.find(({ id }) => id === fullyPopulated.id);
+  assert.equal(storedPopulated.createdAt, "2026-09-24T01:00:00.000Z", "Timestamps keep accepting offsets");
+  assert.equal(storedPopulated.appliedDate, fullyPopulated.appliedDate);
+  assert.equal(storedPopulated.events.find(({ type }) => type === "NOTE_ADDED").emailSnippet.length, 5_000);
+  assert.equal((await post("/api/applications/import", backup([storedPopulated]))).status, 201, "A conforming export re-imports as an identical record");
+
+  // ARCH-001: a stored row that predates the stricter import rules still gets conflict detection, not a 400.
+  const legacy = await prisma.application.create({ data: {
+    company: "Backup API test", role: "legacy row", source: "", notes: "   ", jobUrl: "javascript:alert(1)",
+    appliedDate: new Date("2026-09-30T18:00:00.000Z"), createdAt: new Date("2026-09-24T01:00:00.000Z"),
+    events: { create: [
+      { type: "STATUS_CHANGE", fromStatus: null, toStatus: "APPLIED", detail: "null → APPLIED", createdAt: new Date("2026-09-24T02:00:00.000Z") },
+      { type: "STATUS_CHANGE", fromStatus: "APPLIED", toStatus: "INTERVIEW", detail: "APPLIED → INTERVIEW", createdAt: new Date("2026-09-24T01:00:00.000Z") },
+    ] },
+  } });
+  const legacyConflict = await post("/api/applications/import", backup([{ ...conforming(), id: legacy.id }]));
+  assert.equal(legacyConflict.status, 409, await legacyConflict.clone().text());
+  assert.deepEqual((await legacyConflict.json()).conflicts, [legacy.id]);
+  console.log("Passed: version 1 backup round trip, outdated backup rejection, identical merge, conflicts, malformed atomicity, settings-only import, one-time restore, expiry cleanup on load/delete/restore, collision, invalid status, chunked size limit, clock-skewed status events, out-of-order undo restore, future-dated import rejection, shared import field rules, legacy-row conflict detection.");
 } finally { await prisma.$disconnect(); }

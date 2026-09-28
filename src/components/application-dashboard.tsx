@@ -31,6 +31,7 @@ import { useToastUndo, type ToastUndo } from "@/hooks/use-toast-undo";
 import { currentLocalDate } from "@/lib/application-date";
 import { getSettingsState, subscribeSettings, setSettingsState, updateSettings } from "@/lib/settings-store";
 import { BOARD_STATUSES, boardLabel, useBoards } from "@/lib/board-preferences";
+import { applicationApiPath } from "@/lib/application-api-path";
 import { applicationInputSchema, interviewDateSchema } from "@/lib/application-schema";
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { findPossibleDuplicate, type DuplicateMatch } from "@/lib/duplicate-match";
@@ -349,7 +350,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         ? editingRevision ?? applications.find((item) => item.id === targetEditingId)?.revision
         : undefined;
       if (targetEditingId && expectedRevision === undefined) throw new Error("Could not find the application version to update");
-      const response = await fetch(targetEditingId ? `/api/applications/${targetEditingId}` : "/api/applications", {
+      const response = await fetch(targetEditingId ? applicationApiPath(targetEditingId) : "/api/applications", {
         method: targetEditingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(targetEditingId ? { ...candidate, revision: expectedRevision } : candidate),
@@ -426,7 +427,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setError("");
     setDeleting(true);
     try {
-      const response = await fetch(`/api/applications/${deletedApplication.id}?undoable=1`, {
+      const response = await fetch(`${applicationApiPath(deletedApplication.id)}?undoable=1`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
       });
@@ -468,7 +469,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setMovingId(application.id);
     setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status, archived, ...restoration } : item));
     try {
-      const response = await fetch(`/api/applications/${application.id}`, {
+      const response = await fetch(applicationApiPath(application.id), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(status === previousStatus && archived !== previousArchived
@@ -529,7 +530,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setSavingInterviewDate(true);
     setInterviewDateError("");
     try {
-      const response = await fetch(`/api/applications/${pendingInterviewDate.id}`, {
+      const response = await fetch(applicationApiPath(pendingInterviewDate.id), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -575,7 +576,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       return;
     }
 
-    const response = await fetch(`/api/applications/${undo.applicationId}/restore`, {
+    const response = await fetch(applicationApiPath(undo.applicationId, "restore"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token: undo.token }),
