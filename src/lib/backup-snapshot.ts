@@ -156,12 +156,31 @@ export const applicationSnapshotSchema = z.object({
     context.addIssue({ code: "custom", path: ["status"], message: "Saved status must match the final status in history" });
   }
 });
-export const applicationRestoreSnapshotSchema = applicationSnapshotSchema.extend({
-  revision: z.number().int().nonnegative().default(0),
-});
+// Undo restore re-inserts rows this server stored itself, so it checks field types only. It must not
+// reuse the import rules above: a stored history that fails them would otherwise be lost on undo.
+const storedTimestamp = z.iso.datetime().transform((value) => new Date(value));
+const storedEventSchema = z.object({
+  id: z.string().min(1), type: z.enum(EventType), detail: z.string().nullable(),
+  fromStatus: z.enum(Status).nullable(), toStatus: z.enum(Status).nullable(),
+  emailSnippet: z.string().nullable(), createdAt: storedTimestamp,
+}).strict();
+export const applicationRestoreSnapshotSchema = z.object({
+  id: z.string().min(1), company: z.string(), role: z.string(), status: z.enum(Status), archived: z.boolean(),
+  revision: z.number().int().nonnegative(), source: z.string().nullable(), appliedDate: storedTimestamp,
+  interviewDate: storedTimestamp.nullable(), interviewDatePromptDismissed: z.boolean(),
+  notes: z.string().nullable(), jobUrl: z.string().nullable(), createdAt: storedTimestamp, lastUpdated: storedTimestamp,
+  events: z.array(storedEventSchema),
+}).strict();
 export const backupSnapshotSchema = z.object({
   version: z.literal(1), applications: z.array(applicationSnapshotSchema).max(MAX_BACKUP_APPLICATIONS), settings: settingsSchema,
-}).strict();
+}).strict().superRefine((backup, context) => {
+  const now = Date.now();
+  backup.applications.forEach((application, applicationIndex) => application.events.forEach((event, eventIndex) => {
+    if (event.createdAt.getTime() > now) {
+      context.addIssue({ code: "custom", path: ["applications", applicationIndex, "events", eventIndex, "createdAt"], message: "Event time must not be in the future" });
+    }
+  }));
+});
 export type BackupSnapshot = z.input<typeof backupSnapshotSchema>;
 
 export function canonicalSnapshot(value: unknown) {

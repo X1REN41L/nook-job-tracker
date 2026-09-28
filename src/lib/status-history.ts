@@ -33,6 +33,11 @@ export function parseStatusTransitionDetail(detail: string | null): ParsedStatus
   return { fromStatus, toStatus };
 }
 
+// A new event must sort after the existing history even if the clock is behind its latest event.
+export function nextStatusEventTime(latestEventAt: Date | null, now = new Date()) {
+  return latestEventAt && latestEventAt.getTime() >= now.getTime() ? new Date(latestEventAt.getTime() + 1) : now;
+}
+
 export function isValidStatusTransition(
   fromStatus: Status | null,
   toStatus: Status | null,

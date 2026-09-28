@@ -17,8 +17,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir "$test_dir/project"
-cp -R "$project_root/src" "$project_root/prisma" "$project_root/scripts" "$test_dir/project/"
+mkdir -p "$test_dir/project/prisma"
+cp -R "$project_root/src" "$project_root/scripts" "$test_dir/project/"
+cp "$project_root/prisma/schema.prisma" "$test_dir/project/prisma/"
 cp "$project_root/package.json" "$project_root/package-lock.json" "$project_root/next.config.ts" "$project_root/tsconfig.json" "$project_root/postcss.config.mjs" "$test_dir/project/"
 ln -s "$project_root/node_modules" "$test_dir/project/node_modules"
 cd "$test_dir/project"

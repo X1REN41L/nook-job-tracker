@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import http from "node:http";
 import { PrismaClient, Status } from "@prisma/client";
 
 // Run against a running local app; only this script's own record is removed.
@@ -17,6 +18,25 @@ async function request(path, method = "GET", body) {
       ...(mutating ? { Origin: origin, "Content-Type": "application/json" } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+// fetch cannot override Host, so DNS-rebinding requests are sent with node:http.
+function hostRequest(host, path, method = "GET", body) {
+  const { hostname, port } = new URL(base);
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  const headers = {
+    Host: host,
+    ...(payload === undefined ? {} : { Origin: `http://${host}`, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }),
+  };
+  return new Promise((resolve, reject) => {
+    const outgoing = http.request({ hostname, port, path, method, headers }, (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => resolve({ status: response.statusCode, text: Buffer.concat(chunks).toString("utf8") }));
+    });
+    outgoing.on("error", reject);
+    outgoing.end(payload);
   });
 }
 
@@ -85,6 +105,30 @@ try {
   assert.equal((await request(path)).status, 200);
   const list = await (await request("/api/applications")).json();
   assert.ok(list.applications.some(({ id }) => id === applicationId));
+
+  const { port } = new URL(base);
+  const settingsBefore = await (await request("/api/settings")).json();
+  for (const host of [`evil.test:${port}`, `localhost.evil.test:${port}`, `127.0.0.1.evil.test:${port}`, "evil.test"]) {
+    const exportResponse = await hostRequest(host, "/api/applications/export");
+    assert.equal(exportResponse.status, 403, `Export must reject Host ${host}`);
+    assert.doesNotMatch(exportResponse.text, /Smoke test company/);
+    const pageResponse = await hostRequest(host, "/dashboard");
+    assert.equal(pageResponse.status, 403, `Pages must reject Host ${host}`);
+    assert.doesNotMatch(pageResponse.text, /Smoke test company/);
+    const settingsResponse = await hostRequest(host, "/api/settings", "PATCH", {
+      revision: settingsBefore.revision, changes: { theme: settingsBefore.settings.theme === "dark" ? "light" : "dark" },
+    });
+    assert.equal(settingsResponse.status, 403, `Settings writes must reject Host ${host}`);
+    assert.equal((await hostRequest(host, "/api/applications/purge", "DELETE", {})).status, 403, `Purge must reject Host ${host}`);
+  }
+  assert.equal(await prisma.application.count(), 1, "Rejected-Host requests must not delete records");
+  assert.deepEqual(await (await request("/api/settings")).json(), settingsBefore, "Rejected-Host requests must not change settings");
+  for (const host of [`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`]) {
+    const exportResponse = await hostRequest(host, "/api/applications/export");
+    assert.equal(exportResponse.status, 200, `Export must allow Host ${host}`);
+    assert.match(exportResponse.text, /Smoke test company/);
+    assert.equal((await hostRequest(host, "/dashboard")).status, 200, `Pages must allow Host ${host}`);
+  }
 
   const staleClient = { ...application };
   const edited = await request(path, "PUT", { ...input, role: "Edited internship", revision: application.revision });

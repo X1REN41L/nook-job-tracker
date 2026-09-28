@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import http from "node:http";
 import { PrismaClient } from "@prisma/client";
 
 const base = process.env.SMOKE_BASE_URL;
@@ -40,6 +41,19 @@ try {
   assert.equal(oversized.status, 413);
   assert.match((await oversized.json()).error, /10 MB/);
   assert.equal(await prisma.application.count(), baselineCount, "Oversized request must not create records");
+  const oversizedChunkedStatus = await new Promise((resolve, reject) => {
+    const { hostname, port } = new URL(base);
+    const outgoing = http.request({ hostname, port, path: "/api/applications/import", method: "POST", headers: mutationHeaders }, (response) => {
+      response.resume();
+      response.on("end", () => resolve(response.statusCode));
+    });
+    outgoing.on("error", reject);
+    const chunk = " ".repeat(1024 * 1024);
+    for (let index = 0; index < 11; index += 1) outgoing.write(chunk);
+    outgoing.end();
+  });
+  assert.equal(oversizedChunkedStatus, 413, "Chunked bodies over 10 MB must reach the route's own size limit");
+  assert.equal(await prisma.application.count(), baselineCount, "Oversized chunked request must not create records");
 
   const tooManyApplications = await post("/api/applications/import", backup(Array(5_001).fill(null)));
   assert.equal(tooManyApplications.status, 413);
@@ -206,5 +220,53 @@ try {
   await prisma.undoSnapshot.create({ data: { token: deleteCleanupToken, applicationId: "expired-delete", payload: "{}", expiresAt: new Date(0) } });
   assert.equal((await fetch(`${base}/api/applications/${deleteCleanupApplication.id}`, { method: "DELETE", headers: mutationHeaders })).status, 204);
   assert.equal(await prisma.undoSnapshot.count({ where: { token: deleteCleanupToken } }), 0, "Delete requests should purge expired snapshot payloads");
-  console.log("Passed: version 1 backup round trip, outdated backup rejection, identical merge, conflicts, malformed atomicity, settings-only import, one-time restore, expiry cleanup on load/delete/restore, collision, invalid status.");
+
+  // BAK-001: the server clock is behind the latest stored event (clock skew). Import now rejects
+  // future-dated events, so the state is seeded directly.
+  const skewedInitialAt = new Date(Date.now() + 1500);
+  const skewed = await prisma.application.create({ data: {
+    company: "Backup API test", role: "clock skew", appliedDate: new Date("2026-09-24T00:00:00.000Z"),
+    events: { create: [{ type: "STATUS_CHANGE", fromStatus: null, toStatus: "APPLIED", detail: "null → APPLIED", createdAt: skewedInitialAt }] },
+  } });
+  const skewedMove = await fetch(`${base}/api/applications/${skewed.id}`, { method: "PATCH", headers: mutationHeaders, body: JSON.stringify({ revision: 0, status: "INTERVIEW" }) });
+  assert.equal(skewedMove.status, 200);
+  const skewedEvents = await prisma.applicationEvent.findMany({ where: { applicationId: skewed.id }, orderBy: { createdAt: "asc" } });
+  assert.deepEqual(skewedEvents.map(({ fromStatus, toStatus }) => [fromStatus, toStatus]), [[null, "APPLIED"], ["APPLIED", "INTERVIEW"]], "A new status event must sort after the latest existing event");
+  assert.ok(skewedEvents[1].createdAt > skewedEvents[0].createdAt);
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, skewedEvents[1].createdAt.getTime() - Date.now() + 100)));
+  const skewedExport = await (await fetch(`${base}/api/applications/export`)).json();
+  assert.ok(skewedExport.applications.some(({ id }) => id === skewed.id));
+  const purged = await fetch(`${base}/api/applications/purge`, { method: "DELETE", headers: mutationHeaders, body: "{}" });
+  assert.equal(purged.status, 200);
+  assert.equal(await prisma.application.count(), 0);
+  const skewedReimport = await post("/api/applications/import", skewedExport);
+  assert.equal(skewedReimport.status, 201, await skewedReimport.clone().text());
+  assert.deepEqual((await (await fetch(`${base}/api/applications/export`)).json()).applications, skewedExport.applications, "Export after a clock-skewed move must round-trip");
+
+  // BAK-001: a history already stored out of order (created before the fix) must still be undo-restorable.
+  const outOfOrder = await prisma.application.create({ data: {
+    company: "Backup API test", role: "out of order history", status: "INTERVIEW", revision: 3, appliedDate: new Date("2026-09-24T00:00:00.000Z"),
+    events: { create: [
+      { type: "STATUS_CHANGE", fromStatus: null, toStatus: "APPLIED", detail: "null → APPLIED", createdAt: new Date("2026-09-24T02:00:00.000Z") },
+      { type: "STATUS_CHANGE", fromStatus: "APPLIED", toStatus: "INTERVIEW", detail: "APPLIED → INTERVIEW", createdAt: new Date("2026-09-24T01:00:00.000Z") },
+    ] },
+  }, include: { events: true } });
+  const outOfOrderExport = await (await fetch(`${base}/api/applications/export`)).json();
+  assert.equal((await post("/api/applications/import", backup(outOfOrderExport.applications.filter(({ id }) => id === outOfOrder.id)))).status, 400, "Import still rejects an out-of-order history");
+  const outOfOrderDelete = await fetch(`${base}/api/applications/${outOfOrder.id}?undoable=1`, { method: "DELETE", headers: mutationHeaders });
+  assert.equal(outOfOrderDelete.status, 200);
+  const outOfOrderRestore = await post(`/api/applications/${outOfOrder.id}/restore`, { token: (await outOfOrderDelete.json()).token });
+  assert.equal(outOfOrderRestore.status, 201, await outOfOrderRestore.clone().text());
+  const outOfOrderRestored = await prisma.application.findUniqueOrThrow({ where: { id: outOfOrder.id }, include: { events: true } });
+  assert.equal(outOfOrderRestored.status, "INTERVIEW");
+  assert.equal(outOfOrderRestored.revision, 3);
+  const eventRow = ({ id, type, fromStatus, toStatus, detail, emailSnippet, createdAt }) => [id, type, fromStatus, toStatus, detail, emailSnippet, createdAt.toISOString()];
+  assert.deepEqual(outOfOrderRestored.events.map(eventRow).sort(), outOfOrder.events.map(eventRow).sort(), "Undo restore must keep the stored history intact");
+
+  // BAK-001: imported events dated after the import are rejected, not repaired.
+  const beforeFutureImport = await prisma.application.count();
+  const futureEvent = { ...initial, id: randomUUID(), createdAt: new Date(Date.now() + 86_400_000).toISOString() };
+  await assertValidationIssues(await post("/api/applications/import", backup([{ ...record("future event"), archived: false, events: [futureEvent] }])), ["applications[0].events[0].createdAt"]);
+  assert.equal(await prisma.application.count(), beforeFutureImport, "A future-dated backup must not create records");
+  console.log("Passed: version 1 backup round trip, outdated backup rejection, identical merge, conflicts, malformed atomicity, settings-only import, one-time restore, expiry cleanup on load/delete/restore, collision, invalid status, chunked size limit, clock-skewed status events, out-of-order undo restore, future-dated import rejection.");
 } finally { await prisma.$disconnect(); }

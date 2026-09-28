@@ -6,7 +6,7 @@ import { apiError } from "@/lib/api";
 import { applicationEditSchema, applicationMutationSchema } from "@/lib/application-schema";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma } from "@/lib/prisma";
-import { statusTransitionDetail } from "@/lib/status-history";
+import { nextStatusEventTime, statusTransitionDetail } from "@/lib/status-history";
 import { cleanupExpiredUndoSnapshots } from "@/lib/undo-snapshots";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -83,6 +83,11 @@ async function updateApplication(
           return latest ? { application: latest, conflict: true as const } : null;
         }
         if (nextStatus && current.status !== nextStatus) {
+          const latestEvent = await transaction.applicationEvent.findFirst({
+            where: { applicationId: current.id },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+          });
           await transaction.applicationEvent.create({
             data: {
               applicationId: current.id,
@@ -90,7 +95,7 @@ async function updateApplication(
               fromStatus: current.status,
               toStatus: nextStatus,
               detail: statusTransitionDetail(current.status, nextStatus),
-              createdAt: new Date(),
+              createdAt: nextStatusEventTime(latestEvent?.createdAt ?? null),
             },
           });
         }
