@@ -8,15 +8,16 @@ export function formatDashboardPercentage(value: number) {
   return `${Number.isFinite(value) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value) : "0"}%`;
 }
 
-export function DashboardMetricCard({ label, value, detail, coverage }: {
+export function DashboardMetricCard({ label, value, detail, coverage, explanation }: {
   label: string;
   value: string | number;
   detail: string;
   coverage?: HistoryCoverage;
+  explanation?: string;
 }) {
   return (
     <div className="flex min-h-36 min-w-0 flex-col rounded-nook border border-line bg-paper p-4">
-      <p className="min-h-10 text-sm font-medium leading-5 text-ink-soft">{label}</p>
+      <p className="min-h-10 text-sm font-medium leading-5 text-ink-soft" title={explanation}>{label}</p>
       <p className="mt-2 font-serif text-2xl font-semibold leading-tight text-ink">{value}</p>
       <p className="mt-1 text-xs text-ink-soft">{detail}</p>
       {coverage && !coverage.isComplete && (

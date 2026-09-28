@@ -33,11 +33,14 @@ export async function POST(request: Request) {
       const conflicts = records.filter((item) => {
         const found = byId.get(item.id);
         return found && canonicalSnapshot(found) !== canonicalSnapshot(item);
-      }).map((item) => item.id);
-      if (conflicts.length) return { conflicts, created: [], skippedIds: [] };
+      });
+      if (conflicts.length) return { conflicts: conflicts.map((item) => item.id), conflictNames: conflicts.map((item) => {
+        const existing = byId.get(item.id)!;
+        return `${existing.company} — ${existing.role}`;
+      }), created: [], skippedIds: [] };
       const newRecords = prepared.filter(({ application }) => !byId.has(application.id));
       const occupiedEvents = await tx.applicationEvent.findMany({ where: { id: { in: newRecords.flatMap(({ events }) => events.map((event) => event.id)) } }, select: { id: true } });
-      if (occupiedEvents.length) return { conflicts: occupiedEvents.map((event) => event.id), created: [], skippedIds: [] };
+      if (occupiedEvents.length) return { conflicts: occupiedEvents.map((event) => event.id), conflictNames: [], created: [], skippedIds: [] };
       if (newRecords.length) {
         await tx.application.createMany({ data: newRecords.map(({ application }) => application) });
         const events = newRecords.flatMap((item) => item.events);
@@ -51,9 +54,11 @@ export async function POST(request: Request) {
       const inserted = await tx.application.findMany({ where: { id: { in: newRecords.map(({ application }) => application.id) } } });
       const insertedById = new Map(inserted.map((application) => [application.id, application]));
       const created = newRecords.map(({ application }) => insertedById.get(application.id)!);
-      return { conflicts: [], created, skippedIds: existing.map((item) => item.id), settings: parsed.data.settings, settingsRevision: row.revision };
+      return { conflicts: [], conflictNames: [], created, skippedIds: existing.map((item) => item.id), settings: parsed.data.settings, settingsRevision: row.revision };
     }, { timeout: 60_000 });
-    if (result.conflicts.length) return NextResponse.json({ error: `Conflicting IDs: ${result.conflicts.join(", ")}`, conflicts: result.conflicts }, { status: 409 });
+    if (result.conflicts.length) return NextResponse.json({ error: result.conflictNames.length
+      ? `Import stopped: ${result.conflictNames.slice(0, 3).join(", ")}${result.conflictNames.length > 3 ? ` and ${result.conflictNames.length - 3} more` : ""} changed since this backup. No applications or settings were imported.`
+      : `Import stopped: an event ID already exists (${result.conflicts[0]}). No applications or settings were imported.`, conflicts: result.conflicts }, { status: 409 });
     return NextResponse.json({ applications: result.created, createdIds: result.created.map((item) => item.id), skippedIds: result.skippedIds, settings: result.settings, settingsRevision: result.settingsRevision }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ error: "Backup ID conflicts with an existing record" }, { status: 409 });

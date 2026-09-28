@@ -3,6 +3,7 @@
 import { useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
 import { groupUpcomingInterviews, interviewDateKey, type InterviewListItem } from "@/lib/interviews";
+import { matchesApplicationSearch } from "@/lib/application-list";
 
 type InterviewTab = "upcoming" | "past";
 
@@ -48,14 +49,11 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
   const upcomingTabRef = useRef<HTMLButtonElement>(null);
   const pastTabRef = useRef<HTMLButtonElement>(null);
 
-  const query = searchQuery.trim().toLocaleLowerCase();
-  const matchesSearch = (interview: InterviewListItem) => !query ||
-    interview.role.toLocaleLowerCase().includes(query) ||
-    interview.company.toLocaleLowerCase().includes(query);
+  const query = searchQuery.trim();
   const upcoming = interviews
-    .filter((interview) => interviewDateKey(interview.date) >= today && matchesSearch(interview));
+    .filter((interview) => interviewDateKey(interview.date) >= today && matchesApplicationSearch(interview, query));
   const past = interviews
-    .filter((interview) => interviewDateKey(interview.date) < today && matchesSearch(interview))
+    .filter((interview) => interviewDateKey(interview.date) < today && matchesApplicationSearch(interview, query))
     .sort((a, b) => (pastSort === "recent" ? -1 : 1) * interviewDateKey(a.date).localeCompare(interviewDateKey(b.date)));
   const groups = groupUpcomingInterviews(upcoming, today);
   const panelId = `${id}-panel`;
@@ -125,7 +123,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
         {selectedTab === "upcoming" ? (
           <section aria-labelledby={`${id}-upcoming-heading`}>
             <h2 className="mb-7 font-serif text-2xl font-semibold text-ink" id={`${id}-upcoming-heading`}>
-              Upcoming Interviews <span className="font-sans text-base font-medium text-ink-soft">({upcomingCount})</span>
+              Upcoming Interviews <span className="font-sans text-base font-medium text-ink-soft">({query ? upcoming.length : upcomingCount})</span>
             </h2>
             {groups.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "All caught up — no interviews on the horizon."}</p>

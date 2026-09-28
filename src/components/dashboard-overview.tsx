@@ -18,6 +18,7 @@ function OverviewMetrics({ data }: { data: OverviewData | null }) {
       value={rate ? formatDashboardPercentage(rate.percentage) : "—"}
       detail={rate ? `${rate.numerator} of ${rate.denominator}` : " "}
       coverage={rate?.historyCoverage}
+      explanation="Percentage of applications that reached this exact status. Each status is counted independently."
     />
   );
 
@@ -25,7 +26,7 @@ function OverviewMetrics({ data }: { data: OverviewData | null }) {
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-label="Overview metrics">
       <DashboardMetricCard label="Total Applications" value={data?.totalApplications ?? "—"} detail="All time" />
       <DashboardMetricCard label="Active Pipeline" value={data?.activePipeline ?? "—"} detail="Currently active" />
-      <DashboardMetricCard label="Upcoming Interviews" value={data?.upcomingInterviews.count ?? "—"} detail="Upcoming" />
+      <DashboardMetricCard label="Active upcoming interviews" value={data?.upcomingInterviews.count ?? "—"} detail="Upcoming" />
       {rateCard("Interview Rate", data?.interviewRate)}
       {rateCard("Offer Rate", data?.offerRate)}
     </div>

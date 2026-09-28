@@ -100,7 +100,9 @@ try {
   assert.ok(withEvents.applications[0].events.some(({ fromStatus, toStatus }) => fromStatus === null && toStatus === "APPLIED"));
   assert.ok(withEvents.applications[0].events.some(({ fromStatus, toStatus }) => fromStatus === "APPLIED" && toStatus === "INTERVIEW"));
   assert.equal(withEvents.applications[0].archived, true);
+  const undoBeforePlainDelete = await prisma.undoSnapshot.count();
   assert.equal((await fetch(`${base}/api/applications/${seedId}`, { method: "DELETE", headers: mutationHeaders })).status, 204);
+  assert.equal(await prisma.undoSnapshot.count(), undoBeforePlainDelete, "Plain DELETE is permanent and does not create an undo snapshot");
   const restored = await post("/api/applications/import", withEvents);
   assert.equal(restored.status, 201, await restored.clone().text());
   const importResult = await restored.json();
@@ -111,7 +113,16 @@ try {
   const identical = await post("/api/applications/import", backup(withEvents.applications));
   assert.equal(identical.status, 201);
   assert.deepEqual((await identical.json()).skippedIds, [seedId]);
-  assert.equal((await post("/api/applications/import", backup([{ ...withEvents.applications[0], role: "conflict" }]))).status, 409);
+  const conflictCount = await prisma.application.count();
+  const conflictSettings = await prisma.settings.findUnique({ where: { id: 1 } });
+  const conflictingImport = await post("/api/applications/import", backup([{ ...withEvents.applications[0], role: "conflict" }]));
+  assert.equal(conflictingImport.status, 409);
+  const conflictBody = await conflictingImport.json();
+  assert.deepEqual(conflictBody.conflicts, [seedId]);
+  assert.match(conflictBody.error, /Backup API test — seed/);
+  assert.match(conflictBody.error, /No applications or settings were imported/);
+  assert.equal(await prisma.application.count(), conflictCount);
+  assert.deepEqual(await prisma.settings.findUnique({ where: { id: 1 } }), conflictSettings);
   await assertValidationIssues(await post("/api/applications/import", backup([
     { ...record("invalid status"), status: "INVALID" },
     { ...record("invalid fields"), company: "", appliedDate: "invalid" },

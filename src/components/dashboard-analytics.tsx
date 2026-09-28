@@ -185,6 +185,7 @@ export function DashboardAnalytics({ today, refreshKey }: { today: string; refre
       value={rate ? formatDashboardPercentage(rate.percentage) : "—"}
       detail={rate ? `${rate.numerator} of ${rate.denominator}` : " "}
       coverage={rate?.historyCoverage}
+      explanation="Percentage of applications that reached this exact status. Each status is counted independently."
     />
   );
 

@@ -72,10 +72,11 @@ async function updateApplication(
       const current = await prisma.application.findUnique({ where: { id } });
       if (!current) return null;
       if (current.revision !== expectedRevision) return { application: current, conflict: true as const };
+      const leavingInterview = current.status === Status.INTERVIEW && nextStatus !== undefined && nextStatus !== Status.INTERVIEW;
       return await prisma.$transaction(async (transaction) => {
         const updated = await transaction.application.updateMany({
           where: { id: current.id, revision: expectedRevision },
-          data: { ...data, revision: { increment: 1 } },
+          data: { ...data, ...(leavingInterview && { interviewDatePromptDismissed: false }), revision: { increment: 1 } },
         });
         if (!updated.count) {
           const latest = await transaction.application.findUnique({ where: { id } });
@@ -137,6 +138,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       if (!deleted) return NextResponse.json({ error: "Application not found" }, { status: 404 });
       return NextResponse.json({ token, expiresAt: expiresAt.toISOString() });
     }
+    // Plain DELETE is retained for callers that need permanent deletion; the UI uses ?undoable=1.
     const result = await prisma.application.deleteMany({ where: { id } });
     if (!result.count) return NextResponse.json({ error: "Application not found" }, { status: 404 });
     return new NextResponse(null, { status: 204 });

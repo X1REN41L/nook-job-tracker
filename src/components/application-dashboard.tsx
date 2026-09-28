@@ -32,6 +32,8 @@ import { useBoards } from "@/hooks/use-boards";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
 import { currentLocalDate } from "@/lib/application-date";
+import { compareApplications, matchesApplicationSearch } from "@/lib/application-list";
+import { subscribeToLocalDate } from "@/lib/local-date-subscription";
 import { setSettingsState } from "@/lib/settings-store";
 import { BOARD_STATUSES, boardLabel } from "@/lib/board-preferences";
 import { applicationApiPath } from "@/lib/application-api-path";
@@ -83,13 +85,6 @@ function getSidebarWidth() {
   }
 }
 
-
-function subscribeToLocalDate(onStoreChange: () => void) {
-  const now = new Date();
-  const nextLocalMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const timeout = window.setTimeout(onStoreChange, nextLocalMidnight.getTime() - now.getTime());
-  return () => window.clearTimeout(timeout);
-}
 
 function getServerLocalDate() {
   return "";
@@ -318,7 +313,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     if (!response.ok) throw new Error(body.error ?? "Could not import the applications");
     const imported = body.applications as ApplicationRecord[];
     setSettingsState({ settings: body.settings, revision: body.settingsRevision });
-    reconcileApplications((current) => [...current, ...imported].sort((a, b) => b.appliedDate.localeCompare(a.appliedDate)));
+    reconcileApplications((current) => [...current, ...imported].sort(compareApplications));
     return { created: imported, skippedIds: body.skippedIds as string[] };
   }
 
@@ -410,7 +405,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       const previous = targetEditingId ? applications.find((item) => item.id === targetEditingId) : undefined;
       reconcileApplications((current) => {
         const next = targetEditingId ? current.map((item) => item.id === targetEditingId ? body.application : item) : [body.application, ...current];
-        return next.sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
+        return next.sort(compareApplications);
       });
       showToast(targetEditingId ? `Saved changes to ${body.application.company}` : `Added ${body.application.company}`);
       closeModal();
@@ -674,7 +669,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     const body = await response.json();
     if (!response.ok) throw new Error(body.error ?? "Could not restore the application");
     const restored = body.application as ApplicationRecord;
-    reconcileApplications((current) => [restored, ...current].sort((a, b) => b.appliedDate.localeCompare(a.appliedDate)));
+    reconcileApplications((current) => [restored, ...current].sort(compareApplications));
     showToast(`Restored ${restored.company}`);
     if (restoreKeyboardFocus && (BOARD_STATUSES as readonly Status[]).includes(restored.status)) focusKanbanCard(restored.id);
   }
@@ -703,11 +698,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const sidebarItems = applications
     .filter((item) => !item.archived)
     .filter((item) => activeFilter === "all" || item.status === activeFilter)
-    .filter((item) => `${item.company} ${item.role}`.toLowerCase().includes(searchTerm.toLowerCase()))
-    .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
+    .filter((item) => matchesApplicationSearch(item, searchTerm))
+    .sort(compareApplications);
   const archivedItems = applications
     .filter((item) => item.archived)
-    .sort((a, b) => b.appliedDate.localeCompare(a.appliedDate));
+    .sort(compareApplications);
   const interviewToday = today || currentLocalDate();
   const interviews = getInterviewListItems(applications);
   const upcomingInterviewCount = getUpcomingInterviewCount(applications, interviewToday);

@@ -211,6 +211,27 @@ try {
   assert.equal(singleOverview.interviewRate.numerator, 0);
   assert.equal(singleOverview.interviewRate.percentage, 0);
   assert.equal(singleOverview.interviewRate.historyCoverage.completeApplications, 1);
+  const skipTarget = await createApplication({ role: "Skipped interview" });
+  const skippedInterview = await changeStatus(skipTarget, "OFFER");
+  const skippedOverview = await json(dashboardPath("overview"));
+  assert.equal(skippedOverview.interviewRate.numerator, 0, "Skipping Interview does not imply that milestone");
+  assert.equal(skippedOverview.offerRate.numerator, 1);
+  await prisma.application.delete({ where: { id: skippedInterview.id } });
+  createdIds.splice(createdIds.indexOf(skippedInterview.id), 1);
+  const promptTarget = await createApplication({ role: "Interview prompt re-entry" });
+  let promptState = await changeStatus(promptTarget, "INTERVIEW");
+  const dismissed = await fetch(base + "/api/applications/" + promptTarget.id, {
+    method: "PATCH", headers, body: JSON.stringify({ revision: promptState.revision, status: "INTERVIEW", interviewDatePromptDismissed: true }),
+  });
+  assert.equal(dismissed.status, 200);
+  promptState = (await dismissed.json()).application;
+  assert.equal(promptState.interviewDatePromptDismissed, true);
+  promptState = await changeStatus(promptState, "APPLIED");
+  assert.equal(promptState.interviewDatePromptDismissed, false, "Leaving Interview clears the prompt dismissal");
+  promptState = await changeStatus(promptState, "INTERVIEW");
+  assert.equal(promptState.interviewDatePromptDismissed, false, "Returning to Interview allows the prompt again");
+  await prisma.application.delete({ where: { id: promptTarget.id } });
+  createdIds.splice(createdIds.indexOf(promptTarget.id), 1);
   const unchanged = await changeStatus(milestone, "APPLIED");
   assert.equal(await prisma.applicationEvent.count({ where: { applicationId: milestone.id, type: "STATUS_CHANGE" } }), 1,
     "A same-status update must not add a transition event");
