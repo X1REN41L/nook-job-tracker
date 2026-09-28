@@ -1,4 +1,4 @@
-import { Status } from "@prisma/client";
+import type { Status } from "@prisma/client";
 
 import { DEFAULT_BOARD_STATUSES } from "@/lib/general-preferences";
 import { getSettingsState, updateSettings } from "@/lib/settings-store";

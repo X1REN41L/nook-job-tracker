@@ -1,4 +1,4 @@
-import { Status } from "@prisma/client";
+import type { Status } from "@prisma/client";
 
 export const STATUS_META: Record<
   Status,

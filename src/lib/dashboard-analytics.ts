@@ -22,6 +22,7 @@ type DashboardApplication = {
   interviewDate: Date | null;
   events: StatusHistoryEvent[];
 };
+type AnalyzedApplication = DashboardApplication & { history: ReturnType<typeof analyzeStatusHistory> };
 
 type HistoryCoverage = {
   totalApplications: number;
@@ -72,9 +73,9 @@ function roundPercentage(numerator: number, denominator: number) {
   return denominator === 0 ? 0 : Math.round((numerator / denominator) * 10_000) / 100;
 }
 
-function coverageFor(applications: DashboardApplication[]): HistoryCoverage {
+function coverageFor(applications: AnalyzedApplication[]): HistoryCoverage {
   const completeApplications = applications.filter((application) =>
-    analyzeStatusHistory(application.status, application.events).complete,
+    application.history.complete,
   ).length;
   const denominator = applications.length;
   return {
@@ -86,15 +87,15 @@ function coverageFor(applications: DashboardApplication[]): HistoryCoverage {
   };
 }
 
-function rateFor(applications: DashboardApplication[], milestone: Status): RateMetric {
+function rateFor(applications: AnalyzedApplication[], milestone: Status, historyCoverage: HistoryCoverage): RateMetric {
   const numerator = applications.filter((application) =>
-    analyzeStatusHistory(application.status, application.events).knownStatuses.has(milestone),
+    application.history.knownStatuses.has(milestone),
   ).length;
   return {
     numerator,
     denominator: applications.length,
     percentage: roundPercentage(numerator, applications.length),
-    historyCoverage: coverageFor(applications),
+    historyCoverage,
   };
 }
 
@@ -154,19 +155,22 @@ function makeTrendBuckets(selection: AnalyticsSelection, startDate: string, endD
   return { granularity: "MONTH" as const, buckets };
 }
 
-async function loadApplications(where?: Prisma.ApplicationWhereInput): Promise<DashboardApplication[]> {
-  return prisma.application.findMany({
+async function loadApplications(where?: Prisma.ApplicationWhereInput): Promise<AnalyzedApplication[]> {
+  const applications = await prisma.application.findMany({
     where,
     select: baseSelection,
   });
+  return applications.map((application) => ({
+    ...application,
+    history: analyzeStatusHistory(application.status, application.events),
+  }));
 }
 
-function staleApplications(applications: DashboardApplication[], today: string, timeZone: string, threshold: number): StaleApplication[] {
+function staleApplications(applications: AnalyzedApplication[], today: string, timeZone: string, threshold: number): StaleApplication[] {
   const result: StaleApplication[] = [];
   for (const application of applications) {
     if (application.archived || !ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number])) continue;
-    const history = analyzeStatusHistory(application.status, application.events);
-    const lastStatusEvent = history.latestStatusEvent;
+    const lastStatusEvent = application.history.latestStatusEvent;
     if (!lastStatusEvent) continue;
 
     const staleDays = Math.max(0, daysBetween(calendarDateInTimeZone(new Date(lastStatusEvent.createdAt), timeZone), today));
@@ -188,12 +192,12 @@ function staleApplications(applications: DashboardApplication[], today: string, 
   });
 }
 
-function staleTimingCoverage(applications: DashboardApplication[]) {
+function staleTimingCoverage(applications: AnalyzedApplication[]) {
   const eligibleApplications = applications.filter((application) =>
     !application.archived && ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number]),
   );
   const withReliableStatusTimestamp = eligibleApplications.filter((application) =>
-    analyzeStatusHistory(application.status, application.events).latestStatusEvent !== null,
+    application.history.latestStatusEvent !== null,
   ).length;
   const withoutReliableStatusTimestamp = eligibleApplications.length - withReliableStatusTimestamp;
   return {
@@ -218,13 +222,12 @@ function staleGroups(applications: StaleApplication[]) {
       MEDIUM: applicationsBySeverity.MEDIUM.length,
       total: applications.length,
     },
-    applications,
-    top: applications.slice(0, 3),
   };
 }
 
 export async function getDashboardOverview(today: string, timeZone: string, staleApplicationThreshold = 15) {
   const applications = await loadApplications();
+  const historyCoverage = coverageFor(applications);
   const upcoming = applications
     .filter((application) =>
       !application.archived &&
@@ -255,8 +258,8 @@ export async function getDashboardOverview(today: string, timeZone: string, stal
         };
       }),
     },
-    interviewRate: rateFor(applications, Status.INTERVIEW),
-    offerRate: rateFor(applications, Status.OFFER),
+    interviewRate: rateFor(applications, Status.INTERVIEW, historyCoverage),
+    offerRate: rateFor(applications, Status.OFFER, historyCoverage),
     staleApplications: stale.slice(0, 3),
     staleTimingCoverage: staleTimingCoverage(applications),
   };
@@ -280,6 +283,7 @@ export async function getDashboardAnalytics(selection: AnalyticsSelection, today
       ? { gte: dateFromKey(range.startDate), lte: new Date(Date.UTC(9999, 11, 31, 23, 59, 59, 999)) }
       : { gte: dateFromKey(range.startDate), lt: dayAfterKey(range.endDate) },
   });
+  const historyCoverage = coverageFor(applications);
   const trend = makeTrendBuckets(selection, range.startDate, range.endDate);
   const bucketsByKey = new Map(trend.buckets.map((bucket) => [bucket.startDate, bucket]));
   const statusBreakdown: Record<Status, number> = {
@@ -303,9 +307,9 @@ export async function getDashboardAnalytics(selection: AnalyticsSelection, today
     period: selection.period,
     range,
     applications: applications.length,
-    interviewRate: rateFor(applications, Status.INTERVIEW),
-    offerRate: rateFor(applications, Status.OFFER),
-    rejectionRate: rateFor(applications, Status.REJECTED),
+    interviewRate: rateFor(applications, Status.INTERVIEW, historyCoverage),
+    offerRate: rateFor(applications, Status.OFFER, historyCoverage),
+    rejectionRate: rateFor(applications, Status.REJECTED, historyCoverage),
     statusBreakdown,
     applicationsTrend: trend,
   };

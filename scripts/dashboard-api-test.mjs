@@ -11,6 +11,7 @@ const createdIds = [];
 const today = new Date().toISOString().slice(0, 10);
 const dashboardPath = (section, date = today, timeZone = "UTC", staleApplicationThreshold = 15) =>
   `/api/dashboard/${section}?${new URLSearchParams({ today: date, timeZone, staleApplicationThreshold: String(staleApplicationThreshold) })}`;
+const staleItems = (response) => ["CRITICAL", "HIGH", "MEDIUM"].flatMap((severity) => response.applicationsBySeverity[severity]);
 
 function shiftDate(key, offset) {
   const date = new Date(key + "T00:00:00.000Z");
@@ -134,7 +135,7 @@ try {
   const beforeUndoEvents = await prisma.applicationEvent.findMany({ where: { applicationId: undoTarget.id }, orderBy: { createdAt: "asc" } });
   const beforeUndoOverview = await json(dashboardPath("overview"));
   const beforeUndoStale = await json(dashboardPath("stale"));
-  assert.ok(beforeUndoStale.applications.some(({ id }) => id === undoTarget.id));
+  assert.ok(staleItems(beforeUndoStale).some(({ id }) => id === undoTarget.id));
   const moveResponse = await fetch(base + "/api/applications/" + undoTarget.id, {
     method: "PATCH", headers,
     body: JSON.stringify({ revision: undoTarget.revision, status: "OFFER", archived: true, interviewDate: null, interviewDatePromptDismissed: true }),
@@ -175,8 +176,8 @@ try {
   assert.equal(undone.revision, movedForUndo.application.revision + 1);
   assert.deepEqual((await prisma.applicationEvent.findMany({ where: { applicationId: undoTarget.id }, orderBy: { createdAt: "asc" } })).map(({ id }) => id), beforeUndoEvents.map(({ id }) => id));
   assert.equal((await json(dashboardPath("overview"))).offerRate.numerator, beforeUndoOverview.offerRate.numerator);
-  assert.deepEqual((await json(dashboardPath("stale"))).applications.some(({ id }) => id === undoTarget.id),
-    beforeUndoStale.applications.some(({ id }) => id === undoTarget.id));
+  assert.deepEqual(staleItems(await json(dashboardPath("stale"))).some(({ id }) => id === undoTarget.id),
+    staleItems(beforeUndoStale).some(({ id }) => id === undoTarget.id));
 
   const movedAgainResponse = await fetch(base + "/api/applications/" + undoTarget.id, {
     method: "PATCH", headers, body: JSON.stringify({ revision: undone.revision, status: "OFFER" }),
@@ -398,13 +399,17 @@ try {
   assert.equal(stale.applicationsBySeverity.CRITICAL[0].id, stale60.id);
   assert.deepEqual(stale.applicationsBySeverity.HIGH.map(({ id }) => id), [stale59.id, stale30.id]);
   assert.deepEqual(stale.applicationsBySeverity.MEDIUM.map(({ id }) => id), [stale29.id, stale21.id, stale20.id]);
-  assert.deepEqual(stale.applications.map(({ id, staleDays, severity }) => [id, staleDays, severity]), [
+  assert.deepEqual(Object.keys(stale).sort(), ["applicationsBySeverity", "counts", "timingCoverage"]);
+  assert.deepEqual(staleItems(stale).map(({ id, staleDays, severity }) => [id, staleDays, severity]), [
     [stale60.id, 60, "CRITICAL"], [stale59.id, 59, "HIGH"], [stale30.id, 30, "HIGH"],
     [stale29.id, 29, "MEDIUM"], [stale21.id, 21, "MEDIUM"], [stale20.id, 20, "MEDIUM"],
   ]);
-  assert.deepEqual(stale.top.map(({ id }) => id), overview.staleApplications.map(({ id }) => id));
-  assert.deepEqual(stale.top, overview.staleApplications, "Overview and stale endpoint share the exact stale result");
-  assert.equal(stale.applications.some(({ id }) => id === archivedStale.id || id === staleOffer.id || id === missingTiming.id), false);
+  assert.deepEqual(staleItems(stale).slice(0, 3), overview.staleApplications, "Overview and stale endpoint share the exact stale result");
+  assert.equal(staleItems(stale).some(({ id }) => id === archivedStale.id || id === staleOffer.id || id === missingTiming.id), false);
+  const oldShapeBytes = Buffer.byteLength(JSON.stringify({ ...stale, applications: staleItems(stale), top: staleItems(stale).slice(0, 3) }));
+  const newShapeBytes = Buffer.byteLength(JSON.stringify(stale));
+  assert.ok(newShapeBytes < oldShapeBytes, "Stale response omits duplicate item lists");
+  console.log(`Stale payload with 6 items: ${oldShapeBytes} → ${newShapeBytes} bytes`);
   assert.equal(stale.timingCoverage.withoutReliableStatusTimestamp, 2);
   assert.equal(stale.timingCoverage.isComplete, false);
 
@@ -414,7 +419,7 @@ try {
     const filtered = await json(dashboardPath("stale", today, "UTC", threshold));
     const preview = await json(dashboardPath("overview", today, "UTC", threshold));
     assert.equal(filtered.counts.total, count, `${threshold} day stale threshold`);
-    assert.deepEqual(filtered.top, preview.staleApplications, "Overview and Stale Applications use the same threshold");
+    assert.deepEqual(staleItems(filtered).slice(0, 3), preview.staleApplications, "Overview and Stale Applications use the same threshold");
   }
   assert.equal((await fetch(base + dashboardPath("stale", today, "UTC", 14))).status, 400);
   assert.equal((await fetch(base + dashboardPath("stale", today, "UTC", 21))).status, 400);
@@ -422,8 +427,8 @@ try {
   const nextDay = shiftDate(today, 1);
   const nextDayStale = await json(dashboardPath("stale", nextDay));
   const nextDayOverview = await json(dashboardPath("overview", nextDay));
-  assert.deepEqual(nextDayStale.top, nextDayOverview.staleApplications);
-  assert.deepEqual(nextDayStale.applications.map(({ id, staleDays, severity }) => [id, staleDays, severity]), [
+  assert.deepEqual(staleItems(nextDayStale).slice(0, 3), nextDayOverview.staleApplications);
+  assert.deepEqual(staleItems(nextDayStale).map(({ id, staleDays, severity }) => [id, staleDays, severity]), [
     [stale60.id, 61, "CRITICAL"], [stale59.id, 60, "CRITICAL"], [stale30.id, 31, "HIGH"],
     [stale29.id, 30, "HIGH"], [stale21.id, 22, "MEDIUM"], [stale20.id, 21, "MEDIUM"],
   ], "An explicit today moves each 20/21, 29/30, and 59/60-day boundary consistently");
@@ -626,38 +631,38 @@ try {
   }
   const dhakaStale = await json(dashboardPath("stale", boundaryToday, "Asia/Dhaka"));
   const dhakaOverview = await json(dashboardPath("overview", boundaryToday, "Asia/Dhaka"));
-  assert.deepEqual(dhakaStale.top, dhakaOverview.staleApplications);
+  assert.deepEqual(staleItems(dhakaStale).slice(0, 3), dhakaOverview.staleApplications);
   for (const [age, id] of timezoneFixtures) {
-    const actual = dhakaStale.applications.find((item) => item.id === id);
+    const actual = staleItems(dhakaStale).find((item) => item.id === id);
     assert.equal(actual?.staleDays, age, `Dhaka local day boundary at ${age} days`);
     assert.equal(actual?.severity, age >= 60 ? "CRITICAL" : age >= 30 ? "HIGH" : "MEDIUM");
   }
   const utcSameDate = await createApplication({ role: "UTC and local date match" });
   await setStatusEventTimestamp(utcSameDate.id, "2026-09-26T12:00:00.000Z");
   const utcStale = await json(dashboardPath("stale", boundaryToday, "UTC"));
-  assert.equal(utcStale.applications.find((item) => item.id === utcSameDate.id)?.staleDays, 21);
+  assert.equal(staleItems(utcStale).find((item) => item.id === utcSameDate.id)?.staleDays, 21);
 
   const previousLocalDate = await createApplication({ role: "Previous local day" });
   await setStatusEventTimestamp(previousLocalDate.id, "2026-09-26T02:30:00.000Z");
   const losAngelesStale = await json(dashboardPath("stale", boundaryToday, "America/Los_Angeles"));
-  assert.equal(losAngelesStale.applications.find((item) => item.id === previousLocalDate.id)?.staleDays, 22,
+  assert.equal(staleItems(losAngelesStale).find((item) => item.id === previousLocalDate.id)?.staleDays, 22,
     "Early UTC hours belong to the previous local calendar day in Los Angeles");
-  assert.deepEqual(losAngelesStale.top, (await json(dashboardPath("overview", boundaryToday, "America/Los_Angeles"))).staleApplications);
+  assert.deepEqual(staleItems(losAngelesStale).slice(0, 3), (await json(dashboardPath("overview", boundaryToday, "America/Los_Angeles"))).staleApplications);
 
   const monthBoundary = await createApplication({ role: "Local month boundary" });
   await setStatusEventTimestamp(monthBoundary.id, "2026-09-30T22:30:00.000Z");
   const octoberStale = await json(dashboardPath("stale", "2026-10-22", "Asia/Dhaka"));
-  assert.equal(octoberStale.applications.find((item) => item.id === monthBoundary.id)?.staleDays, 21);
+  assert.equal(staleItems(octoberStale).find((item) => item.id === monthBoundary.id)?.staleDays, 21);
 
   const yearBoundary = await createApplication({ role: "Local year boundary" });
   await setStatusEventTimestamp(yearBoundary.id, "2025-12-31T22:30:00.000Z");
   const januaryStale = await json(dashboardPath("stale", "2026-01-22", "Asia/Dhaka"));
-  assert.equal(januaryStale.applications.find((item) => item.id === yearBoundary.id)?.staleDays, 21);
+  assert.equal(staleItems(januaryStale).find((item) => item.id === yearBoundary.id)?.staleDays, 21);
 
   const dstBoundary = await createApplication({ role: "DST spring transition" });
   await setStatusEventTimestamp(dstBoundary.id, "2026-03-08T04:30:00.000Z");
   const marchStale = await json(dashboardPath("stale", "2026-03-28", "America/New_York"));
-  assert.equal(marchStale.applications.find((item) => item.id === dstBoundary.id)?.staleDays, 21,
+  assert.equal(staleItems(marchStale).find((item) => item.id === dstBoundary.id)?.staleDays, 21,
     "DST changes do not alter calendar-day age");
 
   console.log("Passed: Dashboard API states, history, rates, stale boundaries and timezone conversion, Overview consistency, calendar dates, and analytics cohorts.");

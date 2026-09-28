@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-import { Status } from "@prisma/client";
 import { MOTION_MODES } from "@/lib/motion-mode";
+import { STATUS_VALUES } from "@/lib/status-values";
 
-const DEFAULT_BOARD_STATUSES = [Status.APPLIED, Status.ONLINE_ASSESSMENT, Status.INTERVIEW, Status.OFFER, Status.REJECTED] as const;
+const DEFAULT_BOARD_STATUSES = STATUS_VALUES;
 const STARTUP_PAGES = ["dashboard", "job-board", "interviews"] as const;
 const STALE_THRESHOLDS = [7, 15, 30] as const;
 const BOARD_STATUSES = DEFAULT_BOARD_STATUSES;
