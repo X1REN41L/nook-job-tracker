@@ -2,9 +2,10 @@
 
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragOverEvent, type DragStartEvent, type KeyboardCoordinateGetter } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { BOARD_COLORS, BOARD_COLOR_CLASSES, saveBoards, resetBoards, useBoards, type BoardConfiguration, type BoardStatus } from "@/lib/board-preferences";
+import { BOARD_COLORS, BOARD_COLOR_CLASSES, saveBoards, resetBoards, type BoardConfiguration, type BoardStatus } from "@/lib/board-preferences";
+import { useBoards } from "@/hooks/use-boards";
 
 const keyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
   if (event.code !== "ArrowUp" && event.code !== "ArrowDown") return undefined;
@@ -18,7 +19,7 @@ const keyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
   return { x: target.left + (target.width - active.width) / 2, y: target.top + (target.height - active.height) / 2 };
 };
 
-export function BoardSettings() {
+export function BoardSettings({ showToast }: { showToast: (message: string) => void }) {
   const boards = useBoards();
   const [editing, setEditing] = useState<BoardStatus | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -32,7 +33,7 @@ export function BoardSettings() {
   );
 
   function update(status: BoardStatus, patch: Partial<BoardConfiguration>) {
-    saveBoards((current) => current.map((board) => board.status === status ? { ...board, ...patch } : board));
+    void saveBoards((current) => current.map((board) => board.status === status ? { ...board, ...patch } : board)).catch((error: Error) => showToast(error.message));
   }
 
   function reorder(event: DragEndEvent) {
@@ -40,14 +41,14 @@ export function BoardSettings() {
     const from = boards.findIndex((board) => `reorder:${board.status}` === event.active.id);
     const to = boards.findIndex((board) => board.status === event.over?.id);
     if (from < 0 || to < 0 || from === to) return;
-    saveBoards((current) => {
+    void saveBoards((current) => {
       const next = [...current];
       const currentFrom = next.findIndex((board) => `reorder:${board.status}` === event.active.id);
       const currentTo = next.findIndex((board) => board.status === event.over?.id);
       if (currentFrom < 0 || currentTo < 0 || currentFrom === currentTo) return next;
       next.splice(currentTo, 0, next.splice(currentFrom, 1)[0]);
       return next;
-    });
+    }).catch((error: Error) => showToast(error.message));
   }
 
   function startDrag(event: DragStartEvent) {
@@ -79,7 +80,7 @@ export function BoardSettings() {
           <p>Restore default names, colors, empty-state messages, and order? Application data and your default new-application status stay the same.</p>
           <div className="mt-3 flex justify-end gap-2">
             <button ref={cancelResetRef} className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => { setConfirmReset(false); requestAnimationFrame(() => resetRef.current?.focus()); }} type="button">Cancel</button>
-            <button className="btn-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => { resetBoards(); setEditing(null); setConfirmReset(false); requestAnimationFrame(() => resetRef.current?.focus()); }} type="button">Restore defaults</button>
+            <button className="btn-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => { void resetBoards().catch((error: Error) => showToast(error.message)); setEditing(null); setConfirmReset(false); requestAnimationFrame(() => resetRef.current?.focus()); }} type="button">Restore defaults</button>
           </div>
         </div>
       ) : (
@@ -100,6 +101,24 @@ function BoardRow({ board, editing, shift, onEdit, onUpdate }: {
   const { setNodeRef: setDropRef } = useDroppable({ id: board.status });
   const [draftName, setDraftName] = useState(board.label);
   const [draftEmpty, setDraftEmpty] = useState(board.emptyText);
+  const nameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emptyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (nameTimer.current) clearTimeout(nameTimer.current);
+    if (emptyTimer.current) clearTimeout(emptyTimer.current);
+  }, []);
+  function schedule(field: "label" | "emptyText", value: string) {
+    const timer = field === "label" ? nameTimer : emptyTimer;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => { timer.current = null; if (value.trim()) onUpdate({ [field]: value }); }, 350);
+  }
+  function commit(field: "label" | "emptyText", value: string) {
+    const timer = field === "label" ? nameTimer : emptyTimer;
+    if (!timer.current) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+    if (value.trim() && value !== board[field]) onUpdate({ [field]: value });
+  }
   const setRefs = useCallback((node: HTMLDivElement | null) => { setDragRef(node); setDropRef(node); }, [setDragRef, setDropRef]);
   const focusClass = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 
@@ -117,7 +136,7 @@ function BoardRow({ board, editing, shift, onEdit, onUpdate }: {
         <div className="grid gap-3 pb-4 pl-9 pr-2">
           <div>
             <label className="mb-1 block text-xs font-semibold" htmlFor={`board-name-${board.status}`}>Name</label>
-            <input className={`input max-w-sm text-sm ${focusClass}`} id={`board-name-${board.status}`} maxLength={80} onBlur={() => { if (!draftName.trim()) setDraftName(board.label); }} onChange={(event) => { const value = event.target.value; setDraftName(value); if (value.trim()) onUpdate({ label: value }); }} type="text" value={draftName} />
+            <input className={`input max-w-sm text-sm ${focusClass}`} id={`board-name-${board.status}`} maxLength={80} onBlur={() => { if (!draftName.trim()) setDraftName(board.label); else commit("label", draftName); }} onChange={(event) => { const value = event.target.value; setDraftName(value); schedule("label", value); }} type="text" value={draftName} />
           </div>
           <fieldset>
             <legend className="mb-1 text-xs font-semibold">Color</legend>
@@ -129,7 +148,7 @@ function BoardRow({ board, editing, shift, onEdit, onUpdate }: {
           </fieldset>
           <div>
             <label className="mb-1 block text-xs font-semibold" htmlFor={`board-empty-${board.status}`}>Empty state text</label>
-          <textarea className={`scrollbar-styled input max-w-sm resize-y text-sm ${focusClass}`} id={`board-empty-${board.status}`} maxLength={240} onBlur={() => { if (!draftEmpty.trim()) setDraftEmpty(board.emptyText); }} onChange={(event) => { const value = event.target.value; setDraftEmpty(value); if (value.trim()) onUpdate({ emptyText: value }); }} rows={2} value={draftEmpty} />
+          <textarea className={`scrollbar-styled input max-w-sm resize-y text-sm ${focusClass}`} id={`board-empty-${board.status}`} maxLength={240} onBlur={() => { if (!draftEmpty.trim()) setDraftEmpty(board.emptyText); else commit("emptyText", draftEmpty); }} onChange={(event) => { const value = event.target.value; setDraftEmpty(value); schedule("emptyText", value); }} rows={2} value={draftEmpty} />
           </div>
         </div>
       )}

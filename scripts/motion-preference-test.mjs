@@ -3,7 +3,11 @@ import { test } from "node:test";
 import { MOTION_MODES, motionIsOff } from "../src/lib/motion-mode.ts";
 import { getMotionMode, motionIsCurrentlyOff } from "../src/lib/general-preferences.ts";
 import { defaultSettings } from "../src/lib/settings-defaults.ts";
-import { setSettingsState } from "../src/lib/settings-store.ts";
+import { getSettingsState, setSettingsState } from "../src/lib/settings-store.ts";
+
+function setMotion(value) {
+  setSettingsState({ settings: { ...defaultSettings, motion: value }, revision: getSettingsState().revision + 1 });
+}
 
 test("Motion resolves System, On, and Off against the OS preference", () => {
   assert.deepEqual(MOTION_MODES, ["system", "on", "off"]);
@@ -21,16 +25,16 @@ test("stored Motion choice drives effective motion with the OS preference", () =
   Object.defineProperty(globalThis, "window", { configurable: true, value: { matchMedia: () => ({ matches: osReduced }) } });
   try {
     for (const [value, expected] of [["system", "system"], ["on", "on"], ["off", "off"]]) {
-      setSettingsState({ settings: { ...defaultSettings, motion: value }, revision: 0 });
+      setMotion(value);
       assert.equal(getMotionMode(), expected, `stored ${value}`);
     }
-    setSettingsState({ settings: { ...defaultSettings, motion: "on" }, revision: 0 });
+    setMotion("on");
     osReduced = true;
     assert.equal(motionIsCurrentlyOff(), false);
-    setSettingsState({ settings: { ...defaultSettings, motion: "system" }, revision: 0 });
+    setMotion("system");
     assert.equal(motionIsCurrentlyOff(), true);
     osReduced = false;
-    setSettingsState({ settings: { ...defaultSettings, motion: "off" }, revision: 0 });
+    setMotion("off");
     assert.equal(motionIsCurrentlyOff(), true);
   } finally {
     if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);

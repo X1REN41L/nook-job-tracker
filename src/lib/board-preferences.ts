@@ -1,8 +1,7 @@
 import { Status } from "@prisma/client";
-import { useSyncExternalStore } from "react";
 
 import { DEFAULT_BOARD_STATUSES } from "@/lib/general-preferences";
-import { getSettingsState, subscribeSettings, updateSettings } from "@/lib/settings-store";
+import { getSettingsState, updateSettings } from "@/lib/settings-store";
 import { STATUS_META } from "@/lib/status-meta";
 
 export const BOARD_STATUSES = DEFAULT_BOARD_STATUSES;
@@ -21,11 +20,9 @@ export function getBoards(): BoardConfiguration[] {
   return boards.length ? boards : DEFAULT_BOARDS;
 }
 export function saveBoards(boards: BoardConfiguration[] | ((current: BoardConfiguration[]) => BoardConfiguration[])) {
-  return updateSettings((settings) => ({ boards: typeof boards === "function" ? boards(settings.boards.length ? settings.boards : DEFAULT_BOARDS) : boards }))
-    .catch((error) => window.alert(error.message));
+  return updateSettings((settings) => ({ boards: typeof boards === "function" ? boards(settings.boards.length ? settings.boards : DEFAULT_BOARDS) : boards }));
 }
 export function resetBoards() { return saveBoards([]); }
-export function useBoards() { return useSyncExternalStore(subscribeSettings, getBoards, () => DEFAULT_BOARDS); }
 export function boardFor(boards: BoardConfiguration[], status: Status) { return boards.find((board) => board.status === status); }
 export function boardDot(boards: BoardConfiguration[], status: Status) {
   const board = boardFor(boards, status);

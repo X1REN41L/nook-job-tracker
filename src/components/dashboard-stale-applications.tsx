@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { getStaleApplications, StaleApplication } from "@/lib/dashboard-analytics";
 import { currentBrowserTimeZone } from "@/lib/application-date";
-import { getStaleApplicationThreshold, subscribeToPreferences } from "@/lib/general-preferences";
+import { useSettings } from "@/hooks/use-settings";
 import { STATUS_META } from "@/lib/status-meta";
 import type { ApplicationRecord } from "@/types/application";
 
@@ -86,7 +86,7 @@ export function DashboardStaleApplications({ today, refreshKey, applications, on
   onArchive: (application: ApplicationRecord) => void;
   archiveDisabled: boolean;
 }) {
-  const staleApplicationThreshold = useSyncExternalStore(subscribeToPreferences, getStaleApplicationThreshold, () => 15);
+  const staleApplicationThreshold = useSettings().staleApplicationThreshold;
   const [result, setResult] = useState<{ today: string; threshold: number; data: StaleData } | null>(null);
   const [failedToday, setFailedToday] = useState<string | null>(null);
 

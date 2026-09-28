@@ -62,14 +62,14 @@ const collisionDetectionStrategy: CollisionDetection = (args) => {
   return edgeCollision ? [edgeCollision] : closestCorners(args);
 };
 
-export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: {
+export function useBoardDrag({ sidebarCollapsed, onDrop }: {
   sidebarCollapsed: boolean;
-  setSidebarCollapsed: (collapsed: boolean) => void;
   onDrop: (event: DragEndEvent) => Promise<void>;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeDragSource, setActiveDragSource] = useState<DragSource | null>(null);
   const [isPointerNearRail, setIsPointerNearRail] = useState(false);
+  const [temporarilyExpanded, setTemporarilyExpanded] = useState(false);
   const sidebarEdgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartedCollapsed = useRef(false);
   const autoExpandedSidebar = useRef(false);
@@ -206,7 +206,7 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
     sidebarEdgeTimer.current = setTimeout(() => {
       sidebarEdgeTimer.current = null;
       autoExpandedSidebar.current = true;
-      setSidebarCollapsed(false);
+      setTemporarilyExpanded(true);
     }, SIDEBAR_EDGE_DWELL_MS);
   }
   useLayoutEffect(() => {
@@ -224,7 +224,7 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
     setPointerNearRail(false);
     if (autoExpandedSidebar.current) {
       autoExpandedSidebar.current = false;
-      setSidebarCollapsed(true);
+      setTemporarilyExpanded(false);
     }
     dragStartedCollapsed.current = false;
   }
@@ -236,6 +236,7 @@ export function useBoardDrag({ sidebarCollapsed, setSidebarCollapsed, onDrop }: 
 
   return {
     activeId,
+    temporarilyExpanded,
     activeDragSource,
     sensors,
     collisionDetection,

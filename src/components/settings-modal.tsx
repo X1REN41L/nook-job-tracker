@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
-import { useTheme } from "@/components/theme-provider";
 import { Columns3, DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
 
 import { ShortcutList } from "@/components/shortcut-list";
@@ -10,8 +9,10 @@ import { BoardSettings } from "@/components/board-settings";
 import { DeleteAllDataDialog } from "@/components/delete-all-data-dialog";
 import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-modal-shell";
 import { useDialogFocusTrap } from "@/hooks/use-dialog-focus-trap";
-import { useBoards } from "@/lib/board-preferences";
-import { DEFAULT_BOARD_KEY, DEFAULT_BOARD_STATUSES, MOTION_KEY, STALE_THRESHOLD_KEY, STALE_THRESHOLDS, STARTUP_PAGE_KEY, STARTUP_PAGES, getDefaultBoard, getMotionMode, getStaleApplicationThreshold, getStartupPage, setPreference, subscribeToPreferences } from "@/lib/general-preferences";
+import { useBoards } from "@/hooks/use-boards";
+import { useSettings } from "@/hooks/use-settings";
+import { useSettingsUpdate } from "@/hooks/use-settings-update";
+import { STALE_THRESHOLDS, STARTUP_PAGES } from "@/lib/general-preferences";
 import { MOTION_MODES } from "@/lib/motion-mode";
 
 type SettingsCategory = "general" | "board" | "shortcuts" | "backup";
@@ -24,7 +25,7 @@ const SETTINGS_CATEGORIES = [
 ] satisfies Array<{ id: SettingsCategory; label: string; Icon: typeof SlidersHorizontal }>;
 const subscribeToMount = () => () => {};
 
-export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll, onConfirmationChange, deleteDisabled, importProgress, returnFocusRef, suspendFocusTrap }: {
+export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll, onConfirmationChange, deleteDisabled, importProgress, returnFocusRef, suspendFocusTrap, showToast }: {
   isMac: boolean;
   onClose: () => void;
   onExport: () => void;
@@ -35,15 +36,18 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
   importProgress: { current: number; total: number } | null;
   returnFocusRef: RefObject<HTMLElement | null>;
   suspendFocusTrap: boolean;
+  showToast: (message: string) => void;
 }) {
   const [category, setCategory] = useState<SettingsCategory>("general");
-  const { theme, setTheme } = useTheme();
+  const settings = useSettings();
+  const theme = settings.theme;
+  const saveSettings = useSettingsUpdate(showToast);
   const mounted = useSyncExternalStore(subscribeToMount, () => true, () => false);
-  const defaultBoard = useSyncExternalStore(subscribeToPreferences, getDefaultBoard, () => DEFAULT_BOARD_STATUSES[0]);
-  const startupPage = useSyncExternalStore(subscribeToPreferences, getStartupPage, () => "dashboard");
-  const staleThreshold = useSyncExternalStore(subscribeToPreferences, getStaleApplicationThreshold, () => 15);
+  const defaultBoard = settings.defaultBoard;
+  const startupPage = settings.startupPage;
+  const staleThreshold = settings.staleApplicationThreshold;
   const boards = useBoards();
-  const motion = useSyncExternalStore(subscribeToPreferences, getMotionMode, () => "system");
+  const motion = settings.motion;
   const [importError, setImportError] = useState("");
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -135,7 +139,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                     <span className="text-sm font-semibold">Theme</span>
                     <div aria-label="Theme" className="flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5" role="group">
                       {(["system", "light", "dark"] as const).map((mode) => (
-                        <button key={mode} aria-label={`Use ${mode} theme`} aria-pressed={mounted && theme === mode} className={`flex h-8 w-9 items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${mounted && theme === mode ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`} disabled={!mounted} onClick={() => setTheme(mode)} type="button">
+                        <button key={mode} aria-label={`Use ${mode} theme`} aria-pressed={mounted && theme === mode} className={`flex h-8 w-9 items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${mounted && theme === mode ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`} disabled={!mounted} onClick={() => saveSettings({ theme: mode })} type="button">
                           <ThemeIcon mode={mode} />
                         </button>
                       ))}
@@ -143,7 +147,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                   </div>
                   <div className="flex min-h-16 items-center justify-between gap-3 py-3">
                     <label className="text-sm font-semibold" htmlFor="default-board">New Applications Default Board</label>
-                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="default-board" onChange={(event) => setPreference(DEFAULT_BOARD_KEY, event.target.value)} value={defaultBoard}>
+                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="default-board" onChange={(event) => saveSettings({ defaultBoard: event.target.value as typeof defaultBoard })} value={defaultBoard}>
                       {boards.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
                     </select>
                   </div>
@@ -152,7 +156,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                       <label className="text-sm font-semibold" htmlFor="startup-page">Startup Page</label>
                       <p className="mt-0.5 text-xs text-ink-soft">Choose where Nook opens.</p>
                     </div>
-                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="startup-page" onChange={(event) => setPreference(STARTUP_PAGE_KEY, event.target.value)} value={startupPage}>
+                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="startup-page" onChange={(event) => saveSettings({ startupPage: event.target.value as typeof startupPage })} value={startupPage}>
                       {STARTUP_PAGES.map((page) => <option key={page} value={page}>{page === "job-board" ? "Job Board" : page === "dashboard" ? "Dashboard" : "Interviews"}</option>)}
                     </select>
                   </div>
@@ -161,7 +165,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                       <label className="text-sm font-semibold" htmlFor="stale-threshold">Stale Application Threshold</label>
                       <p className="mt-0.5 text-xs text-ink-soft">Mark applications as stale after no activity for:</p>
                     </div>
-                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="stale-threshold" onChange={(event) => setPreference(STALE_THRESHOLD_KEY, event.target.value)} value={staleThreshold}>
+                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="stale-threshold" onChange={(event) => saveSettings({ staleApplicationThreshold: Number(event.target.value) as typeof staleThreshold })} value={staleThreshold}>
                       {STALE_THRESHOLDS.map((days) => <option key={days} value={days}>{days} days</option>)}
                     </select>
                   </div>
@@ -172,7 +176,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                     </div>
                     <div aria-label="Motion" className="flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5" role="group">
                       {MOTION_MODES.map((mode) => (
-                        <button key={mode} aria-pressed={motion === mode} className={`rounded-[8px] px-2.5 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${motion === mode ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`} onClick={() => setPreference(MOTION_KEY, mode)} type="button">{mode === "system" ? "System" : mode === "on" ? "On" : "Off"}</button>
+                        <button key={mode} aria-pressed={motion === mode} className={`rounded-[8px] px-2.5 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${motion === mode ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`} onClick={() => saveSettings({ motion: mode })} type="button">{mode === "system" ? "System" : mode === "on" ? "On" : "Off"}</button>
                       ))}
                     </div>
                   </div>
@@ -180,7 +184,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
               </div>
             )}
 
-            {category === "board" && <BoardSettings />}
+            {category === "board" && <BoardSettings showToast={showToast} />}
 
             {category === "shortcuts" && (
               <div>

@@ -30,6 +30,7 @@ type ApplicationSidebarProps = {
   headingRef: RefObject<HTMLHeadingElement | null>;
   searchInputRef: RefObject<HTMLInputElement | null>;
   settingsTriggerRef: RefObject<HTMLButtonElement | null>;
+  focusExpandOnCollapseRef: RefObject<boolean>;
   onSearchTermChange: (value: string) => void;
   onFilterChange: (filter: "all" | Status) => void;
   onToggleSidebar: () => void;
@@ -74,6 +75,7 @@ export function ApplicationSidebar({
   headingRef,
   searchInputRef,
   settingsTriggerRef,
+  focusExpandOnCollapseRef,
   onSearchTermChange,
   onFilterChange,
   onToggleSidebar,
@@ -97,6 +99,10 @@ export function ApplicationSidebar({
   const archivedSectionClassName = `sidebar-flex-section sidebar-archive-section ${archivedExpanded ? "is-expanded" : ""}`;
 
   useLayoutEffect(() => {
+    if (collapsed && focusExpandOnCollapseRef.current) {
+      pendingToggleFocusRef.current = true;
+      focusExpandOnCollapseRef.current = false;
+    }
     if (pendingToggleFocusRef.current !== collapsed) return;
     const button = (collapsed ? expandButtonRef : collapseButtonRef).current;
     if (!button) return;
@@ -115,7 +121,7 @@ export function ApplicationSidebar({
     };
     button.addEventListener("transitionend", handleTransitionEnd);
     return () => button.removeEventListener("transitionend", handleTransitionEnd);
-  }, [collapsed]);
+  }, [collapsed, focusExpandOnCollapseRef]);
 
   function handleToggleSidebar() {
     pendingToggleFocusRef.current = !collapsed;

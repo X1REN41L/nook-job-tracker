@@ -50,7 +50,6 @@
   --font-sans: var(--font-karla), ui-sans-serif, system-ui, sans-serif;
 }
 
-:root.light { color-scheme: light; }
 :root.dark { color-scheme: dark; }
 
 :root {

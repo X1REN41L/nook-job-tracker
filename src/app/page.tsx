@@ -1,5 +1,7 @@
-import { StartupRedirect } from "@/components/startup-redirect";
+import { redirect } from "next/navigation";
+import { readSettings } from "@/lib/database-settings";
 
-export default function HomePage() {
-  return <StartupRedirect />;
+export default async function HomePage() {
+  const { settings } = await readSettings();
+  redirect({ dashboard: "/dashboard", "job-board": "/jobs", interviews: "/interviews" }[settings.startupPage]);
 }

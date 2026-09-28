@@ -3,6 +3,7 @@ import { type APIRequestContext } from "@playwright/test";
 
 
 import { expect, readSettings, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
+import { DEFAULT_BOARDS } from "../../src/lib/board-preferences";
 
 const ownedIds: string[] = [];
 
@@ -119,6 +120,52 @@ test("the slash shortcut expands the sidebar and focuses application search", as
   await page.keyboard.press("/");
 
   await expect(page.getByRole("button", { name: "Collapse sidebar", exact: true })).toBeVisible();
-  test.fail(true, "REACT-002: async sidebar expansion leaves search inert when the shortcut's focus callback runs");
   await expect(page.getByRole("textbox", { name: "Search company or role" })).toBeFocused();
+});
+
+test("server settings appear in the first sidebar and board DOM", async ({ page, request }) => {
+  await resetSettings(request, { sidebarCollapsed: true, allApplicationsExpanded: false, motion: "off", theme: "dark", boards: DEFAULT_BOARDS.map((board) => board.status === "APPLIED" ? { ...board, label: "Custom Applied" } : board) });
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      const workspace = document.querySelector(".app-workspace");
+      if (!workspace || (window as typeof window & { firstNookDOM?: unknown }).firstNookDOM) return;
+      (window as typeof window & { firstNookDOM?: unknown }).firstNookDOM = {
+        collapsed: workspace.classList.contains("sidebar-collapsed"),
+        customBoard: workspace.textContent?.includes("Custom Applied"),
+        motion: document.documentElement.dataset.motion,
+        dark: document.documentElement.classList.contains("dark"),
+      };
+      observer.disconnect();
+    });
+    observer.observe(document, { childList: true, subtree: true });
+  });
+  await page.goto("/jobs");
+  await expect(page.locator(".app-workspace")).toHaveClass(/sidebar-collapsed/);
+  expect(await page.evaluate(() => (window as typeof window & { firstNookDOM?: unknown }).firstNookDOM)).toEqual({ collapsed: true, customBoard: true, motion: "off", dark: true });
+});
+
+test("rapid sidebar toggles preserve the final setting and collapse restores focus", async ({ page, request }) => {
+  const application = await createApplication(request);
+  await page.goto("/jobs");
+  await page.getByRole("button", { name: `Edit or archive ${application.role} at ${application.company}` }).focus();
+  await page.keyboard.press("ControlOrMeta+Shift+s");
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+Shift+s");
+  await page.keyboard.press("ControlOrMeta+Shift+s");
+  await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+  await expect.poll(async () => (await readSettings(request)).sidebarCollapsed).toBe(true);
+});
+
+test("board name draft makes one settings write after typing", async ({ page }) => {
+  await page.goto("/jobs");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Board", exact: true }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).first().click();
+  const name = page.getByLabel("Name", { exact: true });
+  let writes = 0;
+  page.on("request", (request) => { if (request.method() === "PATCH" && request.url().endsWith("/api/settings")) writes++; });
+  await name.fill("Applied custom name");
+  await expect(page.getByText("Applied custom name", { exact: true }).first()).toBeVisible();
+  await name.blur();
+  expect(writes).toBe(1);
 });

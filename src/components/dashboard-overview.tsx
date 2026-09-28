@@ -6,7 +6,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
 import type { getDashboardOverview } from "@/lib/dashboard-analytics";
 import { currentBrowserTimeZone } from "@/lib/application-date";
-import { getStaleApplicationThreshold, subscribeToPreferences } from "@/lib/general-preferences";
+import { useSettings } from "@/hooks/use-settings";
 
 type OverviewData = Awaited<ReturnType<typeof getDashboardOverview>>;
 type Rate = OverviewData["interviewRate"];
@@ -99,7 +99,7 @@ function UpcomingInterviewsPreview({ items, loading, error }: { items: OverviewD
 }
 
 export function DashboardOverview({ today, refreshKey }: { today: string; refreshKey: unknown }) {
-  const staleApplicationThreshold = useSyncExternalStore(subscribeToPreferences, getStaleApplicationThreshold, () => 15);
+  const staleApplicationThreshold = useSettings().staleApplicationThreshold;
   const [result, setResult] = useState<{ today: string; threshold: number; data: OverviewData } | null>(null);
   const [error, setError] = useState(false);
 

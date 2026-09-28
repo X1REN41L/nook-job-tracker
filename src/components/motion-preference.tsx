@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
-import { getMotionMode, subscribeToPreferences } from "@/lib/general-preferences";
+import { useEffect } from "react";
+import { useSettings } from "@/hooks/use-settings";
 
 export function MotionPreference() {
-  const mode = useSyncExternalStore(subscribeToPreferences, getMotionMode, () => "system");
+  const mode = useSettings().motion;
 
   useEffect(() => {
     document.documentElement.dataset.motion = mode;

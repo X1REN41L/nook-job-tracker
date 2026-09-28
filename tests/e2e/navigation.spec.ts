@@ -7,12 +7,15 @@ let applicationId: string | null = null;
 
 test("root redirects to the configured startup page", async ({ page, request }) => {
   test.setTimeout(90_000);
+  let settingsRequests = 0;
+  page.on("request", (request) => { if (request.url().endsWith("/api/settings")) settingsRequests++; });
   await resetSettings(request, { startupPage: "job-board" });
   await page.goto("/");
   await expect(page).toHaveURL(/\/jobs$/, { timeout: 30_000 });
   await resetSettings(request, { startupPage: "interviews" });
   await page.goto("/");
   await expect(page).toHaveURL(/\/interviews$/, { timeout: 30_000 });
+  expect(settingsRequests).toBe(0);
 });
 
 test.beforeEach(async () => {

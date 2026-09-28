@@ -5,6 +5,7 @@ import localFont from "next/font/local";
 import { ThemeProvider } from "@/components/theme-provider";
 import { MotionPreference } from "@/components/motion-preference";
 import { readSettings } from "@/lib/database-settings";
+import { applyTheme } from "@/lib/apply-theme";
 import nookIcon from "./nook-icon.png";
 
 import "./globals.css";
@@ -33,9 +34,9 @@ export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const initialState = await readSettings();
-  const themeScript = `document.documentElement.classList.toggle("dark", ${JSON.stringify(initialState.settings.theme)} === "dark" || (${JSON.stringify(initialState.settings.theme)} === "system" && matchMedia("(prefers-color-scheme: dark)").matches));`;
+  const themeScript = `(${applyTheme.toString()})(${JSON.stringify(initialState.settings.theme)}, matchMedia("(prefers-color-scheme: dark)").matches);`;
   return (
-    <html lang="en" className={`${fraunces.variable} ${karla.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${fraunces.variable} ${karla.variable}`} data-motion={initialState.settings.motion} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         <ThemeProvider initialState={initialState}>

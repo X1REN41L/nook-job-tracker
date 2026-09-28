@@ -28,9 +28,12 @@ import { ARCHIVED_DROP_ID, SIDEBAR_EDGE_DROP_ID, useBoardDrag } from "@/hooks/us
 import { useDashboardShortcuts } from "@/hooks/use-dashboard-shortcuts";
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { useToastUndo, type ToastUndo } from "@/hooks/use-toast-undo";
+import { useBoards } from "@/hooks/use-boards";
+import { useSettings } from "@/hooks/use-settings";
+import { useSettingsUpdate } from "@/hooks/use-settings-update";
 import { currentLocalDate } from "@/lib/application-date";
-import { getSettingsState, subscribeSettings, setSettingsState, updateSettings } from "@/lib/settings-store";
-import { BOARD_STATUSES, boardLabel, useBoards } from "@/lib/board-preferences";
+import { setSettingsState } from "@/lib/settings-store";
+import { BOARD_STATUSES, boardLabel } from "@/lib/board-preferences";
 import { applicationApiPath } from "@/lib/application-api-path";
 import { applicationInputSchema, interviewDateSchema } from "@/lib/application-schema";
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
@@ -67,9 +70,6 @@ function subscribeToSidebarPreference(onStoreChange: () => void) {
   };
 }
 
-function getSidebarPreference() {
-  return getSettingsState().settings.sidebarCollapsed;
-}
 
 function getSidebarWidth() {
   try {
@@ -82,13 +82,6 @@ function getSidebarWidth() {
   }
 }
 
-function getArchivedPreference() {
-  return getSettingsState().settings.archivedExpanded;
-}
-
-function getAllApplicationsPreference() {
-  return getSettingsState().settings.allApplicationsExpanded;
-}
 
 function subscribeToLocalDate(onStoreChange: () => void) {
   const now = new Date();
@@ -105,6 +98,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const router = useRouter();
   const boardScrollRef = useScrollbarActivity<HTMLDivElement>();
   const boards = useBoards();
+  const settings = useSettings();
   const [applications, setApplications] = useState(initialApplications);
   const [form, setForm] = useState<JobFormState>(blankForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -126,12 +120,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const isMac = typeof navigator !== "undefined" && isMacPlatform();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
-  const sidebarCollapsed = useSyncExternalStore(subscribeSettings, getSidebarPreference, () => false);
+  const sidebarCollapsed = settings.sidebarCollapsed;
   const sidebarWidth = useSyncExternalStore(subscribeToSidebarPreference, getSidebarWidth, () => DEFAULT_SIDEBAR_WIDTH);
-  const archivedExpanded = useSyncExternalStore(subscribeSettings, getArchivedPreference, () => false);
-  const allApplicationsExpanded = useSyncExternalStore(subscribeSettings, getAllApplicationsPreference, () => true);
+  const archivedExpanded = settings.archivedExpanded;
+  const allApplicationsExpanded = settings.allApplicationsExpanded;
   const today = useSyncExternalStore(subscribeToLocalDate, currentLocalDate, getServerLocalDate);
   const { toast, deleteRecovery, undoing, showToast, clearApplicationUndo, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
+  const saveSettings = useSettingsUpdate(showToast);
   const lastToastRef = useRef(toast);
   if (toast) lastToastRef.current = toast;
   const visibleToast = toast ?? lastToastRef.current;
@@ -147,6 +142,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingSearchFocusRef = useRef(false);
+  const focusExpandOnCollapseRef = useRef(false);
   const interviewSearchRef = useRef<HTMLInputElement | null>(null);
   const upcomingTabRef = useRef<HTMLButtonElement | null>(null);
   const pastTabRef = useRef<HTMLButtonElement | null>(null);
@@ -154,11 +151,27 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const submissionInFlight = useRef(false);
   const dndContextId = useId();
-  const { activeId, activeDragSource, sensors, collisionDetection, autoScroll, onDragStart, onDragMove, onDragEnd, onDragCancel } = useBoardDrag({
+  const { activeId, activeDragSource, temporarilyExpanded, sensors, collisionDetection, autoScroll, onDragStart, onDragMove, onDragEnd, onDragCancel } = useBoardDrag({
     sidebarCollapsed,
-    setSidebarCollapsed,
     onDrop: handleDrop,
   });
+  const effectiveSidebarCollapsed = sidebarCollapsed && !temporarilyExpanded;
+  useEffect(() => {
+    if (!pendingSearchFocusRef.current || effectiveSidebarCollapsed || !allApplicationsExpanded) return;
+    const input = searchInputRef.current;
+    if (!input) return;
+    let frame = 0;
+    const focusWhenVisible = () => {
+      if (input.closest("[inert]") || getComputedStyle(input).visibility !== "visible") {
+        frame = requestAnimationFrame(focusWhenVisible);
+        return;
+      }
+      input.focus();
+      pendingSearchFocusRef.current = false;
+    };
+    frame = requestAnimationFrame(focusWhenVisible);
+    return () => cancelAnimationFrame(frame);
+  }, [effectiveSidebarCollapsed, allApplicationsExpanded]);
   const cancelDelete = useCallback(() => {
     setPendingDelete(null);
     if (reopenModalAfterDelete.current) setIsModalOpen(true);
@@ -166,11 +179,19 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }, []);
 
   function setSidebarCollapsed(nextCollapsed: boolean) {
-    void updateSettings({ sidebarCollapsed: nextCollapsed }).catch((error) => showToast(error.message));
+    if (nextCollapsed) {
+      const active = document.activeElement;
+      if (active?.closest(".sidebar-content, .sidebar-resize-handle")) focusExpandOnCollapseRef.current = true;
+    }
+    saveSettings({ sidebarCollapsed: nextCollapsed });
   }
 
   function toggleSidebar() {
-    setSidebarCollapsed(!sidebarCollapsed);
+    if (!sidebarCollapsed) {
+      const active = document.activeElement;
+      if (active?.closest(".sidebar-content, .sidebar-resize-handle")) focusExpandOnCollapseRef.current = true;
+    }
+    saveSettings((current) => ({ sidebarCollapsed: !current.sidebarCollapsed }));
   }
 
   function saveSidebarWidth(width: number) {
@@ -259,11 +280,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   useEffect(() => () => resizeCleanupRef.current?.(), []);
 
   function toggleArchived() {
-    void updateSettings({ archivedExpanded: !archivedExpanded }).catch((error) => showToast(error.message));
+    saveSettings((current) => ({ archivedExpanded: !current.archivedExpanded }));
   }
 
   function toggleAllApplications() {
-    void updateSettings({ allApplicationsExpanded: !allApplicationsExpanded }).catch((error) => showToast(error.message));
+    saveSettings((current) => ({ allApplicationsExpanded: !current.allApplicationsExpanded }));
   }
 
   async function insertApplications(backup: BackupSnapshot) {
@@ -659,9 +680,15 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     }
     if (page !== "job-board") return false;
     if (!searchInputRef.current) return false;
+    pendingSearchFocusRef.current = true;
     if (sidebarCollapsed) setSidebarCollapsed(false);
     if (!allApplicationsExpanded) toggleAllApplications();
-    requestAnimationFrame(() => requestAnimationFrame(() => searchInputRef.current?.focus()));
+    if (!sidebarCollapsed && allApplicationsExpanded) {
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+        pendingSearchFocusRef.current = false;
+      });
+    }
     return true;
   }
 
@@ -799,7 +826,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       >
         <div
           ref={workspaceRef}
-          className={`app-workspace relative grid min-h-0 flex-1 overflow-hidden ${sidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}
+          className={`app-workspace relative grid min-h-0 flex-1 overflow-hidden ${effectiveSidebarCollapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}
           style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
         >
         <ApplicationSidebar
@@ -808,7 +835,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           archivedItems={archivedItems}
           totalApplications={applications.length}
           upcomingInterviewCount={upcomingInterviewCount}
-          collapsed={sidebarCollapsed}
+          collapsed={effectiveSidebarCollapsed}
           width={sidebarWidth}
           page={page}
           dashboardSection={dashboardSection}
@@ -819,6 +846,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           activeFilter={activeFilter}
           headingRef={sidebarHeadingRef}
           searchInputRef={searchInputRef}
+          focusExpandOnCollapseRef={focusExpandOnCollapseRef}
           settingsTriggerRef={settingsTriggerRef}
           onSearchTermChange={setSearchTerm}
           onFilterChange={setActiveFilter}
@@ -914,6 +942,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
       <MotionPresence open={settingsOpen}>
         <SettingsModal
+          showToast={showToast}
           isMac={isMac}
           onClose={() => setSettingsOpen(false)}
           onExport={exportApplications}
