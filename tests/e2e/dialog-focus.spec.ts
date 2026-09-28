@@ -28,7 +28,7 @@ async function openJobBoard(page: Page) {
 }
 
 function sidebarRow(page: Page, application: { company: string; role: string }) {
-  return page.getByRole("button", { name: `Edit or archive ${application.role} at ${application.company}`, exact: true });
+  return page.getByRole("button", { name: `Edit ${application.role} at ${application.company}`, exact: true });
 }
 
 async function assertFocusCycle(page: Page, dialog: Locator, controls: Locator[], initialIndex: number) {

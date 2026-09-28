@@ -520,7 +520,7 @@ body.sidebar-resizing-active * {
     transition: box-shadow var(--motion-fast) var(--motion-ease);
   }
 
-  .kanban-card-focus:focus-visible {
+  .kanban-card-focus:has(> .kanban-card-action:focus-visible) {
     outline: none;
     border-color: var(--color-forest);
     box-shadow: 0 0 0 2px var(--color-forest-tint), var(--shadow-nook);

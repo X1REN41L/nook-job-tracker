@@ -101,7 +101,7 @@ test("general shortcuts work across routes while page actions remain scoped", as
     await expect(shortcuts.getByText(modifier === "Meta" ? "⌘ ⇧ ," : "Ctrl + Shift + ,", { exact: true })).toBeVisible();
     await expect(shortcuts.getByRole("region", { name: "Job Board" }).getByText(modifier === "Meta" ? "⌥ A" : "Alt + A", { exact: true })).toBeVisible();
     await expect(shortcuts.getByText("G J", { exact: true })).toBeVisible();
-    await expect(shortcuts.getByText("← / →", { exact: true })).toBeVisible();
+    await expect(shortcuts.getByText("← / →", { exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(shortcuts).toHaveCount(0);
 
@@ -207,6 +207,9 @@ test("keyboard-only navigation, card focus, archive, delete, and undo", async ({
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Upcoming" })).toHaveAttribute("aria-selected", "true");
   await search.evaluate((element) => (element as HTMLElement).blur());
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Upcoming" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Upcoming" }).focus();
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Past" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowLeft");

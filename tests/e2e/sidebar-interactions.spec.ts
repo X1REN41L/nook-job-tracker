@@ -100,7 +100,7 @@ test("archives a focused application and restores it from Archive", async ({ pag
 
   const archiveToggle = page.getByRole("button", { name: "Archived 1", exact: true });
   await expect(archiveToggle).toHaveAttribute("aria-expanded", "true");
-  const archivedRow = page.getByRole("button", { name: `Edit or move archived ${application.role} at ${application.company}`, exact: true });
+  const archivedRow = page.getByRole("button", { name: `Edit archived ${application.role} at ${application.company}`, exact: true });
   await expect(archivedRow).toBeVisible();
   const restoredResponse = page.waitForResponse((response) =>
     response.request().method() === "PATCH" && response.url().endsWith(`/api/applications/${application.id}`),
@@ -147,7 +147,7 @@ test("server settings appear in the first sidebar and board DOM", async ({ page,
 test("rapid sidebar toggles preserve the final setting and collapse restores focus", async ({ page, request }) => {
   const application = await createApplication(request);
   await page.goto("/jobs");
-  await page.getByRole("button", { name: `Edit or archive ${application.role} at ${application.company}` }).focus();
+  await page.getByRole("button", { name: `Edit ${application.role} at ${application.company}` }).focus();
   await page.keyboard.press("ControlOrMeta+Shift+s");
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeFocused();
   await page.keyboard.press("ControlOrMeta+Shift+s");

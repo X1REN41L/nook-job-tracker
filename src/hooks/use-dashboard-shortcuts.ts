@@ -26,7 +26,6 @@ type DashboardShortcutOptions = {
   onUndo: () => void;
   onToggleSidebar: () => void;
   onNavigate: (path: string) => void;
-  onSwitchInterviewTab: (direction: "left" | "right") => boolean;
   onMoveApplicationFocus: (direction: "up" | "down" | "left" | "right") => boolean;
   onArchiveFocused: (application: ApplicationRecord) => void;
   onDeleteFocused: (application: ApplicationRecord, focused: HTMLElement | null) => void;
@@ -52,7 +51,6 @@ export function useDashboardShortcuts({
   onUndo,
   onToggleSidebar,
   onNavigate,
-  onSwitchInterviewTab,
   onMoveApplicationFocus,
   onArchiveFocused,
   onDeleteFocused,
@@ -83,10 +81,6 @@ export function useDashboardShortcuts({
       if (destination) {
         event.preventDefault();
         onNavigate(destination);
-        return;
-      }
-      if (shortcut === "switch-interview-tabs") {
-        if (onSwitchInterviewTab(event.key === "ArrowLeft" ? "left" : "right")) event.preventDefault();
         return;
       }
       if (shortcut === "focus-application-up" || shortcut === "focus-application-down" || shortcut === "focus-column-left" || shortcut === "focus-column-right") {

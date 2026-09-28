@@ -43,7 +43,6 @@ test("both shortcut panels show the same complete five sections on every route",
     ] },
     { heading: "Interviews", rows: [
       { action: "Search", keys: "/" },
-      { action: "Switch tabs", keys: "← / →" },
     ] },
   ];
 
@@ -82,7 +81,7 @@ async function expectRowsAligned(container: Locator) {
       verticalCentersApart: Math.abs((label.top + label.bottom) / 2 - (key.top + key.bottom) / 2),
     };
   }));
-  expect(rows).toHaveLength(21);
+  expect(rows).toHaveLength(20);
   for (const row of rows) {
     expect(row.childCount).toBe(2);
     expect(row.labelRight).toBeLessThan(row.keyLeft);

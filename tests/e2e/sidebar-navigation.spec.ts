@@ -8,7 +8,7 @@ test("shows ordered sidebar destinations, marks the active route, and opens Sett
   await expect(links).toHaveCount(3);
   await expect(links.nth(0)).toHaveAccessibleName("Dashboard");
   await expect(links.nth(1)).toHaveAccessibleName("Job Board");
-  await expect(links.nth(2)).toHaveAccessibleName("Interviews");
+  await expect(links.nth(2)).toHaveAccessibleName("Interviews, 0 upcoming");
   await expect(links.nth(0)).toHaveAttribute("aria-current", "page");
   await expect(navigation.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
 
@@ -24,9 +24,9 @@ test("shows ordered sidebar destinations, marks the active route, and opens Sett
   await expect(page).toHaveURL(/\/jobs$/);
   await expect(navigation.getByRole("link", { name: "Job Board", exact: true })).toHaveAttribute("aria-current", "page");
 
-  await navigation.getByRole("link", { name: "Interviews", exact: true }).click();
+  await navigation.getByRole("link", { name: "Interviews, 0 upcoming", exact: true }).click();
   await expect(page).toHaveURL(/\/interviews$/);
-  await expect(navigation.getByRole("link", { name: "Interviews", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("link", { name: "Interviews, 0 upcoming", exact: true })).toHaveAttribute("aria-current", "page");
 
   await navigation.getByRole("link", { name: "Dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);

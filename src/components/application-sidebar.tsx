@@ -202,7 +202,7 @@ export function ApplicationSidebar({
               </Link>
               <Link
                 aria-current={page === "interviews" ? "page" : undefined}
-                aria-label="Interviews"
+                aria-label={`Interviews, ${upcomingInterviewCount} upcoming`}
                 className={`${mainNavItemClass} ${page === "interviews" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
                 href="/interviews"
                 title={collapsed ? "Interviews" : undefined}
@@ -237,7 +237,7 @@ export function ApplicationSidebar({
             <>
               <div className={allApplicationsSectionClassName}>
                 <div className={`shrink-0 border-b px-4.5 py-3 ${allApplicationsExpanded ? "border-transparent" : "border-line"}`}>
-                  <h2 aria-label="All applications" className="font-serif text-base font-semibold outline-none" id={allApplicationsHeadingId} ref={headingRef} tabIndex={-1}>
+                  <h2 className="font-serif text-base font-semibold outline-none" id={allApplicationsHeadingId} ref={headingRef} tabIndex={-1}>
                     <button
                       aria-controls={allApplicationsContentId}
                       aria-expanded={allApplicationsExpanded}
@@ -405,7 +405,7 @@ function SidebarApplicationRow({ application, boards, disabled, draggable = true
       onClick={() => { if (!disabled && !isDragging) onEdit(application); }}
       type="button"
       {...(draggable ? listeners : {})}
-      aria-label={`${draggable ? "Edit or archive" : "Edit"} ${application.role} at ${application.company}`}
+      aria-label={`Edit ${application.role} at ${application.company}`}
       onKeyDown={(event) => {
         if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onEdit(application); }
       }}
@@ -517,7 +517,7 @@ function ArchivedRow({ application, boards, disabled, onEdit, onRequestDelete, o
         onClick={() => { if (!disabled && !isDragging) onEdit(application); }}
         type="button"
         {...listeners}
-        aria-label={`Edit or move archived ${application.role} at ${application.company}`}
+        aria-label={`Edit archived ${application.role} at ${application.company}`}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onEdit(application); }
         }}

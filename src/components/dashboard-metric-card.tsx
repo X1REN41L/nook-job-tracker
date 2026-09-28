@@ -16,7 +16,7 @@ export function DashboardMetricCard({ label, value, detail, coverage }: {
 }) {
   return (
     <div className="flex min-h-36 min-w-0 flex-col rounded-nook border border-line bg-paper p-4">
-      <h2 className="min-h-10 text-sm font-medium leading-5 text-ink-soft">{label}</h2>
+      <p className="min-h-10 text-sm font-medium leading-5 text-ink-soft">{label}</p>
       <p className="mt-2 font-serif text-2xl font-semibold leading-tight text-ink">{value}</p>
       <p className="mt-1 text-xs text-ink-soft">{detail}</p>
       {coverage && !coverage.isComplete && (

@@ -97,7 +97,7 @@ test("shows dated interview details in date order and groups them by day", async
   await expect(page.getByRole("tab", { name: "Past" })).toHaveAttribute("aria-selected", "false");
   await expect(page.getByRole("tabpanel")).not.toHaveAttribute("tabindex", "0");
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
-  await expect(navigation.getByRole("link", { name: "Interviews", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(navigation.getByRole("link", { name: "Interviews, 3 upcoming", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("upcoming-interview-count")).toHaveText("3");
   await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Tomorrow", exact: true })).toBeVisible();
@@ -143,10 +143,10 @@ test("searches by role and company within the selected tab and supports keyboard
 
   const upcomingTab = page.getByRole("tab", { name: "Upcoming" });
   await upcomingTab.focus();
-  await page.keyboard.press("Tab");
   const pastTab = page.getByRole("tab", { name: "Past" });
+  await expect(pastTab).toHaveAttribute("tabindex", "-1");
+  await page.keyboard.press("ArrowRight");
   await expect(pastTab).toBeFocused();
-  await page.keyboard.press("Enter");
   await expect(pastTab).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("heading", { name: /Research Lead.*Acme Legacy/ })).toBeVisible();
   await page.keyboard.press("ArrowLeft");

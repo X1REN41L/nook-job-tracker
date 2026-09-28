@@ -46,7 +46,6 @@ export const shortcutDefinitions = [
   { id: "focus-column-left", action: "Previous column", bindings: [{ kind: "key", key: "ArrowLeft" }], section: "Job Board", page: "job-board" },
   { id: "focus-column-right", action: "Next column", bindings: [{ kind: "key", key: "ArrowRight" }], section: "Job Board", page: "job-board" },
   { id: "search-interviews", action: "Search", bindings: [{ kind: "key", key: "/" }], section: "Interviews", page: "interviews" },
-  { id: "switch-interview-tabs", action: "Switch tabs", bindings: [{ kind: "key", key: "ArrowLeft" }, { kind: "key", key: "ArrowRight" }], section: "Interviews", page: "interviews" },
 ] as const satisfies readonly ShortcutDefinition[];
 
 export type DashboardShortcut = (typeof shortcutDefinitions)[number]["id"];

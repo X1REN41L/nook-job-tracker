@@ -1,6 +1,6 @@
 "use client";
 
-import { closestCenter, DndContext, KeyboardSensor, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragOverEvent, type DragStartEvent, type KeyboardCoordinateGetter } from "@dnd-kit/core";
+import { closestCenter, DndContext, type Announcements, KeyboardSensor, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragOverEvent, type DragStartEvent, type KeyboardCoordinateGetter } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -61,6 +61,35 @@ export function BoardSettings({ showToast }: { showToast: (message: string) => v
     if (over) setDrag((current) => current ? { ...current, over } : current);
   }
 
+  function reorderAnnouncement(id: string | number | undefined) {
+    const status = String(id ?? "").replace("reorder:", "");
+    const index = boards.findIndex((board) => board.status === status);
+    return index < 0 ? null : { status, label: boards[index].label, position: `position ${index + 1} of ${boards.length}` };
+  }
+
+  const announcements: Announcements = {
+    onDragStart: ({ active }) => {
+      const board = reorderAnnouncement(active.id);
+      return board ? `Picked up ${board.label} board. It is in ${board.position}.` : undefined;
+    },
+    onDragOver: ({ active, over }) => {
+      const board = reorderAnnouncement(active.id);
+      const target = reorderAnnouncement(over?.id);
+      if (!board || !target || target.status === board.status) return undefined;
+      return `${board.label} board is over ${target.label}, ${target.position}.`;
+    },
+    onDragEnd: ({ active, over }) => {
+      const board = reorderAnnouncement(active.id);
+      const target = reorderAnnouncement(over?.id);
+      if (!board) return undefined;
+      return target && target.status !== board.status ? `${board.label} board was moved to ${target.position}.` : `${board.label} board was not moved.`;
+    },
+    onDragCancel: ({ active }) => {
+      const board = reorderAnnouncement(active.id);
+      return board ? `Reordering canceled. ${board.label} board stays in ${board.position}.` : undefined;
+    },
+  };
+
   const activeIndex = drag ? boards.findIndex((board) => board.status === drag.active) : -1;
   const overIndex = drag ? boards.findIndex((board) => board.status === drag.over) : -1;
 
@@ -68,7 +97,7 @@ export function BoardSettings({ showToast }: { showToast: (message: string) => v
     <div>
       <h3 className="font-serif text-lg font-semibold">Board</h3>
       <p className="mt-1 text-sm text-ink-soft">Customize board names, colors, empty states, and order.</p>
-      <DndContext accessibility={{ screenReaderInstructions: { draggable: "Press Space or Enter to pick up a board. Use Up and Down Arrow to move it. Press Space or Enter to drop, or Escape to cancel." } }} collisionDetection={closestCenter} onDragCancel={() => setDrag(null)} onDragEnd={reorder} onDragOver={moveDrag} onDragStart={startDrag} sensors={sensors}>
+      <DndContext accessibility={{ announcements, screenReaderInstructions: { draggable: "Press Space or Enter to pick up a board. Use Up and Down Arrow to move it. Press Space or Enter to drop, or Escape to cancel." } }} collisionDetection={closestCenter} onDragCancel={() => setDrag(null)} onDragEnd={reorder} onDragOver={moveDrag} onDragStart={startDrag} sensors={sensors}>
         <div className="mt-5 divide-y divide-line border-y border-line">
           {boards.map((board, index) => (
             <BoardRow key={board.status} board={board} editing={editing === board.status} shift={drag && index !== activeIndex && overIndex >= 0 && ((activeIndex < index && index <= overIndex) || (overIndex <= index && index < activeIndex)) ? (activeIndex < overIndex ? -drag.height : drag.height) : 0} onEdit={() => setEditing(editing === board.status ? null : board.status)} onUpdate={(patch) => update(board.status, patch)} />

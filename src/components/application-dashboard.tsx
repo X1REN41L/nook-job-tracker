@@ -96,7 +96,7 @@ function getServerLocalDate() {
 
 export function ApplicationDashboard({ initialApplications, page, dashboardSection = "overview" }: { initialApplications: ApplicationRecord[]; page: ApplicationPageName; dashboardSection?: DashboardSection }) {
   const router = useRouter();
-  const boardScrollRef = useScrollbarActivity<HTMLDivElement>();
+  const boardScrollRef = useScrollbarActivity<HTMLElement>();
   const boards = useBoards();
   const settings = useSettings();
   const [applications, setApplications] = useState(initialApplications);
@@ -145,8 +145,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const pendingSearchFocusRef = useRef(false);
   const focusExpandOnCollapseRef = useRef(false);
   const interviewSearchRef = useRef<HTMLInputElement | null>(null);
-  const upcomingTabRef = useRef<HTMLButtonElement | null>(null);
-  const pastTabRef = useRef<HTMLButtonElement | null>(null);
   const shortcutTriggerRef = useRef<HTMLElement | null>(null);
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const submissionInFlight = useRef(false);
@@ -700,15 +698,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     return true;
   }
 
-  function switchInterviewTab(direction: "left" | "right") {
-    if (page !== "interviews") return false;
-    const target = direction === "left" ? upcomingTabRef.current : pastTabRef.current;
-    if (!target) return false;
-    target.click();
-    target.focus();
-    return true;
-  }
-
   function moveApplicationFocus(direction: "up" | "down" | "left" | "right") {
     const focus = (element: HTMLElement | undefined) => {
       if (!element) return false;
@@ -771,7 +760,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     onUndo: () => { void undoLatestChange(true); },
     onToggleSidebar: toggleSidebar,
     onNavigate: (path) => router.push(path),
-    onSwitchInterviewTab: switchInterviewTab,
     onMoveApplicationFocus: moveApplicationFocus,
     onArchiveFocused: (application) => {
       if (application.archived) return;
@@ -781,7 +769,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   });
 
   return (
-    <main className="select-none-ui flex h-screen flex-col overflow-hidden bg-cream text-ink">
+    <div className="select-none-ui flex h-screen flex-col overflow-hidden bg-cream text-ink">
       {page === "job-board" && (
         <button aria-label="Add job" className="btn-primary fixed bottom-6 right-6 z-50 flex origin-bottom-right scale-[1.2] items-center gap-2 shadow-lg" onClick={openAddModal} type="button">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
@@ -870,12 +858,15 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onRequestDelete={(application, trigger) => requestDelete(application, trigger, false)}
           onRestore={(application) => moveApplication(application, application.status, true, undefined, false)}
         />
-        <div ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto py-6">
+        <main ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto py-6">
           <div className={`page-shell ${page === "job-board" ? "h-full" : ""}`}>
             {page === "job-board" ? (
-              <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingId={movingId} onEdit={startEdit} />
+              <>
+                <h1 className="sr-only">Job Board</h1>
+                <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingId={movingId} onEdit={startEdit} />
+              </>
             ) : page === "interviews" ? (
-              <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} searchInputRef={interviewSearchRef} upcomingTabRef={upcomingTabRef} pastTabRef={pastTabRef} />
+              <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} searchInputRef={interviewSearchRef} />
             ) : (
               dashboardSection === "overview" ? (
                 <DashboardOverview today={today} refreshKey={applications} />
@@ -893,7 +884,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
               )
             )}
           </div>
-        </div>
+        </main>
 
         </div>
         {activeApplication && typeof document !== "undefined"
@@ -1001,6 +992,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

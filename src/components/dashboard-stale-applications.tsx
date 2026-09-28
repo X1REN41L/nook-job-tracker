@@ -5,7 +5,8 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { getStaleApplications, StaleApplication } from "@/lib/dashboard-analytics";
 import { currentBrowserTimeZone } from "@/lib/application-date";
 import { useSettings } from "@/hooks/use-settings";
-import { STATUS_META } from "@/lib/status-meta";
+import { useBoards } from "@/hooks/use-boards";
+import { boardLabel } from "@/lib/board-preferences";
 import type { ApplicationRecord } from "@/types/application";
 
 type StaleData = Awaited<ReturnType<typeof getStaleApplications>>;
@@ -24,6 +25,7 @@ function StaleApplicationRow({ application, onEdit, onArchive, archiveDisabled }
   onArchive: () => void;
   archiveDisabled: boolean;
 }) {
+  const boards = useBoards();
   return (
     <li className="stale-application-row relative min-w-0">
       <button
@@ -35,7 +37,7 @@ function StaleApplicationRow({ application, onEdit, onArchive, archiveDisabled }
           {application.role} <span className="font-medium text-ink-soft">— {application.company}</span>
         </span>
         <span className="mt-1.5 flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm text-ink-soft">
-          <span>{application.status === "ONLINE_ASSESSMENT" ? "Online Assessment" : STATUS_META[application.status].label}</span>
+          <span>{boardLabel(boards, application.status)}</span>
           <span>Last status update {application.staleDays} {application.staleDays === 1 ? "day" : "days"} ago</span>
         </span>
       </button>

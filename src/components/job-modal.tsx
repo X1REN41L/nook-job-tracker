@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import { useRef } from "react";
 import { Status } from "@prisma/client";
 
-import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
+import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { Dialog } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
 
@@ -18,8 +18,6 @@ export type JobFormState = {
   notes: string;
   jobUrl: string;
 };
-
-const statuses = Object.values(Status);
 
 export function JobModal({
   boards,
@@ -107,9 +105,9 @@ export function JobModal({
                 onChange={(e) => onChangeField("status", e.target.value as Status)}
                 value={form.status}
               >
-                {statuses.map((status) => (
-                  <option key={status} value={status}>
-                    {boardLabel(boards, status)}
+                {boards.map((board) => (
+                  <option key={board.status} value={board.status}>
+                    {board.label}
                   </option>
                 ))}
               </select>

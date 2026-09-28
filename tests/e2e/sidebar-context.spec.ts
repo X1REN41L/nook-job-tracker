@@ -87,14 +87,14 @@ test("keeps Job Board filters, search, and archive controls on its route", async
   await page.reload();
 
   await expect(page).toHaveURL(/\/jobs$/);
-  await expect(page.getByRole("heading", { name: "All applications", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All applications 2", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Search company or role" })).toBeVisible();
   await expect(page.getByRole("button", { name: "All applications 2" })).toBeVisible();
 
   const offerFilter = page.getByRole("button", { name: "Offer", exact: true });
   await offerFilter.click();
-  await expect(page.getByRole("button", { name: "Edit or archive Older role at Recent South" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Edit or archive Newest role at Recent North" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Edit Older role at Recent South" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit Newest role at Recent North" })).toHaveCount(0);
 
   const search = page.getByRole("textbox", { name: "Search company or role" });
   await search.fill("No matching company");
@@ -104,7 +104,7 @@ test("keeps Job Board filters, search, and archive controls on its route", async
 
   const archiveToggle = page.getByRole("button", { name: "Archived 1", exact: true });
   await archiveToggle.click();
-  await expect(page.getByRole("button", { name: "Edit or move archived Archived role at Archived West" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit archived Archived role at Archived West" })).toBeVisible();
   await archiveToggle.click();
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
 
@@ -112,7 +112,7 @@ test("keeps Job Board filters, search, and archive controls on its route", async
   await expect(collapsedArchive).toBeVisible();
   await collapsedArchive.click();
   await expect(page.getByRole("button", { name: "Archived 1", exact: true })).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByRole("button", { name: "Edit or move archived Archived role at Archived West" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit archived Archived role at Archived West" })).toBeVisible();
 });
 
 test("counts dated upcoming applications across stages and archive on Interviews", async ({ page, request }) => {
@@ -162,7 +162,7 @@ test("counts dated upcoming applications across stages and archive on Interviews
   await page.reload();
 
   await expect(page.getByTestId("upcoming-interview-count")).toHaveText("4");
-  await expect(page.getByRole("heading", { name: "All applications", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^All applications\b/ })).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search by company or role" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Archived\s+\d+$/ })).toHaveCount(0);
 });
@@ -170,7 +170,7 @@ test("counts dated upcoming applications across stages and archive on Interviews
 test("shows empty application and archive states and a zero interview count", async ({ page }) => {
   await page.goto("/interviews");
   await expect(page.getByTestId("upcoming-interview-count")).toHaveText("0");
-  await expect(page.getByRole("heading", { name: "All applications", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^All applications\b/ })).toHaveCount(0);
 
   await page.goto("/dashboard");
   await expect(page.getByRole("heading", { name: "Needs Attention" })).toBeVisible();

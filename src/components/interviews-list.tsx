@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent, type RefObject } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
 import { groupUpcomingInterviews, interviewDateKey, type InterviewListItem } from "@/lib/interviews";
 
@@ -35,18 +35,18 @@ function InterviewRow({ interview }: { interview: InterviewListItem }) {
   );
 }
 
-export function InterviewsList({ interviews, upcomingCount, today, searchInputRef, upcomingTabRef, pastTabRef }: {
+export function InterviewsList({ interviews, upcomingCount, today, searchInputRef }: {
   interviews: InterviewListItem[];
   upcomingCount: number;
   today: string;
   searchInputRef: RefObject<HTMLInputElement | null>;
-  upcomingTabRef: RefObject<HTMLButtonElement | null>;
-  pastTabRef: RefObject<HTMLButtonElement | null>;
 }) {
   const [selectedTab, setSelectedTab] = useState<InterviewTab>("upcoming");
   const [searchQuery, setSearchQuery] = useState("");
   const [pastSort, setPastSort] = useState<"recent" | "oldest">("recent");
   const id = useId();
+  const upcomingTabRef = useRef<HTMLButtonElement>(null);
+  const pastTabRef = useRef<HTMLButtonElement>(null);
 
   const query = searchQuery.trim().toLocaleLowerCase();
   const matchesSearch = (interview: InterviewListItem) => !query ||
@@ -72,6 +72,9 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
     } else if (event.key === "End") {
       event.preventDefault();
       focusTab("past");
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      focusTab(selectedTab === "upcoming" ? "past" : "upcoming");
     }
   }
 
@@ -94,6 +97,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
               onClick={() => setSelectedTab(tab)}
               onKeyDown={handleTabKeyDown}
               role="tab"
+              tabIndex={selectedTab === tab ? 0 : -1}
               type="button"
             >
               {tab === "upcoming" ? "Upcoming" : "Past"}

@@ -21,7 +21,7 @@ test("definitions drive the exact group order and platform labels", () => {
     assert.equal(labels.find(({ id }) => id === "toggle-sidebar").keys, isMac ? "⌘ ⇧ S" : "Ctrl + Shift + S");
     assert.equal(labels.find(({ id }) => id === "new-job").keys, isMac ? "⌥ N" : "Alt + N");
     assert.equal(labels.find(({ id }) => id === "archive-focused").keys, isMac ? "⌥ A" : "Alt + A");
-    assert.equal(labels.find(({ id }) => id === "switch-interview-tabs").keys, "← / →");
+    assert.equal(labels.some(({ id }) => id === "switch-interview-tabs"), false);
   }
   assert.equal(shortcutDestination("go-stale"), "/dashboard/stale");
   assert.equal(shortcutDestination("go-job-board"), "/jobs");
@@ -45,7 +45,7 @@ test("page and subsection sequences only match in their scopes", () => {
 test("same keys resolve only in the active section", () => {
   for (const page of ["dashboard", "job-board", "interviews"]) {
     assert.equal(matchDashboardShortcut(key("/"), false, page), page === "job-board" ? "search-job-board" : page === "interviews" ? "search-interviews" : null);
-    assert.equal(matchDashboardShortcut(key("ArrowRight"), false, page), page === "job-board" ? "focus-column-right" : page === "interviews" ? "switch-interview-tabs" : null);
+    assert.equal(matchDashboardShortcut(key("ArrowRight"), false, page), page === "job-board" ? "focus-column-right" : null);
     assert.equal(matchDashboardShortcut(key("Delete"), false, page), page === "job-board" ? "delete-focused" : null);
     assert.equal(matchDashboardShortcut(key("n", { code: "KeyN", altKey: true }), false, page), page === "job-board" ? "new-job" : null);
   }

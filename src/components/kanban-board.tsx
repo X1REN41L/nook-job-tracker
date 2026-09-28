@@ -6,7 +6,7 @@ import {
 } from "@dnd-kit/core";
 import { Status } from "@prisma/client";
 import { CSS } from "@dnd-kit/utilities";
-import { useLayoutEffect, useRef } from "react";
+import { useId, useLayoutEffect, useRef } from "react";
 
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { formatAppliedDate } from "@/lib/application-date";
@@ -27,14 +27,14 @@ export function KanbanBoard({ applications, boards, dropDisabled = false, moving
   useLayoutEffect(() => {
     const board = boardRef.current;
     if (!board) return;
-    const cards = board.querySelectorAll<HTMLElement>("[data-kanban-card-id]");
+    const cards = board.querySelectorAll<HTMLElement>("article[data-application-id]");
     const reduced = motionIsCurrentlyOff();
     if (!reduced) {
       const motion = getComputedStyle(document.documentElement);
       const duration = Number.parseFloat(motion.getPropertyValue("--motion-standard")) || 190;
       const easing = motion.getPropertyValue("--motion-ease").trim();
       cards.forEach((card) => {
-        const before = beforeUpdate.current.get(card.dataset.kanbanCardId ?? "");
+        const before = beforeUpdate.current.get(card.dataset.applicationId ?? "");
         const column = card.closest<HTMLElement>("[data-board-status]")?.dataset.boardStatus;
         if (!before || before.column !== column) return;
         const shift = before.top - card.getBoundingClientRect().top;
@@ -47,8 +47,8 @@ export function KanbanBoard({ applications, boards, dropDisabled = false, moving
     }
     return () => {
       const positions = new Map<string, { top: number; column: string }>();
-      board.querySelectorAll<HTMLElement>("[data-kanban-card-id]").forEach((card) => {
-        const id = card.dataset.kanbanCardId;
+      board.querySelectorAll<HTMLElement>("article[data-application-id]").forEach((card) => {
+        const id = card.dataset.applicationId;
         const column = card.closest<HTMLElement>("[data-board-status]")?.dataset.boardStatus;
         if (id && column) positions.set(id, { top: card.getBoundingClientRect().top, column });
       });
@@ -102,11 +102,12 @@ function KanbanCard({ application, disabled, onEdit }: {
   disabled: boolean;
   onEdit: (application: ApplicationRecord) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, isDragging } = useDraggable({
     id: application.id,
     data: { applicationId: application.id, label: `${application.role} at ${application.company}`, source: "board", status: application.status },
     disabled,
   });
+  const datesId = useId();
   let postingUrl: string | undefined;
   try {
     const candidate = application.jobUrl?.trim();
@@ -119,25 +120,31 @@ function KanbanCard({ application, disabled, onEdit }: {
     <article
       ref={setNodeRef}
       data-application-id={application.id}
-      data-kanban-card-id={application.id}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className={`card kanban-card-focus touch-none cursor-grab p-3.5 active:cursor-grabbing ${isDragging ? "opacity-0" : ""}`}
-      onClick={() => { if (!disabled && !isDragging) onEdit(application); }}
-      {...attributes}
-      {...listeners}
-      aria-label={`Edit or move ${application.role} at ${application.company}`}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onEdit(application); }
-        else listeners?.onKeyDown?.(event);
-      }}
+      className={`card kanban-card-focus relative touch-none cursor-grab p-3.5 active:cursor-grabbing ${isDragging ? "opacity-0" : ""}`}
     >
+      <button
+        ref={setActivatorNodeRef}
+        className="kanban-card-action absolute inset-0 z-0 cursor-grab rounded-nook focus-visible:outline-none active:cursor-grabbing"
+        data-kanban-card-id={application.id}
+        onClick={() => { if (!disabled && !isDragging) onEdit(application); }}
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-describedby={`${datesId} ${attributes["aria-describedby"]}`}
+        aria-label={`Edit or move ${application.role} at ${application.company}`}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onEdit(application); }
+          else listeners?.onKeyDown?.(event);
+        }}
+      />
       <h4 className="truncate font-serif text-[15px] font-semibold">{application.role}</h4>
       <p className={`mb-2 mt-0.5 text-[13px] text-ink-soft ${postingUrl ? "flex items-center gap-1" : "truncate"}`}>
         {postingUrl ? <span className="min-w-0 truncate">{application.company}</span> : application.company}
         {postingUrl && (
           <a
             aria-label="Open job posting in a new tab"
-            className="inline-flex shrink-0 text-ink-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+            className="relative z-10 inline-flex shrink-0 text-ink-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
             href={postingUrl}
             rel="noopener noreferrer"
             target="_blank"
@@ -152,26 +159,29 @@ function KanbanCard({ application, disabled, onEdit }: {
           </a>
         )}
       </p>
-      <div className="flex items-center gap-1.5 text-[11.5px] text-ink-soft">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="4" width="18" height="18" rx="3" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-        {formatAppliedDate(application.appliedDate)}
-      </div>
-      {application.status === Status.INTERVIEW && application.interviewDate && (
-        <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-ink-soft">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <div id={datesId}>
+        <div className="flex items-center gap-1.5 text-[11.5px] text-ink-soft">
+          <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="3" y="4" width="18" height="18" rx="3" />
             <line x1="16" y1="2" x2="16" y2="6" />
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />
           </svg>
-          Interview {formatAppliedDate(application.interviewDate)}
+          <span className="sr-only">Applied </span>
+          {formatAppliedDate(application.appliedDate)}
         </div>
-      )}
+        {application.status === Status.INTERVIEW && application.interviewDate && (
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-ink-soft">
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="3" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            Interview {formatAppliedDate(application.interviewDate)}
+          </div>
+        )}
+      </div>
     </article>
   );
 }

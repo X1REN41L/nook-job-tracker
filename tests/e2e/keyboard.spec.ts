@@ -44,7 +44,7 @@ async function openDashboard(page: Page) {
 }
 
 async function openEditModal(page: Page, application: { company: string; role: string }) {
-  await page.getByRole("button", { name: `Edit or archive ${application.role} at ${application.company}`, exact: true }).click();
+  await page.getByRole("button", { name: `Edit ${application.role} at ${application.company}`, exact: true }).click();
   return page.getByRole("dialog", { name: "Edit job" });
 }
 
@@ -327,15 +327,15 @@ test("tabs through every dashboard, Kanban, sidebar, and archived control in vis
     page.getByRole("button", { name: "Collapse sidebar", exact: true }),
     page.getByRole("link", { name: "Dashboard", exact: true }),
     page.getByRole("link", { name: "Job Board", exact: true }),
-    page.getByRole("link", { name: "Interviews", exact: true }),
+    page.getByRole("link", { name: /^Interviews, \d+ upcoming$/ }),
     page.getByRole("button", { name: "Settings", exact: true }),
     page.getByRole("textbox", { name: "Search company or role", exact: true }),
     ...["All", "Applied", "Online assessment", "Interview", "Offer", "Rejected"].map((name) =>
       page.getByRole("button", { name, exact: true }),
     ),
-    page.getByRole("button", { name: `Edit or archive ${active.role} at ${active.company}`, exact: true }),
+    page.getByRole("button", { name: `Edit ${active.role} at ${active.company}`, exact: true }),
     page.getByRole("button", { name: /^Archived\s+\d+$/ }),
-    archivedRow.getByRole("button", { name: `Edit or move archived ${archived.role} at ${archived.company}`, exact: true }),
+    archivedRow.getByRole("button", { name: `Edit archived ${archived.role} at ${archived.company}`, exact: true }),
     archivedRow.getByRole("button", { name: "Restore", exact: true }),
     archivedRow.getByRole("button", { name: `Delete ${archived.role} at ${archived.company}`, exact: true }),
     page.getByRole("button", { name: `Edit or move ${active.role} at ${active.company}`, exact: true }),

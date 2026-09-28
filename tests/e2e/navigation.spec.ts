@@ -47,7 +47,7 @@ async function createApplication(request: APIRequestContext) {
 test("loads and navigates among the shared Job Board, Dashboard, and Interviews shell", async ({ page, request }) => {
   await createApplication(request);
   const jobBoardSidebarApplication = page.getByRole("button", {
-    name: "Edit or archive Shared sidebar role at Route navigation fixture",
+    name: "Edit Shared sidebar role at Route navigation fixture",
   });
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
 

@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
 import { analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod } from "@/lib/analytics-period";
 import type { getDashboardAnalytics } from "@/lib/dashboard-analytics";
-import { STATUS_META } from "@/lib/status-meta";
+import { useBoards } from "@/hooks/use-boards";
+import { boardDot, boardLabel } from "@/lib/board-preferences";
 
 type AnalyticsData = Awaited<ReturnType<typeof getDashboardAnalytics>>;
 type Rate = AnalyticsData["interviewRate"];
@@ -111,6 +112,7 @@ function ApplicationsTrend({ trend }: { trend: AnalyticsData["applicationsTrend"
 }
 
 function StatusBreakdown({ counts }: { counts: AnalyticsData["statusBreakdown"] }) {
+  const boards = useBoards();
   const maxCount = Math.max(0, ...STATUSES.map((status) => counts[status]));
   return (
     <section className="min-w-0" aria-labelledby="status-breakdown-heading">
@@ -119,11 +121,11 @@ function StatusBreakdown({ counts }: { counts: AnalyticsData["statusBreakdown"] 
         {STATUSES.map((status) => (
           <li key={status}>
             <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="min-w-0 font-medium text-ink">{status === "ONLINE_ASSESSMENT" ? "Online Assessment" : STATUS_META[status].label}</span>
+              <span className="min-w-0 font-medium text-ink">{boardLabel(boards, status)}</span>
               <span className="shrink-0 tabular-nums text-ink" aria-label={`${counts[status]} applications`}>{counts[status]}</span>
             </div>
             <div aria-hidden="true" className="mt-1.5 h-2 rounded-full bg-cream-2">
-              <div className={`h-full rounded-full ${STATUS_META[status].dot}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 90 : 0}%` }} />
+              <div className={`h-full rounded-full ${boardDot(boards, status)}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 90 : 0}%` }} />
             </div>
           </li>
         ))}
