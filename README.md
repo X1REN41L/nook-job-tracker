@@ -1,118 +1,199 @@
+<div align="center">
+
 # Nook
 
-Nook is a local-only job application tracker for organizing opportunities, following your progress, and keeping your application data on your computer.
+**A job application tracker that runs on your own computer.**
 
-## Features
+Track where you applied, move applications through each stage, keep interview dates in one place, and see how your search is going. No account needed, and your data stays on your machine.
 
-- **Overview dashboard:** See your application pipeline, active upcoming interviews, and applications that need attention.
-- **Job Board:** Move applications through a Kanban workflow, with drag-and-drop and keyboard controls.
-- **Application management:** Add, edit, search, filter, and delete applications. Keep company, role, dates, source, notes, and posting links together; open saved links from board cards.
-- **Duplicate-entry warnings:** Review possible matches before saving a similar application.
-- **Interviews:** Record interview dates and browse upcoming and past interviews.
-- **Analytics:** Review application activity and outcomes over selected time periods.
-- **Stale application tracking:** Find applications that have gone without a status update, with a threshold of 7, 15, or 30 days.
-- **Archive and restore:** Move applications out of the active board and bring them back when needed.
-- **Undo:** Undo your most recent status change, archive action, or deletion. Only the latest action can be undone; a deleted application can be restored for up to 10 minutes.
-- **Keyboard shortcuts:** Use shortcuts for common actions, search, navigation, and undo.
-- **Customizable boards:** Change board names, colors, order, and empty-state messages. Custom names and colors appear throughout the app.
-- **Themes and motion:** Choose a light, dark, or system theme, and turn animations on, off, or follow your system's reduced-motion setting.
-- **JSON Backup & Restore:** Export your data and import a Nook backup from Settings.
+![Nook Job Board](docs/screenshots/job-board.png)
 
-## Architecture
+</div>
 
-Nook is a Next.js app written in TypeScript with React and Tailwind CSS. Prisma stores data in a SQLite database file on your computer. The Next.js server provides both the pages and the API that reads and writes the database.
+## Contents
 
-## Local Data & Privacy
+- [What you can do](#what-you-can-do)
+- [Getting started](#getting-started)
+- [Using Nook](#using-nook)
+- [Keyboard shortcuts](#keyboard-shortcuts)
+- [Your data](#your-data)
+- [Updating Nook](#updating-nook)
+- [Troubleshooting](#troubleshooting)
 
-- Nook runs only on your computer. It needs no account, external database, or cloud service, and normal use does not send your job or application data anywhere.
-- Your data lives in the SQLite file `prisma/dev.db` (set by `DATABASE_URL` in `.env`).
-- The server binds to `127.0.0.1` and accepts requests only for `localhost`, `127.0.0.1`, or `[::1]`. Opening Nook through a LAN IP address or another hostname is not supported.
-- The database schema is applied with `prisma db push` (through `npm run setup`). Nook does not use Prisma migrations.
-- Use Backup & Restore to preserve your data or move it to another installation.
+## What you can do
 
-## Requirements
+### See your search at a glance
 
-- Node.js `^22.18.0` or `>=23.6.0` (see `engines` in `package.json`)
-- npm
+The Overview shows your total applications, your active pipeline, upcoming interviews, and your interview and offer rates. It also lists the applications that need attention.
 
-## Setup
+![Overview dashboard](docs/screenshots/dashboard.png)
+
+### Move applications through a board
+
+The Job Board has a column for each stage: **Applied**, **Online assessment**, **Interview**, **Offer**, and **Rejected**. Drag a card to update its status, or use the keyboard. Cards show the company, application date, interview date, and a link to the job posting. The sidebar lists every application, with search and status filters.
+
+<p align="center">
+  <img src="docs/screenshots/job-board-dark.png" alt="Job Board in dark theme" width="100%">
+</p>
+
+### Keep the details together
+
+Each application stores the company, role, status, date applied, interview date, source, a link to the posting, and your notes. If a new entry looks like one you already have, Nook shows the possible match before you save.
+
+![Editing an application](docs/screenshots/edit-application.png)
+
+### Stay on top of interviews
+
+The Interviews page groups upcoming interviews by when they happen (this week, next week, later) and shows your notes for each one. A **Past** tab keeps earlier interviews, and you can search by company or role.
+
+![Interviews page](docs/screenshots/interviews.png)
+
+### Review your progress
+
+Analytics shows how many applications you sent in a period, your interview, offer, and rejection rates, and a breakdown by status. You can view the current month, the last 3 months, the current year, or a specific month or year.
+
+![Analytics](docs/screenshots/analytics.png)
+
+### Follow up on quiet applications
+
+Stale Applications lists active applications whose status hasn't changed for a while, grouped by how long they've been waiting. In Settings you can set the threshold to 7, 15, or 30 days.
+
+![Stale applications](docs/screenshots/stale.png)
+
+### Make it yours
+
+- **Theme:** light, dark, or match your system.
+- **Motion:** turn animations on or off, or follow your system's reduced-motion setting.
+- **Boards:** rename columns, change their colors and empty-state messages, and reorder them.
+- **Startup page:** open to the Dashboard, the Job Board, or Interviews.
+- **Default board:** choose the status new applications start in.
+
+![Settings](docs/screenshots/settings.png)
+
+### Also included
+
+- **Archive:** move finished applications off the board, then restore them whenever you want.
+- **Undo:** press `U` to undo your most recent status change, archive, or deletion. You can undo a deletion for up to 10 minutes.
+- **Backup & Restore:** export all your data to a JSON file and import it again later or on another computer.
+
+## Getting started
+
+### What you need
+
+- [Node.js](https://nodejs.org/) **22.18 or later on the 22.x line, or 23.6 or newer** (npm comes with it)
+- [Git](https://git-scm.com/downloads)
+
+To check your Node.js version, run `node --version` in a terminal.
+
+### Install
+
+Open a terminal and run:
 
 ```bash
 git clone https://github.com/X1REN41L/nook-job-tracker.git
 cd nook-job-tracker
 npm install
 npm run setup
-npm run dev
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000) after the development server starts.
+`npm run setup` creates your local database. You only need to run it once. If you run it again, it keeps your existing data.
 
-`npm run setup` creates `.env` from `.env.example` if it does not exist, then runs `prisma db push` to create or sync the SQLite database and generate the Prisma client. It keeps an existing `.env` and existing data.
-
-## Running Nook
-
-Start Nook with:
+### Start Nook
 
 ```bash
 npm run dev
 ```
 
-Nook runs only while this command is running; closing the terminal stops it. Your data stays in the database file.
+When the terminal shows that the server is ready, open **[http://127.0.0.1:3000](http://127.0.0.1:3000)** in your browser.
 
-To run a production build instead:
+Nook runs only while this terminal is open. To stop it, press `Ctrl+C` or close the terminal. Your data stays saved. To open Nook again later, go to the `nook-job-tracker` folder and run `npm run dev`.
+
+<details>
+<summary><strong>Optional: run a production build</strong></summary>
+
+A production build takes a minute to create, but pages load faster afterwards:
 
 ```bash
 npm run build
 npm run start
 ```
 
-## Keyboard & Accessibility
+Then open [http://127.0.0.1:3000](http://127.0.0.1:3000). Run `npm run build` again after each update.
 
-- Press `?` to see every shortcut. Common ones: `/` to search, `U` to undo, `G` then `D`, `J`, or `I` to go to the Dashboard, Job Board, or Interviews, `Alt+N` (`⌥N` on macOS) for a new job, and `Esc` to close a dialog.
-- On the Job Board, the arrow keys move focus between cards and columns. On a focused card, `Enter` opens it for editing, and `Space` picks it up so the arrow keys can move it to another status column. Screen readers get instructions and announcements for these moves.
-- Board order in Settings can also be changed with the keyboard.
-- Dialogs keep focus inside them and return it to where you were when they close.
+</details>
 
-## Backup & Restore
+## Using Nook
 
-In Settings, use Backup & Restore to export or import a JSON backup. Backups are the recommended way to preserve or transfer your data.
+1. **Add an application.** On the Job Board, click **Add job** or press `Alt+N` (`⌥N` on macOS). Only the company, role, and date applied are required.
+2. **Update its status.** Drag the card to another column. From the keyboard, focus the card, press `Space` to pick it up, use the Left and Right arrow keys to choose a column, and press `Space` again to drop it (`Esc` cancels).
+3. **Edit details.** Click a card, or focus it and press `Enter`, to add an interview date, notes, or a job link.
+4. **Check in regularly.** The Dashboard shows upcoming interviews and applications that need a follow-up.
+5. **Back up your data.** In **Settings → Backup & Restore**, export a backup from time to time.
 
-**Export** saves every application, including archived ones and their status history, together with your settings.
+## Keyboard shortcuts
 
-**Import** adds the applications from a Nook backup:
+Press `?` anywhere in Nook to see every shortcut.
 
-- The file must be a valid Nook backup of 10 MB or less, with no more than 5,000 applications. Invalid files are rejected without changing anything.
-- Applications that are new are added. Applications that already exist and are identical to the backup are skipped.
-- Import never updates an existing application. If any application in the backup has changed since the backup was made (including an archive and unarchive), the whole import stops, names up to three changed applications, and imports nothing.
-- When an import succeeds, your current settings are replaced by the settings in the backup, even if every application was skipped.
-- If a backup application looks like one you already have, Nook asks whether to import it anyway or cancel the import.
+| Action | Shortcut |
+| --- | --- |
+| Show all shortcuts | `?` |
+| New job (Job Board) | `Alt+N` / `⌥N` |
+| Search | `/` |
+| Undo latest action | `U` |
+| Go to Dashboard / Job Board / Interviews | `G` then `D` / `J` / `I` |
+| Go to Overview / Analytics / Stale Applications | `G` then `O` / `A` / `S` |
+| Archive focused card | `Alt+A` / `⌥A` |
+| Delete focused card | `Delete` or `Backspace` |
+| Move between cards and columns | Arrow keys |
+| Open settings | `Ctrl+Shift+,` / `⌘⇧,` |
+| Toggle sidebar | `Ctrl+Shift+S` / `⌘⇧S` |
+| Close a dialog | `Esc` |
 
-## Common Commands
+Keyboard moves on the Job Board are announced to screen readers. When you close a dialog, focus goes back to where you were.
+
+## Your data
+
+- **Everything stays on your computer.** Nook doesn't need an account or an internet connection, and it doesn't send your application data anywhere.
+- Your data is saved in one file: `prisma/dev.db` inside the Nook folder.
+- Nook only accepts connections from your own computer (`127.0.0.1` or `localhost`). You can't open it from another device on your network.
+
+### Backup & Restore
+
+Open **Settings → Backup & Restore**.
+
+- **Export** saves every application (including archived ones and their status history) and your settings to a JSON file.
+- **Import** adds applications from a Nook backup file:
+  - The file can be up to 10 MB and contain up to 5,000 applications. If the file isn't a valid Nook backup, nothing changes.
+  - New applications are added. Applications you already have that exactly match the backup are skipped.
+  - If an application in the backup was changed after the backup was made, the import stops and nothing is imported. Nook names up to three of the changed applications so you can check them.
+  - If a backup application looks like one you already have, Nook asks whether to import it anyway.
+  - After a successful import, your settings are replaced with the ones in the backup.
+
+To move Nook to another computer, export a backup, install Nook on the new computer, and import the backup there.
+
+## Updating Nook
+
+Stop Nook first, then run these commands in the Nook folder:
 
 ```bash
-npm run setup      # Create .env if needed and sync the database schema
-npm run dev        # Start the development server
-npm run build      # Create a production build
-npm run start      # Run the production build
-npm run lint       # Run ESLint
-npm run typecheck  # Check TypeScript
-npm run db:studio  # Open Prisma Studio
+git pull
+npm install
+npm run setup
 ```
 
-## Tests
+Your data file is kept, but it's a good idea to export a backup before you update.
 
-```bash
-npm test                 # Run every non-browser test suite below
-npm run test:unit        # Unit tests
-npm run test:smoke       # API smoke tests
-npm run test:backup      # Backup, import, and restore API tests
-npm run test:dashboard   # Dashboard and analytics API tests
-npm run test:contention  # Concurrent-request API tests
-npm run test:e2e         # Playwright browser tests
-```
+## Troubleshooting
 
-The API and browser tests each start their own server on a temporary SQLite database, so they never touch your data. `npm run test:e2e` runs in Google Chrome, which must be installed. Other focused scripts are listed in `package.json`.
+**npm shows a Node.js version warning or error.**
+Install a supported version of Node.js (22.18+ or 23.6+), then run `npm install` and `npm run setup` again.
+
+**The page won't load.**
+Make sure the terminal running `npm run dev` is still open, and use `http://127.0.0.1:3000`, not your computer's network IP address.
+
+**Port 3000 is already in use.**
+Start Nook on a different port with `npm run dev -- -p 3001`, then open `http://127.0.0.1:3001`.
 
 ## License
 
-Licensed under the [MIT License](LICENSE).
+Nook is released under the [MIT License](LICENSE).
