@@ -129,6 +129,81 @@ try {
   assert.equal(emptyAnalytics.interviewRate.percentage, 0);
   assertRateValues(emptyAnalytics, ["interviewRate", "offerRate", "rejectionRate"]);
 
+  const undoTarget = await createApplication({ role: "Undo status move", interviewDate: shiftDate(today, 1) });
+  await setStatusEventAge(undoTarget.id, 60);
+  const beforeUndoEvents = await prisma.applicationEvent.findMany({ where: { applicationId: undoTarget.id }, orderBy: { createdAt: "asc" } });
+  const beforeUndoOverview = await json(dashboardPath("overview"));
+  const beforeUndoStale = await json(dashboardPath("stale"));
+  assert.ok(beforeUndoStale.applications.some(({ id }) => id === undoTarget.id));
+  const moveResponse = await fetch(base + "/api/applications/" + undoTarget.id, {
+    method: "PATCH", headers,
+    body: JSON.stringify({ revision: undoTarget.revision, status: "OFFER", archived: true, interviewDate: null, interviewDatePromptDismissed: true }),
+  });
+  assert.equal(moveResponse.status, 200);
+  const movedForUndo = await moveResponse.json();
+  assert.ok(movedForUndo.latestStatusEventId);
+  assert.equal((await json(dashboardPath("overview"))).offerRate.numerator, beforeUndoOverview.offerRate.numerator + 1);
+  const wrongEventUndo = await fetch(base + "/api/applications/" + undoTarget.id + "/undo-status", {
+    method: "POST", headers,
+    body: JSON.stringify({
+      revision: movedForUndo.application.revision,
+      expectedLatestStatusEventId: randomUUID(),
+      archived: undoTarget.archived,
+      interviewDate: undoTarget.interviewDate?.slice(0, 10) ?? null,
+      interviewDatePromptDismissed: undoTarget.interviewDatePromptDismissed,
+    }),
+  });
+  assert.equal(wrongEventUndo.status, 409);
+  assert.deepEqual((await wrongEventUndo.json()).application, movedForUndo.application);
+  assert.ok(await prisma.applicationEvent.findUnique({ where: { id: movedForUndo.latestStatusEventId } }));
+  const undoResponse = await fetch(base + "/api/applications/" + undoTarget.id + "/undo-status", {
+    method: "POST", headers,
+    body: JSON.stringify({
+      revision: movedForUndo.application.revision,
+      expectedLatestStatusEventId: movedForUndo.latestStatusEventId,
+      archived: undoTarget.archived,
+      interviewDate: undoTarget.interviewDate?.slice(0, 10) ?? null,
+      interviewDatePromptDismissed: undoTarget.interviewDatePromptDismissed,
+    }),
+  });
+  assert.equal(undoResponse.status, 200, await undoResponse.clone().text());
+  const undone = (await undoResponse.json()).application;
+  assert.equal(undone.status, undoTarget.status);
+  assert.equal(undone.archived, undoTarget.archived);
+  assert.equal(undone.interviewDate, undoTarget.interviewDate);
+  assert.equal(undone.interviewDatePromptDismissed, undoTarget.interviewDatePromptDismissed);
+  assert.equal(undone.revision, movedForUndo.application.revision + 1);
+  assert.deepEqual((await prisma.applicationEvent.findMany({ where: { applicationId: undoTarget.id }, orderBy: { createdAt: "asc" } })).map(({ id }) => id), beforeUndoEvents.map(({ id }) => id));
+  assert.equal((await json(dashboardPath("overview"))).offerRate.numerator, beforeUndoOverview.offerRate.numerator);
+  assert.deepEqual((await json(dashboardPath("stale"))).applications.some(({ id }) => id === undoTarget.id),
+    beforeUndoStale.applications.some(({ id }) => id === undoTarget.id));
+
+  const movedAgainResponse = await fetch(base + "/api/applications/" + undoTarget.id, {
+    method: "PATCH", headers, body: JSON.stringify({ revision: undone.revision, status: "OFFER" }),
+  });
+  assert.equal(movedAgainResponse.status, 200);
+  const movedAgain = await movedAgainResponse.json();
+  const intervening = await fetch(base + "/api/applications/" + undoTarget.id, {
+    method: "PATCH", headers, body: JSON.stringify({ revision: movedAgain.application.revision, archived: true }),
+  });
+  assert.equal(intervening.status, 200);
+  const afterIntervening = (await intervening.json()).application;
+  const conflictedUndo = await fetch(base + "/api/applications/" + undoTarget.id + "/undo-status", {
+    method: "POST", headers,
+    body: JSON.stringify({
+      revision: movedAgain.application.revision,
+      expectedLatestStatusEventId: movedAgain.latestStatusEventId,
+      archived: false,
+      interviewDate: null,
+      interviewDatePromptDismissed: false,
+    }),
+  });
+  assert.equal(conflictedUndo.status, 409);
+  assert.deepEqual((await conflictedUndo.json()).application, afterIntervening);
+  assert.ok(await prisma.applicationEvent.findUnique({ where: { id: movedAgain.latestStatusEventId } }));
+  await prisma.application.delete({ where: { id: undoTarget.id } });
+  createdIds.splice(createdIds.indexOf(undoTarget.id), 1);
+
   const milestone = await createApplication({ role: "Milestone history" });
   const singleOverview = await json(dashboardPath("overview"));
   assert.equal(singleOverview.totalApplications, 1);
@@ -493,6 +568,11 @@ try {
   const yearZeroPaddedAnnual = await json("/api/dashboard/analytics?period=CUSTOM_YEAR&year=0004");
   assert.deepEqual(yearZeroPaddedAnnual.range, { startDate: "0004-01-01", endDate: "0004-12-31" });
   assert.equal(yearZeroPaddedAnnual.applicationsTrend.buckets.length, 12);
+  const finalYear = await json("/api/dashboard/analytics?period=CUSTOM_YEAR&year=9999");
+  assert.deepEqual(finalYear.range, { startDate: "9999-01-01", endDate: "9999-12-31" });
+  const finalMonth = await json("/api/dashboard/analytics?period=CUSTOM_MONTH&month=9999-12");
+  assert.deepEqual(finalMonth.range, { startDate: "9999-12-01", endDate: "9999-12-31" });
+  assert.equal(finalMonth.applications, 0);
   const earlyCalendarYear = await json("/api/dashboard/analytics?today=0004-02-29");
   assert.deepEqual(earlyCalendarYear.range, { startDate: "0004-02-01", endDate: "0004-02-29" });
 

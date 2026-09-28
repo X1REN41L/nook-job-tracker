@@ -103,6 +103,15 @@ function dateFromKey(key: string) {
   return dateFromParts(year, month - 1, day);
 }
 
+function dayAfterKey(key: string) {
+  const end = dateFromKey(key);
+  const year = end.getUTCFullYear();
+  // Date.UTC treats 0-99 as 1900-1999; dateFromParts handles those years.
+  return year < 100
+    ? dateFromParts(year, end.getUTCMonth(), end.getUTCDate() + 1)
+    : new Date(Date.UTC(year, end.getUTCMonth(), end.getUTCDate() + 1));
+}
+
 function addDays(key: string, count: number) {
   const date = dateFromKey(key);
   date.setUTCDate(date.getUTCDate() + count);
@@ -122,8 +131,10 @@ function makeTrendBuckets(selection: AnalyticsSelection, startDate: string, endD
     while (start <= lastDay) {
       const weekday = dateFromKey(start).getUTCDay();
       const daysUntilSunday = (7 - weekday) % 7;
-      const end = [addDays(start, daysUntilSunday), lastDay].sort()[0];
+      const weekEnd = new Date(dateFromKey(start).getTime() + daysUntilSunday * 86_400_000);
+      const end = weekEnd > dateFromKey(lastDay) ? lastDay : dateKey(weekEnd);
       buckets.push({ startDate: start, endDate: end, count: 0 });
+      if (end === lastDay) break;
       start = addDays(end, 1);
     }
     return { granularity: "WEEK" as const, buckets };
@@ -265,10 +276,9 @@ export async function getStaleApplications(today: string, timeZone: string, stal
 export async function getDashboardAnalytics(selection: AnalyticsSelection, today?: string) {
   const range = analyticsPeriodRange(selection, today);
   const applications = await loadApplications({
-    appliedDate: {
-      gte: dateFromKey(range.startDate),
-      lt: dateFromKey(addDays(range.endDate, 1)),
-    },
+    appliedDate: range.endDate === "9999-12-31"
+      ? { gte: dateFromKey(range.startDate), lte: new Date(Date.UTC(9999, 11, 31, 23, 59, 59, 999)) }
+      : { gte: dateFromKey(range.startDate), lt: dayAfterKey(range.endDate) },
   });
   const trend = makeTrendBuckets(selection, range.startDate, range.endDate);
   const bucketsByKey = new Map(trend.buckets.map((bucket) => [bucket.startDate, bucket]));

@@ -499,7 +499,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           : `${application.company} moved from ${boardLabel(boards, previousStatus)} to ${boardLabel(boards, status)}`;
         showToast(
           message,
-          { kind: "status", applicationId: application.id, status: previousStatus, archived: previousArchived, interviewDate: previousInterviewDate, interviewDatePromptDismissed: previousInterviewDatePromptDismissed },
+          { kind: "status", applicationId: application.id, status: previousStatus, archived: previousArchived, interviewDate: previousInterviewDate, interviewDatePromptDismissed: previousInterviewDatePromptDismissed, expectedLatestStatusEventId: body.latestStatusEventId ?? null, movedRevision: body.application.revision },
         );
       }
       if (!restoration && previousStatus !== Status.INTERVIEW && status === Status.INTERVIEW && !body.application.interviewDate && !body.application.interviewDatePromptDismissed) {
@@ -568,10 +568,32 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     if (undo.kind === "status") {
       const application = applications.find(({ id }) => id === undo.applicationId);
       if (!application) return;
-      await moveApplication(application, undo.status, false, {
-        interviewDate: undo.interviewDate,
-        interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
-      }, undo.archived);
+      if (undo.expectedLatestStatusEventId) {
+        const response = await fetch(applicationApiPath(application.id, "undo-status"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            revision: undo.movedRevision,
+            expectedLatestStatusEventId: undo.expectedLatestStatusEventId,
+            archived: undo.archived,
+            interviewDate: undo.interviewDate?.slice(0, 10) ?? null,
+            interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
+          }),
+        });
+        const body = await response.json();
+        if (response.status === 409 && body.application) {
+          const latest = body.application as ApplicationRecord;
+          setApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+          throw new Error("This application changed elsewhere. The latest saved version has been loaded; review it before trying again.");
+        }
+        if (!response.ok) throw new Error(body.error ?? "Could not undo the status move");
+        setApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
+      } else {
+        await moveApplication(application, undo.status, false, {
+          interviewDate: undo.interviewDate,
+          interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
+        }, undo.archived);
+      }
       if (restoreKeyboardFocus && (BOARD_STATUSES as readonly Status[]).includes(undo.status)) focusKanbanCard(application.id);
       return;
     }

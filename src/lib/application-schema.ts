@@ -130,6 +130,14 @@ export const applicationArchiveSchema = z.object({
   archived: z.boolean(),
 }).strict();
 
+export const applicationStatusUndoSchema = z.object({
+  revision: applicationRevisionSchema,
+  expectedLatestStatusEventId: recordIdSchema,
+  archived: z.boolean(),
+  interviewDate: z.union([z.null(), interviewDateSchema]),
+  interviewDatePromptDismissed: z.boolean(),
+}).strict();
+
 export const applicationMutationSchema = z.union([
   applicationStatusSchema,
   applicationArchiveSchema,

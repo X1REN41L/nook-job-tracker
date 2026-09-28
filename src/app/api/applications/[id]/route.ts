@@ -55,7 +55,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const result = await updateApplication(id, revision, { status, archived, interviewDate, interviewDatePromptDismissed }, status);
     if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
     if (result.conflict) return revisionConflict(result.application);
-    return NextResponse.json({ application: result.application });
+    return NextResponse.json({ application: result.application, latestStatusEventId: result.latestStatusEventId ?? null });
   } catch (error) {
     return apiError(error);
   }
@@ -81,13 +81,14 @@ async function updateApplication(
           const latest = await transaction.application.findUnique({ where: { id } });
           return latest ? { application: latest, conflict: true as const } : null;
         }
+        let latestStatusEventId: string | null = null;
         if (nextStatus && current.status !== nextStatus) {
           const latestEvent = await transaction.applicationEvent.findFirst({
             where: { applicationId: current.id },
             orderBy: { createdAt: "desc" },
             select: { createdAt: true },
           });
-          await transaction.applicationEvent.create({
+          const event = await transaction.applicationEvent.create({
             data: {
               applicationId: current.id,
               type: "STATUS_CHANGE",
@@ -97,9 +98,10 @@ async function updateApplication(
               createdAt: nextStatusEventTime(latestEvent?.createdAt ?? null),
             },
           });
+          latestStatusEventId = event.id;
         }
         const application = await transaction.application.findUniqueOrThrow({ where: { id } });
-        return { application, conflict: false as const };
+        return { application, conflict: false as const, latestStatusEventId };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       const canRetry = isDatabaseContention(error) && attempt < 5;

@@ -8,7 +8,7 @@ const UNDO_TOAST_DURATION_MS = 5000;
 
 export type ToastUndo =
   | { kind: "delete"; applicationId: string; token: string; expiresAt: string; company: string }
-  | { kind: "status"; applicationId: string; status: Status; archived: boolean; interviewDate: string | null; interviewDatePromptDismissed: boolean };
+  | { kind: "status"; applicationId: string; status: Status; archived: boolean; interviewDate: string | null; interviewDatePromptDismissed: boolean; expectedLatestStatusEventId: string | null; movedRevision: number };
 
 export type DeleteRecovery = Extract<ToastUndo, { kind: "delete" }>;
 
