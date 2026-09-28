@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./api-helpers";
 import { randomUUID } from "node:crypto";
 
 test("a browser request from a different origin cannot create an application", async ({ page, request }) => {

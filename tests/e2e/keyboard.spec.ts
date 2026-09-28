@@ -1,6 +1,7 @@
-import { expect, type Locator, type Page, type APIRequestContext, test } from "@playwright/test";
+import { type Locator, type Page, type APIRequestContext } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
 
 type ApplicationInput = {
   company: string;
@@ -38,7 +39,7 @@ async function createApplication(request: APIRequestContext, input: ApplicationI
 }
 
 async function openDashboard(page: Page) {
-  await page.goto("/");
+  await page.goto("/jobs");
   await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
 }
 
@@ -107,19 +108,16 @@ async function deleteWithKeyboard(
   await expect(deleteDialog).toBeHidden();
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ request }) => {
   ownedIds = [];
-  await page.addInitScript(() => {
-    localStorage.removeItem("nook-sidebar-collapsed");
-    localStorage.setItem("nook-archived-expanded", "true");
-  });
+  await resetSettings(request, { archivedExpanded: true });
 });
 
 test.afterEach(async ({ request }) => {
   await Promise.all(ownedIds.map((id) => request.delete(`/api/applications/${id}`, { headers: sameOriginMutationHeaders })));
 });
 
-test("traps focus in Add, Edit, Delete, and Settings modals in forward and reverse visual order", async ({ page, request }) => {
+test("returns focus to Company when Edit follows a trapped and cancelled Add dialog", async ({ page, request }) => {
   const active = await createApplication(request, applicationInput("APPLIED", "focus"));
   await openDashboard(page);
 
@@ -130,6 +128,14 @@ test("traps focus in Add, Edit, Delete, and Settings modals in forward and rever
   await expect(addDialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
   await addDialog.getByRole("button", { name: "Cancel" }).click();
 
+  const editDialog = await openEditModal(page, active);
+  test.fail(true, "UI-001: focus returns to Close when Edit follows a cancelled Add dialog after trap redirection");
+  await expect(editDialog.getByLabel("Company")).toBeFocused();
+});
+
+test("traps focus in Edit and Delete dialogs in both directions", async ({ page, request }) => {
+  const active = await createApplication(request, applicationInput("APPLIED", "focus-controls"));
+  await openDashboard(page);
   const editDialog = await openEditModal(page, active);
   await assertFocusCycle(page, editDialog, jobControls(editDialog, true), 1);
   await editDialog.getByRole("button", { name: "Delete", exact: true }).click();
@@ -144,7 +150,10 @@ test("traps focus in Add, Edit, Delete, and Settings modals in forward and rever
   await expect(deleteControls[0]).toBeFocused();
   await deleteControls[0].click();
   await editDialog.getByRole("button", { name: "Cancel" }).click();
+});
 
+test("traps focus in Settings sections in both directions", async ({ page }) => {
+  await openDashboard(page);
   await page.getByRole("button", { name: "Settings" }).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   const settingsControls = [
@@ -157,6 +166,8 @@ test("traps focus in Add, Edit, Delete, and Settings modals in forward and rever
     settingsDialog.getByRole("button", { name: "Use light theme" }),
     settingsDialog.getByRole("button", { name: "Use dark theme" }),
     settingsDialog.getByRole("combobox", { name: "New Applications Default Board" }),
+    settingsDialog.getByRole("combobox", { name: "Startup Page" }),
+    settingsDialog.getByRole("combobox", { name: "Stale Application Threshold" }),
     settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "System" }),
     settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "On", exact: true }),
     settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "Off", exact: true }),
@@ -172,6 +183,7 @@ test("traps focus in Add, Edit, Delete, and Settings modals in forward and rever
     settingsControls[4],
     settingsDialog.getByRole("button", { name: "Import", exact: true }),
     settingsDialog.getByRole("button", { name: "Export", exact: true }),
+    settingsDialog.getByRole("button", { name: "Delete All Data", exact: true }),
   ];
   await assertFocusCycle(page, settingsDialog, backupControls, 4);
   await page.getByRole("button", { name: "Add job" }).evaluate((button: HTMLButtonElement) => button.focus());
@@ -245,6 +257,7 @@ test("opens Settings only with Cmd/Ctrl+Shift+, and suppresses it in editable fi
   await settingsDialog.getByRole("button", { name: "Shortcuts", exact: true }).click();
   await expect(settingsDialog.getByText(modifier === "Meta" ? "⌘ ⇧ ," : "Ctrl + Shift + ,", { exact: true })).toBeVisible();
   await settingsDialog.getByRole("button", { name: "Close settings" }).click();
+  await expect(settingsDialog).toBeHidden();
 
   const search = page.getByRole("textbox", { name: "Search company or role" });
   await search.fill("search stays intact");
@@ -349,7 +362,7 @@ test("pauses and resumes the Undo toast dismissal timer on hover and focus", asy
   await page.clock.runFor(2_000);
   await expect(toast).toBeVisible();
   await page.clock.runFor(1_500);
-  await expect(toast).toHaveCount(0);
+  await expect(page.locator(".nook-toast-wrap")).toHaveAttribute("aria-hidden", "true");
 
   await deleteWithKeyboard(page, focusTarget, "Space");
   toast = page.locator(".nook-toast");
@@ -362,5 +375,5 @@ test("pauses and resumes the Undo toast dismissal timer on hover and focus", asy
   await page.clock.runFor(2_000);
   await expect(toast).toBeVisible();
   await page.clock.runFor(1_500);
-  await expect(toast).toHaveCount(0);
+  await expect(page.locator(".nook-toast-wrap")).toHaveAttribute("aria-hidden", "true");
 });

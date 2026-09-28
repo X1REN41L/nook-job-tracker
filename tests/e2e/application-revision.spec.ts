@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, test, sameOriginMutationHeaders } from "./api-helpers";
 
 test("keeps an edit form open and refreshes the record after a stale save", async ({ page, request }) => {
   const created = await request.post("/api/applications", {
@@ -17,7 +17,7 @@ test("keeps an edit form open and refreshes the record after a stale save", asyn
   const { application } = await created.json();
 
   try {
-    await page.goto("/");
+    await page.goto("/jobs");
     await page.getByRole("button", { name: "Settings" }).waitFor({ state: "visible" });
     await page.getByRole("button", { name: `Edit or move Original role at ${application.company}`, exact: true }).click();
     const editDialog = page.getByRole("dialog", { name: "Edit job" });

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { type APIRequestContext, type Page } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
 
 const ownedIds: string[] = [];
 let sequence = 0;
@@ -37,13 +38,10 @@ async function deleteThroughDashboard(page: Page, application: { id: string; com
   return body;
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ request }) => {
   ownedIds.length = 0;
   sequence = 0;
-  await page.addInitScript(() => {
-    localStorage.removeItem("nook-sidebar-collapsed");
-    localStorage.setItem("nook-archived-expanded", "true");
-  });
+  await resetSettings(request, { archivedExpanded: true });
 });
 
 test.afterEach(async ({ request }) => {
@@ -52,7 +50,7 @@ test.afterEach(async ({ request }) => {
 
 test("deletion offers Undo without a separate recovery banner", async ({ page, request }) => {
   const application = await createApplication(request);
-  await page.goto("/");
+  await page.goto("/jobs");
   await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
 
   await deleteThroughDashboard(page, application);
@@ -72,7 +70,7 @@ test("deletion offers Undo without a separate recovery banner", async ({ page, r
 
 test("the toast timer pauses while hidden and recovery still works after returning", async ({ page, request }) => {
   const application = await createApplication(request);
-  await page.goto("/");
+  await page.goto("/jobs");
   await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
   await page.evaluate(() => {
     let visibility: DocumentVisibilityState = "visible";
@@ -105,7 +103,7 @@ test("the toast timer pauses while hidden and recovery still works after returni
 
 test("Undo disappears at the server-provided expiry", async ({ page, request }) => {
   const application = await createApplication(request);
-  await page.goto("/");
+  await page.goto("/jobs");
   await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
   await page.route(`**/api/applications/${application.id}*`, async (route) => {
     if (route.request().method() !== "DELETE") return route.continue();

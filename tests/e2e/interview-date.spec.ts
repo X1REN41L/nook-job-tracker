@@ -1,6 +1,7 @@
-import { expect, type APIRequestContext, type Locator, type Page, test } from "@playwright/test";
+import { type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
 
 type ApplicationInput = {
   company: string;
@@ -34,7 +35,7 @@ async function createApplication(request: APIRequestContext, input: ApplicationI
 }
 
 async function openDashboard(page: Page) {
-  await page.goto("/");
+  await page.goto("/jobs");
   await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
 }
 
@@ -61,12 +62,9 @@ async function move(page: Page, application: { id: string; company: string; role
   return responsePromise;
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ request }) => {
+  await resetSettings(request, { archivedExpanded: true });
   ownedIds = [];
-  await page.addInitScript(() => {
-    localStorage.removeItem("nook-sidebar-collapsed");
-    localStorage.setItem("nook-archived-expanded", "true");
-  });
 });
 
 test.afterEach(async ({ request }) => {
@@ -82,7 +80,7 @@ test("restores an interview date and prompt dismissal flag when undoing a drag",
   const movedApplication = (await moved.json()).application;
   expect(movedApplication.status).toBe("ONLINE_ASSESSMENT");
   const undoResponse = page.waitForResponse((response) =>
-    response.request().method() === "PATCH" && response.url().endsWith(`/api/applications/${application.id}`),
+    response.request().method() === "POST" && response.url().endsWith(`/api/applications/${application.id}/undo-status`),
   );
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   const response = await undoResponse;
@@ -90,7 +88,8 @@ test("restores an interview date and prompt dismissal flag when undoing a drag",
   expect(response.status()).toBe(200);
   expect(JSON.parse(response.request().postData() ?? "{}")).toEqual({
     revision: movedApplication.revision,
-    status: "INTERVIEW",
+    expectedLatestStatusEventId: expect.any(String),
+    archived: false,
     interviewDate: "2026-10-05",
     interviewDatePromptDismissed: false,
   });

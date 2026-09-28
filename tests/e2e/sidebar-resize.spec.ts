@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./api-helpers";
 
 async function startDrag(page: Page) {
   const handle = await page.getByRole("separator", { name: "Resize sidebar" }).boundingBox();
@@ -16,11 +17,7 @@ async function startRailDrag(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.addInitScript(() => {
-    localStorage.removeItem("nook-sidebar-collapsed");
-    localStorage.removeItem("nook-sidebar-width");
-    localStorage.removeItem("nook-board-configuration");
-  });
+  await page.addInitScript(() => localStorage.removeItem("nook-sidebar-width"));
   await page.goto("/jobs");
   await page.evaluate(() => document.fonts.ready);
   await page.addStyleTag({ content: ".app-workspace { transition: none !important; }" });
@@ -29,7 +26,7 @@ test.beforeEach(async ({ page }) => {
 test("keeps the first three filter pills on one row at the measured minimum", async ({ page }) => {
   await page.evaluate(() => {
     localStorage.setItem("nook-sidebar-width", "304");
-    window.dispatchEvent(new Event("nook-sidebar-change"));
+    window.dispatchEvent(new Event("nook-sidebar-width-change"));
   });
   await expect.poll(() => page.locator(".sidebar-panel").evaluate((panel) => panel.getBoundingClientRect().width)).toBe(304);
 
@@ -49,7 +46,7 @@ test("keeps the first three filter pills on one row at the measured minimum", as
 
   await page.evaluate(() => {
     localStorage.setItem("nook-sidebar-width", "420");
-    window.dispatchEvent(new Event("nook-sidebar-change"));
+    window.dispatchEvent(new Event("nook-sidebar-width-change"));
   });
   await expect.poll(() => page.locator(".sidebar-panel").evaluate((panel) => panel.getBoundingClientRect().width)).toBe(420);
   const wideTops = await page.evaluate(() => {

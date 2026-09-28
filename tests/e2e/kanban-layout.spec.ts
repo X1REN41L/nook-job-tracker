@@ -1,11 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./api-helpers";
 
 test("keeps board columns readable across zoom-equivalent viewport sizes", async ({ page }) => {
   const monitorWidths = [1440, 1920, 3440, 5120];
   const zoomLevels = [0.5, 0.67, 0.8, 1, 1.5];
   const measurements: string[] = [];
 
-  await page.addInitScript(() => localStorage.removeItem("nook-sidebar-collapsed"));
   await page.goto("/jobs");
   await page.addStyleTag({
     content: ".app-workspace, .sidebar-panel, .sidebar-content, .sidebar-edge-tab { transition-duration: 0s !important; transition-delay: 0s !important; }",

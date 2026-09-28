@@ -6,6 +6,8 @@
 # next.js
 /.next/
 /.next-playwright.*/
+/.next-playwright/
+/tsconfig.playwright.json
 /out/
 
 # production build

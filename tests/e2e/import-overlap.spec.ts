@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+
 import { randomUUID } from "node:crypto";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+import { expect, test, sameOriginMutationHeaders } from "./api-helpers";
 
 test("ignores a file selected during an import and accepts it after completion", async ({ page, request }) => {
   const first = { company: `Overlap first ${Date.now()}`, role: "Import overlap", status: "APPLIED", appliedDate: "2026-09-22" };
@@ -26,7 +26,7 @@ test("ignores a file selected during an import and accepts it after completion",
   });
 
   try {
-    await page.goto("/");
+    await page.goto("/jobs");
     await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
     await page.getByRole("button", { name: "Settings" }).click();
     const settings = page.getByRole("dialog", { name: "Settings" });

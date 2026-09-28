@@ -1,13 +1,4 @@
-import { expect, test } from "@playwright/test";
-
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    if (sessionStorage.getItem("nook-sidebar-navigation-test-initialized")) return;
-    localStorage.removeItem("nook-sidebar-collapsed");
-    localStorage.removeItem("nook-archived-expanded");
-    sessionStorage.setItem("nook-sidebar-navigation-test-initialized", "true");
-  });
-});
+import { expect, readSettings, test } from "./api-helpers";
 
 test("shows ordered sidebar destinations, marks the active route, and opens Settings in place", async ({ page }) => {
   await page.goto("/dashboard");
@@ -42,7 +33,7 @@ test("shows ordered sidebar destinations, marks the active route, and opens Sett
   await expect(navigation.getByRole("link", { name: "Dashboard", exact: true })).toHaveAttribute("aria-current", "page");
 });
 
-test("toggles the sidebar by keyboard and mouse, changes the N control on hover or focus, and restores its preference", async ({ page }) => {
+test("toggles the sidebar by keyboard and mouse, changes the N control on hover or focus, and restores its preference", async ({ page, request }) => {
   await page.goto("/jobs");
 
   const addJob = page.getByRole("button", { name: "Add job", exact: true });
@@ -50,20 +41,21 @@ test("toggles the sidebar by keyboard and mouse, changes the N control on hover 
   await page.keyboard.press("Tab");
   await expect(addJob).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("separator", { name: "Resize sidebar" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(collapse).toBeFocused();
   await page.keyboard.press("Enter");
 
   const expand = page.getByRole("button", { name: "Expand sidebar", exact: true });
-  const logo = page.locator(".sidebar-logo-mark");
-  const expandIcon = page.locator(".sidebar-expand-mark");
+  const logo = page.locator(".sidebar-brand-initial");
   await expect(expand).toBeFocused();
   await expect(logo).toHaveCSS("opacity", "0");
-  await expect(expandIcon).toHaveCSS("opacity", "1");
-  expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).toBe("true");
+  await expect(expand).toHaveCSS("opacity", "1");
+  expect((await readSettings(request)).sidebarCollapsed).toBe(true);
 
   await page.keyboard.press("Enter");
   await expect(collapse).toBeFocused();
-  expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).toBe("false");
+  expect((await readSettings(request)).sidebarCollapsed).toBe(false);
 
   await collapse.click();
   await expect(expand).toBeFocused();
@@ -72,14 +64,14 @@ test("toggles the sidebar by keyboard and mouse, changes the N control on hover 
   await expect(logo).toHaveCSS("opacity", "1");
   await expand.hover();
   await expect(logo).toHaveCSS("opacity", "0");
-  await expect(expandIcon).toHaveCSS("opacity", "1");
+  await expect(expand).toHaveCSS("opacity", "1");
   await expand.click();
   await expect(collapse).toBeFocused();
 
   await collapse.click();
   await page.reload();
   await expect(page.getByRole("button", { name: "Expand sidebar", exact: true })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).toBe("true");
+  expect((await readSettings(request)).sidebarCollapsed).toBe(true);
   await page.mouse.move(500, 500);
-  await expect(page.locator(".sidebar-logo-mark")).toHaveCSS("opacity", "1");
+  await expect(page.locator(".sidebar-brand-initial")).toHaveCSS("opacity", "1");
 });

@@ -1,6 +1,7 @@
-import { expect, type APIRequestContext, type Page, test } from "@playwright/test";
+import { type APIRequestContext, type Page } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, test, sameOriginMutationHeaders } from "./api-helpers";
 
 let applicationIds: string[] = [];
 let fixtureIndex = 0;
@@ -49,12 +50,9 @@ async function createInterview(request: APIRequestContext, input: {
   }
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async () => {
   applicationIds = [];
   fixtureIndex = 0;
-  await page.addInitScript(() => {
-    localStorage.removeItem("nook-sidebar-collapsed");
-  });
 });
 
 test.afterEach(async ({ request }) => {
@@ -183,33 +181,29 @@ test("shows the specified empty states without an interview creation action", as
 });
 
 test("includes dated applications from every stage and archive, groups upcoming dates, and sorts past both ways", async ({ page, request }) => {
+  await page.clock.setFixedTime(new Date("2026-09-28T12:00:00"));
   const today = await localDate(page);
   const tomorrow = await localDate(page, 1);
-  const weekEnd = await page.evaluate(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + (6 - date.getDay()));
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  });
-  const thisWeek = weekEnd > tomorrow ? await localDate(page, 2) : null;
+  const thisWeek = await localDate(page, 2);
   const later = await localDate(page, 8);
   const yesterday = await localDate(page, -1);
   const older = await localDate(page, -8);
   await createInterview(request, { company: "Today Applied", role: "Today role", date: today, status: "APPLIED" });
   await createInterview(request, { company: "Tomorrow Assessment", role: "Tomorrow role", date: tomorrow, status: "ONLINE_ASSESSMENT" });
-  if (thisWeek) await createInterview(request, { company: "Week Offer", role: "Week role", date: thisWeek, status: "OFFER" });
+  await createInterview(request, { company: "Week Offer", role: "Week role", date: thisWeek, status: "OFFER" });
   await createInterview(request, { company: "Later Archived", role: "Later role", date: later, archived: true, status: "REJECTED" });
   await createInterview(request, { company: "Recent Archived", role: "Recent role", date: yesterday, archived: true, status: "APPLIED" });
   await createInterview(request, { company: "Older Assessment", role: "Older role", date: older, status: "ONLINE_ASSESSMENT" });
 
   await page.goto("/interviews");
-  const upcoming = page.getByRole("region", { name: new RegExp(`Upcoming Interviews \\(${thisWeek ? 4 : 3}\\)`) });
+  const upcoming = page.getByRole("region", { name: "Upcoming Interviews (4)" });
   const past = page.getByRole("region", { name: "Past Interviews" });
-  await expect(page.getByTestId("upcoming-interview-count")).toHaveText(String(thisWeek ? 4 : 3));
+  await expect(page.getByTestId("upcoming-interview-count")).toHaveText("4");
   await expect(upcoming.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
   await expect(upcoming.getByRole("heading", { name: "Tomorrow", exact: true })).toBeVisible();
-  if (thisWeek) await expect(upcoming.getByRole("heading", { name: "This Week", exact: true })).toBeVisible();
-  await expect(upcoming.getByRole("heading", { name: "Later", exact: true })).toBeVisible();
-  await expect(upcoming.locator("article")).toHaveCount(thisWeek ? 4 : 3);
+  await expect(upcoming.getByRole("heading", { name: "Later This Week", exact: true })).toBeVisible();
+  await expect(upcoming.getByRole("heading", { name: "Next Week", exact: true })).toBeVisible();
+  await expect(upcoming.locator("article")).toHaveCount(4);
   await expect(upcoming.getByText("Later Archived", { exact: false })).toBeVisible();
   await expect(past).toHaveCount(0);
   await page.getByRole("tab", { name: "Past" }).click();

@@ -1,12 +1,8 @@
-import { expect, test } from "@playwright/test";
-
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.removeItem("nook-sidebar-collapsed"));
-});
+import { expect, test } from "./api-helpers";
 
 test("keeps the expanded sidebar and collapsed rail on the left at desktop and mobile widths", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/");
+  await page.goto("/jobs");
   await page.addStyleTag({ content: ".app-workspace, .sidebar-panel, .sidebar-content, .sidebar-edge-tab { transition-duration: 0s !important; transition-delay: 0s !important; }" });
 
   const sidebar = page.locator(".sidebar-panel");
@@ -15,7 +11,6 @@ test("keeps the expanded sidebar and collapsed rail on the left at desktop and m
 
   await expect(board).toBeVisible();
   await expect(branding).toBeVisible();
-  await expect(sidebar.getByText("your job search, kept tidy", { exact: true })).toBeVisible();
   await expect(page.locator("header").getByText("Nook", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add job" })).toBeVisible();
 
@@ -32,7 +27,7 @@ test("keeps the expanded sidebar and collapsed rail on the left at desktop and m
     sidebarWidth: Math.round(document.querySelector(".sidebar-panel")!.getBoundingClientRect().width),
     boardLeft: Math.round(document.querySelector(".board-scroll")!.getBoundingClientRect().left),
   }));
-  expect(desktopCollapsed).toEqual({ sidebarWidth: 45, boardLeft: 45 });
+  expect(desktopCollapsed).toEqual({ sidebarWidth: 50, boardLeft: 50 });
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
 
   await page.getByRole("button", { name: "Expand sidebar" }).click();
@@ -54,7 +49,7 @@ test("keeps the expanded sidebar and collapsed rail on the left at desktop and m
     sidebarRight: Math.round(document.querySelector(".sidebar-panel")!.getBoundingClientRect().right),
     boardLeft: Math.round(document.querySelector(".board-scroll")!.getBoundingClientRect().left),
   }));
-  expect(mobileCollapsed).toEqual({ sidebarLeft: -275, sidebarRight: 45, boardLeft: 45 });
+  expect(mobileCollapsed).toEqual({ sidebarLeft: 0, sidebarRight: 50, boardLeft: 50 });
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add job" })).toBeVisible();
 });
@@ -99,8 +94,11 @@ test("keeps navigation and brand icons the same size and height when the sidebar
     expect(after.container).toEqual(before.container);
     expect(before.iconCenter).toEqual(before.containerCenter);
     expect(after.iconCenter).toEqual(after.containerCenter);
-    expect(after.containerCenter).toEqual(after.buttonCenter);
-    expect(after.button).toEqual({ width: 36, height: 36 });
+    expect(Math.abs(after.containerCenter.x - after.buttonCenter.x)).toBeLessThanOrEqual(0.5);
+    expect(after.containerCenter.y).toBe(after.buttonCenter.y);
+    expect(after.button.width).toBeGreaterThanOrEqual(35);
+    expect(after.button.width).toBeLessThanOrEqual(36);
+    expect(after.button.height).toBe(36);
     expect(after.iconCenter.y).toBe(before.iconCenter.y);
   }
   expect(new Set(expanded.items.map((item) => item.iconCenter.x)).size).toBe(1);

@@ -1,4 +1,5 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { type Locator } from "@playwright/test";
+import { expect, test } from "./api-helpers";
 
 async function readSections(container: Locator) {
   return container.locator("section[aria-label]").evaluateAll((sections) => sections.map((section) => ({

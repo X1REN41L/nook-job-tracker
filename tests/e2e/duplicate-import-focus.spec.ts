@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+
 import { randomUUID } from "node:crypto";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+import { expect, test, sameOriginMutationHeaders } from "./api-helpers";
 
 test("duplicate import gives the warning dialog focus while Settings stays open", async ({ page, request }) => {
   const application = {
@@ -18,7 +18,7 @@ test("duplicate import gives the warning dialog focus while Settings stays open"
   const { application: saved } = await response.json();
 
   try {
-    await page.goto("/");
+    await page.goto("/jobs");
     await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
     await page.getByRole("button", { name: "Settings" }).click();
     const settings = page.getByRole("dialog", { name: "Settings" });

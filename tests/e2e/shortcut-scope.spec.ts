@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, readSettings, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
 
 test("search is inert off the Job Board and application actions ignore Interviews", async ({ page, request }) => {
   const response = await request.post("/api/applications", {
@@ -21,11 +21,10 @@ test("search is inert off the Job Board and application actions ignore Interview
   page.on("pageerror", (error) => errors.push(error.message));
 
   for (const route of ["/interviews", "/dashboard"]) {
+    await resetSettings(request, { sidebarCollapsed: true });
     await page.goto(route);
-    await page.evaluate(() => localStorage.setItem("nook-sidebar-collapsed", "true"));
-    await page.reload();
     await page.keyboard.press("/");
-    expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).toBe("true");
+    expect((await readSettings(request)).sidebarCollapsed).toBe(true);
     if (route === "/interviews") {
       await expect(page.getByRole("searchbox", { name: "Search by company or role" })).toBeFocused();
     } else {
@@ -72,7 +71,7 @@ test("Escape closes the interview date prompt without marking it skipped", async
   expect((await record.json()).application.interviewDatePromptDismissed).toBe(false);
 });
 
-test("general shortcuts work across routes while page actions remain scoped", async ({ page }) => {
+test("general shortcuts work across routes while page actions remain scoped", async ({ page, request }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
@@ -111,22 +110,22 @@ test("general shortcuts work across routes while page actions remain scoped", as
     await page.keyboard.press("Backspace");
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await page.keyboard.press("u");
-    await expect(page.locator(".nook-toast")).toHaveCount(0);
+    await expect(page.locator(".nook-toast-wrap")).toHaveAttribute("aria-hidden", "true");
 
-    const before = await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"));
+    const before = (await readSettings(request)).sidebarCollapsed;
     await page.keyboard.press(`${modifier}+Shift+s`);
-    expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).not.toBe(before);
+    await expect.poll(async () => (await readSettings(request)).sidebarCollapsed).toBe(!before);
 
     await page.keyboard.press(`${modifier}+Shift+,`);
     const settings = page.getByRole("dialog", { name: "Settings" });
     await expect(settings).toBeVisible();
-    const collapsed = await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"));
+    const collapsed = (await readSettings(request)).sidebarCollapsed;
     for (const key of ["Alt+n", "/", "?", "Alt+a", "Delete", "Backspace", `${modifier}+Shift+s`, "u", "g", "j", "ArrowDown"]) {
       await page.keyboard.press(key);
     }
     await expect(settings).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Add a job" })).toHaveCount(0);
-    expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).toBe(collapsed);
+    expect((await readSettings(request)).sidebarCollapsed).toBe(collapsed);
     expect(new URL(page.url()).pathname).toBe(route);
     await page.keyboard.press("Escape");
     await expect(settings).toHaveCount(0);
@@ -195,7 +194,7 @@ test("keyboard-only navigation, card focus, archive, delete, and undo", async ({
   await expect(page).toHaveURL(/\/dashboard$/);
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Alt+a");
-  await expect(page.locator(`#recent-applications-heading + div [data-application-id="${assessment.id}"]`)).toBeVisible();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await page.keyboard.press("Backspace");
   await expect(page.getByRole("alertdialog", { name: "Delete application?" })).toHaveCount(0);
 

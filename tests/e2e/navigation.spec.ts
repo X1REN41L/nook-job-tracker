@@ -1,15 +1,22 @@
-import { expect, type APIRequestContext, test } from "@playwright/test";
+import { type APIRequestContext } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
 
 let applicationId: string | null = null;
 
-test.beforeEach(async ({ page }) => {
+test("root redirects to the configured startup page", async ({ page, request }) => {
+  test.setTimeout(90_000);
+  await resetSettings(request, { startupPage: "job-board" });
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/jobs$/, { timeout: 30_000 });
+  await resetSettings(request, { startupPage: "interviews" });
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/interviews$/, { timeout: 30_000 });
+});
+
+test.beforeEach(async () => {
   applicationId = null;
-  await page.addInitScript(() => {
-    localStorage.removeItem("nook-sidebar-collapsed");
-    localStorage.removeItem("nook-archived-expanded");
-  });
 });
 
 test.afterEach(async ({ request }) => {
@@ -36,9 +43,6 @@ async function createApplication(request: APIRequestContext) {
 
 test("loads and navigates among the shared Job Board, Dashboard, and Interviews shell", async ({ page, request }) => {
   await createApplication(request);
-  const dashboardRecent = page.getByRole("button", {
-    name: "Edit Shared sidebar role at Route navigation fixture",
-  });
   const jobBoardSidebarApplication = page.getByRole("button", {
     name: "Edit or archive Shared sidebar role at Route navigation fixture",
   });
@@ -47,7 +51,7 @@ test("loads and navigates among the shared Job Board, Dashboard, and Interviews 
   await page.goto("/dashboard");
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
-  await expect(dashboardRecent).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Needs Attention" })).toBeVisible();
 
   await navigation.getByRole("link", { name: "Job Board" }).click();
   await expect(page).toHaveURL(/\/jobs$/);
@@ -61,16 +65,12 @@ test("loads and navigates among the shared Job Board, Dashboard, and Interviews 
   await expect(page).toHaveURL(/\/interviews$/);
   await expect(page.getByRole("heading", { name: "Upcoming Interviews (0)" })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Interviews" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search by company or role" })).toBeVisible();
-  await expect(dashboardRecent).toHaveCount(0);
 
   await page.goto("/interviews");
   await expect(page.getByRole("heading", { name: "Upcoming Interviews (0)" })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "Interviews" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search by company or role" })).toBeVisible();
-  await expect(dashboardRecent).toHaveCount(0);
 
   await page.goto("/jobs");
   await expect(navigation.getByRole("link", { name: "Job Board" })).toHaveAttribute("aria-current", "page");

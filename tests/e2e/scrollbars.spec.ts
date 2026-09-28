@@ -1,16 +1,8 @@
 import { PrismaClient, Status } from "@prisma/client";
-import { expect, type Page, test } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { expect, test } from "./api-helpers";
 
 const prisma = new PrismaClient();
-
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.removeItem("nook-sidebar-collapsed");
-    localStorage.removeItem("nook-archived-expanded");
-    localStorage.removeItem("nook-all-applications-expanded");
-    localStorage.removeItem("theme");
-  });
-});
 
 test.afterEach(async () => {
   await prisma.application.deleteMany({ where: { source: "Scrollbar visual check" } });
@@ -77,14 +69,15 @@ async function switchTheme(page: Page, theme: "light" | "dark") {
   await page.getByRole("button", { name: "Settings" }).click();
   const dialog = page.getByRole("dialog", { name: "Settings" });
   await dialog.getByRole("button", { name: `Use ${theme} theme` }).click();
-  await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${theme}\\b`));
+  if (theme === "dark") await expect(page.locator("html")).toHaveClass(/\bdark\b/);
+  else await expect(page.locator("html")).not.toHaveClass(/\bdark\b/);
   await dialog.getByRole("button", { name: "Close settings" }).click();
 }
 
 test("keeps board scrollbars compact and stable across themes", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 800 });
   await createApplications();
-  await page.goto("/");
+  await page.goto("/jobs");
 
   const applicationList = page.locator(".sidebar-content .scrollbar-styled.overflow-y-auto").nth(0);
   const archiveToggle = page.getByRole("button", { name: "Archived 16", exact: true });

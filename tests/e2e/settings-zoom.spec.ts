@@ -1,9 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./api-helpers";
 
 const zoomLevels = [0.75, 0.9, 1, 1.1, 1.25];
 
 test("compact Settings text stays on one line through browser zoom scaling", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/dashboard");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.evaluate(() => document.fonts.ready);
 

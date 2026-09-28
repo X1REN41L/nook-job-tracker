@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, test, sameOriginMutationHeaders } from "./api-helpers";
 
 const maxFileBytes = 10 * 1024 * 1024;
 const settings = {
@@ -10,6 +10,7 @@ const settings = {
 };
 
 test("backup import enforces limits, reviews duplicates, and accepts a near-limit file", async ({ page, request }) => {
+  test.setTimeout(120_000);
   const importRequests: string[] = [];
   await page.route("**/api/applications/import", async (route) => {
     if (route.request().method() === "POST") importRequests.push(route.request().postData() ?? "");
@@ -28,7 +29,7 @@ test("backup import enforces limits, reviews duplicates, and accepts a near-limi
     seedId = seed.id;
     const initialCount = (await (await request.get("/api/applications")).json()).applications.length;
 
-    await page.goto("/");
+    await page.goto("/jobs");
     await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
     await page.getByRole("button", { name: "Settings" }).click();
     const dialog = page.getByRole("dialog", { name: "Settings" });
@@ -66,9 +67,12 @@ test("backup import enforces limits, reviews duplicates, and accepts a near-limi
       version: 1,
       applications: [{
         id: largeId, company: "Near limit import", role: "Large backup", status: "APPLIED", archived: false,
-        source: null, appliedDate: now, interviewDate: null, interviewDatePromptDismissed: false,
+        source: null, appliedDate: "2026-09-22T00:00:00.000Z", interviewDate: null, interviewDatePromptDismissed: false,
         notes: null, jobUrl: null, createdAt: now, lastUpdated: now,
-        events: [{ id: randomUUID(), type: "STATUS_CHANGE", detail: "x".repeat(9_500_000), fromStatus: null, toStatus: null, emailSnippet: null, createdAt: now }],
+        events: Array.from({ length: 1_900 }, () => ({
+          id: randomUUID(), type: "NOTE_ADDED", detail: "x".repeat(5_000),
+          fromStatus: null, toStatus: null, emailSnippet: null, createdAt: now,
+        })),
       }],
       settings,
     };

@@ -1,6 +1,7 @@
-import { expect, type APIRequestContext, type Page, test } from "@playwright/test";
+import { type APIRequestContext, type Page } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, test, sameOriginMutationHeaders } from "./api-helpers";
 
 type ApplicationFixture = {
   company: string;
@@ -13,12 +14,8 @@ type ApplicationFixture = {
 
 const applicationIds: string[] = [];
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async () => {
   applicationIds.length = 0;
-  await page.addInitScript(() => {
-    localStorage.removeItem("nook-sidebar-collapsed");
-    localStorage.removeItem("nook-archived-expanded");
-  });
 });
 
 test.afterEach(async ({ request }) => {
@@ -67,21 +64,21 @@ function shiftDate(value: string, offset: number) {
   return date.toISOString().slice(0, 10);
 }
 
-test("keeps Job Board browsing on its route and shows recent unarchived applications on expanded Dashboard", async ({ page, request }) => {
-  await page.goto("/dashboard");
+test("keeps Job Board filters, search, and archive controls on its route", async ({ page, request }) => {
+  await page.goto("/jobs");
   const today = await localDate(page);
-  const newest = await createApplication(request, {
+  await createApplication(request, {
     company: "Recent North",
     role: "Newest role",
     appliedDate: shiftDate(today, -1),
   });
-  const oldest = await createApplication(request, {
+  await createApplication(request, {
     company: "Recent South",
     role: "Older role",
     status: "OFFER",
     appliedDate: shiftDate(today, -3),
   });
-  const archived = await createApplication(request, {
+  await createApplication(request, {
     company: "Archived West",
     role: "Archived role",
     appliedDate: today,
@@ -89,23 +86,10 @@ test("keeps Job Board browsing on its route and shows recent unarchived applicat
   });
   await page.reload();
 
-  await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Search company or role" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Archived\s+\d+$/ })).toHaveCount(0);
-  const recentRows = page.locator('.sidebar-content button[data-application-id]');
-  await expect(recentRows).toHaveCount(2);
-  expect(await recentRows.evaluateAll((rows) => rows.map((row) => row.getAttribute("data-application-id")))).toEqual([newest.id, oldest.id]);
-  await expect(page.locator(`[data-application-id="${archived.id}"]`)).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Collapse sidebar" }).click();
-  await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toBeHidden();
-  await page.getByRole("button", { name: "Expand sidebar" }).click();
-  await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toBeVisible();
-
-  await page.getByRole("link", { name: "Job Board", exact: true }).click();
+  await expect(page).toHaveURL(/\/jobs$/);
   await expect(page.getByRole("heading", { name: "All applications", exact: true })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Search company or role" })).toBeVisible();
-  await expect(page.getByText("3 applications total", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "All applications 2" })).toBeVisible();
 
   const offerFilter = page.getByRole("button", { name: "Offer", exact: true });
   await offerFilter.click();
@@ -131,7 +115,7 @@ test("keeps Job Board browsing on its route and shows recent unarchived applicat
   await expect(page.getByRole("button", { name: "Edit or move archived Archived role at Archived West" })).toBeVisible();
 });
 
-test("counts only unarchived, dated Interview applications due today or later and hides other route context", async ({ page, request }) => {
+test("counts dated upcoming applications across stages and archive on Interviews", async ({ page, request }) => {
   await page.goto("/interviews");
   const today = await localDate(page);
   await createApplication(request, {
@@ -177,9 +161,8 @@ test("counts only unarchived, dated Interview applications due today or later an
   });
   await page.reload();
 
-  await expect(page.getByTestId("upcoming-interview-count")).toHaveText("2");
+  await expect(page.getByTestId("upcoming-interview-count")).toHaveText("4");
   await expect(page.getByRole("heading", { name: "All applications", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toHaveCount(0);
   await expect(page.getByRole("searchbox", { name: "Search by company or role" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Archived\s+\d+$/ })).toHaveCount(0);
 });
@@ -188,14 +171,14 @@ test("shows empty application and archive states and a zero interview count", as
   await page.goto("/interviews");
   await expect(page.getByTestId("upcoming-interview-count")).toHaveText("0");
   await expect(page.getByRole("heading", { name: "All applications", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Recent applications", exact: true })).toHaveCount(0);
 
   await page.goto("/dashboard");
-  await expect(page.getByText("No recent applications yet.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Needs Attention" })).toBeVisible();
+  await expect(page.getByText("No applications need attention right now.", { exact: true })).toBeVisible();
 
-  await page.goto("/");
+  await page.goto("/jobs");
   await expect(page.getByText("No applications yet. Add your first job to see it here.", { exact: true })).toBeVisible();
-  await expect(page.getByText("0 applications total", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "All applications 0" })).toBeVisible();
   await page.getByRole("button", { name: "Archived 0", exact: true }).click();
   await expect(page.getByText("No archived applications.", { exact: true })).toBeVisible();
 });

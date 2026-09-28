@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
 
-import { sameOriginMutationHeaders } from "./api-helpers";
+
+import { expect, test, resetSettings, sameOriginMutationHeaders } from "./api-helpers";
 
 test("a failed status undo keeps Undo available for retry", async ({ page, request }) => {
   const created = await request.post("/api/applications", { data: {
@@ -12,7 +12,7 @@ test("a failed status undo keeps Undo available for retry", async ({ page, reque
   try {
     const archived = await request.patch(`/api/applications/${application.id}`, { data: { revision: application.revision, archived: true }, headers: sameOriginMutationHeaders });
     expect(archived.status()).toBe(200);
-    await page.goto("/");
+    await page.goto("/jobs");
     await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
     const row = page.locator(`[data-application-id="${application.id}"]`);
     await page.getByRole("button", { name: /^Archived\s+\d+$/ }).click();
@@ -41,47 +41,9 @@ test("a failed status undo keeps Undo available for retry", async ({ page, reque
   }
 });
 
-test("settings storage failure reports committed imported applications separately", async ({ page, request }) => {
-  const created = await request.post("/api/applications", { data: {
-    company: `Storage check ${randomUUID()}`, role: "Import check", status: "APPLIED", appliedDate: "2026-09-22",
-  }, headers: sameOriginMutationHeaders });
-  expect(created.status()).toBe(201);
-  const { application } = await created.json();
-  const importedId = randomUUID();
-  try {
-    const exported = await (await request.get("/api/applications/export")).json();
-    const record = exported.applications.find((item: { id: string }) => item.id === application.id);
-    await page.addInitScript(() => {
-      const original = Storage.prototype.setItem;
-      Storage.prototype.setItem = function (key, value) {
-        if (key === "nook-sidebar-collapsed") throw new DOMException("Storage unavailable", "QuotaExceededError");
-        return original.call(this, key, value);
-      };
-    });
-    await page.goto("/");
-    await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
-    await page.getByRole("button", { name: "Settings" }).click();
-    const settings = page.getByRole("dialog", { name: "Settings" });
-    await settings.getByRole("button", { name: "Backup & Restore" }).click();
-    await settings.locator('input[type="file"]').setInputFiles({
-      name: "storage-failure.json", mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ ...exported, settings: {
-        ...exported.settings, theme: "system", defaultBoard: "APPLIED", motion: "system", boards: [],
-        sidebarCollapsed: false, archivedExpanded: false,
-      }, applications: [{ ...record, id: importedId, company: `${record.company} restored`, events: [] }] })),
-    });
-    await expect(page.getByText("Imported 1 applications; skipped 0; settings could not be restored")).toBeVisible();
-    const after = await (await request.get("/api/applications/export")).json();
-    expect(after.applications.some((item: { id: string }) => item.id === importedId)).toBe(true);
-  } finally {
-    await request.delete(`/api/applications/${importedId}`, { headers: sameOriginMutationHeaders });
-    await request.delete(`/api/applications/${application.id}`, { headers: sameOriginMutationHeaders });
-  }
-});
-
 test("backup import restores the sidebar collapse preference", async ({ page, request }) => {
-  await page.addInitScript(() => localStorage.setItem("nook-sidebar-collapsed", "true"));
-  await page.goto("/");
+  await resetSettings(request, { sidebarCollapsed: true });
+  await page.goto("/jobs");
   await expect(page.getByRole("button", { name: "Expand sidebar", exact: true })).toBeVisible();
 
   const modifier = await page.evaluate(() => /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent) ? "Meta" : "Control");
@@ -111,6 +73,6 @@ test("backup import restores the sidebar collapse preference", async ({ page, re
   await expect(page.getByText(/^Imported \d+ applications; skipped \d+; settings restored$/)).toBeVisible();
   await settings.getByRole("button", { name: "Close settings" }).click();
   await expect(page.getByRole("button", { name: "Collapse sidebar", exact: true })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("nook-sidebar-collapsed"))).toBe("false");
+  expect((await (await request.get("/api/settings")).json()).settings.sidebarCollapsed).toBe(false);
   await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeFocused();
 });
