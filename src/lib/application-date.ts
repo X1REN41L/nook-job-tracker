@@ -25,3 +25,18 @@ export function formatCalendarDate(value: string, currentYear = currentLocalDate
     month: "short", day: "numeric", ...(value.slice(0, 4) !== currentYear && { year: "numeric" }), timeZone: "UTC",
   }).format(date);
 }
+
+export function calendarDaysSince(value: string, today: string) {
+  return Math.round((Date.parse(`${today.slice(0, 10)}T00:00:00.000Z`) - Date.parse(`${value.slice(0, 10)}T00:00:00.000Z`)) / 86_400_000);
+}
+
+/** Compact age of a calendar date, such as "Today" or "12d ago". */
+export function formatDaysAgo(value: string, today: string) {
+  const days = calendarDaysSince(value, today);
+  return days <= 0 ? "Today" : `${days}d ago`;
+}
+
+// Timestamps (unlike calendar dates) are shown in the browser's own timezone.
+export function formatTimestamp(value: string) {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}

@@ -10,7 +10,11 @@ import { FormEvent, useCallback, useEffect, useId, useRef, useState, useSyncExte
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
+import { ApplicationDetailPanel } from "@/components/application-detail-panel";
 import { ApplicationSidebar } from "@/components/application-sidebar";
+import { ApplicationsTable } from "@/components/applications-table";
+import { BoardToolbar, DEFAULT_BOARD_FILTERS, type BoardFilters } from "@/components/board-toolbar";
+import { CommandPalette, type PaletteCommand } from "@/components/command-palette";
 import { KanbanBoard, KanbanCardOverlay } from "@/components/kanban-board";
 import { DeleteDialog } from "@/components/delete-dialog";
 import { DuplicateWarningDialog } from "@/components/duplicate-warning-dialog";
@@ -19,7 +23,6 @@ import { MotionPresence } from "@/components/motion-presence";
 import { InterviewsList } from "@/components/interviews-list";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DashboardAnalytics } from "@/components/dashboard-analytics";
-import { DashboardStaleApplications } from "@/components/dashboard-stale-applications";
 import { JobModal } from "@/components/job-modal";
 import { SettingsModal } from "@/components/settings-modal";
 import { ShortcutOverlay } from "@/components/shortcut-overlay";
@@ -27,12 +30,13 @@ import { useApplicationBackup } from "@/hooks/use-application-backup";
 import { ARCHIVED_DROP_ID, SIDEBAR_EDGE_DROP_ID, useBoardDrag } from "@/hooks/use-board-drag";
 import { useDashboardShortcuts } from "@/hooks/use-dashboard-shortcuts";
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
-import { useToastUndo, type ToastUndo } from "@/hooks/use-toast-undo";
+import { useStaleApplications } from "@/hooks/use-stale-applications";
+import { useToastUndo, type StatusUndo, type ToastUndo } from "@/hooks/use-toast-undo";
 import { useBoards } from "@/hooks/use-boards";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
 import { currentLocalDate } from "@/lib/application-date";
-import { compareApplications, matchesApplicationSearch } from "@/lib/application-list";
+import { ACTIVE_PIPELINE_STATUSES, applicationSources, compareApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationFilters, type ApplicationFilters } from "@/lib/application-list";
 import { subscribeToLocalDate } from "@/lib/local-date-subscription";
 import { setSettingsState } from "@/lib/settings-store";
 import { BOARD_STATUSES, boardLabel } from "@/lib/board-preferences";
@@ -44,6 +48,7 @@ import { isMacPlatform } from "@/lib/keyboard-shortcuts";
 import { getDefaultBoard } from "@/lib/general-preferences";
 import { getInterviewListItems, getUpcomingInterviewCount } from "@/lib/interviews";
 import type { ApplicationRecord, JobFormState } from "@/types/application";
+import type { StaleApplication } from "@/types/dashboard";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
 const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), interviewDate: "", notes: "", jobUrl: "" });
@@ -89,7 +94,13 @@ function getServerLocalDate() {
   return "";
 }
 
-export function ApplicationDashboard({ initialApplications, page, dashboardSection = "overview" }: { initialApplications: ApplicationRecord[]; page: ApplicationPageName; dashboardSection?: DashboardSection }) {
+export function ApplicationDashboard({ initialApplications, page, dashboardSection = "overview", tableFilters = DEFAULT_APPLICATION_FILTERS, expandAttention = false }: {
+  initialApplications: ApplicationRecord[];
+  page: ApplicationPageName;
+  dashboardSection?: DashboardSection;
+  tableFilters?: ApplicationFilters;
+  expandAttention?: boolean;
+}) {
   const router = useRouter();
   const boardScrollRef = useScrollbarActivity<HTMLElement>();
   const boards = useBoards();
@@ -117,6 +128,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicate | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const isMac = typeof navigator !== "undefined" && isMacPlatform();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
@@ -142,9 +157,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const pendingSearchFocusRef = useRef(false);
   const focusExpandOnCollapseRef = useRef(false);
   const interviewSearchRef = useRef<HTMLInputElement | null>(null);
+  const boardSearchRef = useRef<HTMLInputElement | null>(null);
+  const tableSearchRef = useRef<HTMLInputElement | null>(null);
   const shortcutTriggerRef = useRef<HTMLElement | null>(null);
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const submissionInFlight = useRef(false);
@@ -154,22 +170,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     onDrop: handleDrop,
   });
   const effectiveSidebarCollapsed = sidebarCollapsed && !temporarilyExpanded;
-  useEffect(() => {
-    if (!pendingSearchFocusRef.current || effectiveSidebarCollapsed || !allApplicationsExpanded) return;
-    const input = searchInputRef.current;
-    if (!input) return;
-    let frame = 0;
-    const focusWhenVisible = () => {
-      if (input.closest("[inert]") || getComputedStyle(input).visibility !== "visible") {
-        frame = requestAnimationFrame(focusWhenVisible);
-        return;
-      }
-      input.focus();
-      pendingSearchFocusRef.current = false;
-    };
-    frame = requestAnimationFrame(focusWhenVisible);
-    return () => cancelAnimationFrame(frame);
-  }, [effectiveSidebarCollapsed, allApplicationsExpanded]);
+  const staleData = useStaleApplications(today, dataRevision, page === "job-board" || page === "table" || detailId !== null).data;
+  const staleById = new Map<string, StaleApplication>(staleData
+    ? [...staleData.applicationsBySeverity.CRITICAL, ...staleData.applicationsBySeverity.HIGH, ...staleData.applicationsBySeverity.MEDIUM].map((item) => [item.id, item])
+    : []);
+  const staleDays = new Map([...staleById].map(([id, item]) => [id, item.staleDays]));
   const cancelDelete = useCallback(() => {
     setPendingDelete(null);
     if (reopenModalAfterDelete.current) setIsModalOpen(true);
@@ -339,6 +344,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       setMovingIds(new Set());
       setSearchTerm("");
       setActiveFilter("all");
+      setBoardFilters(DEFAULT_BOARD_FILTERS);
+      setDetailId(null);
       setError("");
       clearApplicationUndo();
       showToast("All application data deleted.");
@@ -362,6 +369,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setForm({ company: application.company, role: application.role, status: application.status, source: application.source ?? "", appliedDate: application.appliedDate.slice(0, 10), interviewDate: application.interviewDate?.slice(0, 10) ?? "", notes: application.notes ?? "", jobUrl: application.jobUrl ?? "" });
     setFormError("");
     setIsModalOpen(true);
+  }
+
+  function openDetail(application: ApplicationRecord) {
+    setDetailId(application.id);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -504,6 +515,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     offerUndo = true,
     restoration?: Pick<ApplicationRecord, "interviewDate" | "interviewDatePromptDismissed">,
     archived = application.archived,
+    // Collects undo entries for a bulk change instead of offering one toast per application.
+    batch?: StatusUndo[],
   ): Promise<MoveResult> {
     // Checked before the no-op test: an in-flight move has already applied its optimistic state.
     if (movingIdsRef.current.has(application.id)) {
@@ -538,33 +551,60 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       if (response.status === 409 && body.application) {
         const latest = body.application as ApplicationRecord;
         reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
-        // Undo (offerUndo false) reports the conflict itself by re-offering its toast.
-        if (offerUndo) setError("This application changed elsewhere. The latest saved version has been loaded; try your action again.");
+        // Undo (offerUndo false) and bulk changes report the conflict themselves.
+        if (offerUndo && !batch) setError("This application changed elsewhere. The latest saved version has been loaded; try your action again.");
         return "conflict";
       }
       if (!response.ok) throw new Error(body.error ?? "Could not update the application status");
       reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
-      if (offerUndo) {
+      const undo: StatusUndo = { kind: "status", applicationId: application.id, status: previousStatus, archived: previousArchived, interviewDate: previousInterviewDate, interviewDatePromptDismissed: previousInterviewDatePromptDismissed, expectedLatestStatusEventId: body.latestStatusEventId ?? null, movedRevision: body.application.revision };
+      if (batch) {
+        batch.push(undo);
+      } else if (offerUndo) {
         const message = previousArchived !== archived
           ? `${archived ? "Archived" : "Restored"} ${application.company}`
           : `${application.company} moved from ${boardLabel(boards, previousStatus)} to ${boardLabel(boards, status)}`;
-        showToast(
-          message,
-          { kind: "status", applicationId: application.id, status: previousStatus, archived: previousArchived, interviewDate: previousInterviewDate, interviewDatePromptDismissed: previousInterviewDatePromptDismissed, expectedLatestStatusEventId: body.latestStatusEventId ?? null, movedRevision: body.application.revision },
-        );
+        showToast(message, undo);
       }
-      if (!restoration && previousStatus !== Status.INTERVIEW && status === Status.INTERVIEW && !body.application.interviewDate && !body.application.interviewDatePromptDismissed) {
+      if (!batch && !restoration && previousStatus !== Status.INTERVIEW && status === Status.INTERVIEW && !body.application.interviewDate && !body.application.interviewDatePromptDismissed) {
         openInterviewDatePrompt(body.application);
       }
       return "moved";
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not update the application status");
+      if (!batch) setError(caught instanceof Error ? caught.message : "Could not update the application status");
       setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status: previousStatus, archived: previousArchived, interviewDate: previousInterviewDate, interviewDatePromptDismissed: previousInterviewDatePromptDismissed } : item));
       if (!offerUndo) throw caught;
       return "failed";
     } finally {
       endMove(application.id);
     }
+  }
+
+  // Bulk changes send one request per application, so each keeps its own revision check and status history.
+  async function bulkMove(targets: ApplicationRecord[], change: { status: Status } | { archived: boolean }) {
+    const undo: StatusUndo[] = [];
+    let failed = 0;
+    setError("");
+    setBulkBusy(true);
+    try {
+      for (const application of targets) {
+        const status = "status" in change ? change.status : application.status;
+        const archived = "archived" in change ? change.archived : application.archived;
+        const result = await moveApplication(application, status, true, undefined, archived, undo);
+        if (result !== "moved" && result !== "unchanged") failed += 1;
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+    const moved = undo.length;
+    const noun = moved === 1 ? "application" : "applications";
+    const summary = moved === 0 && failed === 0
+      ? "Nothing to change"
+      : "status" in change
+        ? `Moved ${moved} ${noun} to ${boardLabel(boards, change.status)}`
+        : `${change.archived ? "Archived" : "Restored"} ${moved} ${noun}`;
+    const problems = failed ? `. ${failed} could not be updated because ${failed === 1 ? "it" : "they"} changed elsewhere or ${failed === 1 ? "was" : "were"} busy.` : "";
+    showToast(`${summary}${problems}`, moved ? { kind: "batch", items: undo } : undefined);
   }
 
   function openInterviewDatePrompt(application: ApplicationRecord) {
@@ -616,47 +656,65 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     });
   }
 
+  async function undoStatusChange(undo: StatusUndo) {
+    const application = applications.find(({ id }) => id === undo.applicationId);
+    if (!application) return null;
+    // Throwing re-offers the Undo toast (useToastUndo), so an undo that did not run is never consumed.
+    const busyMessage = `${application.company} is still being updated. Try Undo again in a moment.`;
+    if (undo.expectedLatestStatusEventId) {
+      if (!beginMove(application.id)) throw new Error(busyMessage);
+      try {
+        const response = await fetch(applicationApiPath(application.id, "undo-status"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            revision: undo.movedRevision,
+            expectedLatestStatusEventId: undo.expectedLatestStatusEventId,
+            archived: undo.archived,
+            interviewDate: undo.interviewDate?.slice(0, 10) ?? null,
+            interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
+          }),
+        });
+        const body = await response.json();
+        if (response.status === 409 && body.application) {
+          const latest = body.application as ApplicationRecord;
+          reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+          throw new Error("This application changed elsewhere. The latest saved version has been loaded; review it before trying again.");
+        }
+        if (!response.ok) throw new Error(body.error ?? "Could not undo the status move");
+        reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
+      } finally {
+        endMove(application.id);
+      }
+    } else {
+      const result = await moveApplication(application, undo.status, false, {
+        interviewDate: undo.interviewDate,
+        interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
+      }, undo.archived);
+      if (result === "busy") throw new Error(busyMessage);
+      if (result === "conflict") throw new Error("This application changed elsewhere. The latest saved version has been loaded; review it before trying again.");
+    }
+    return application;
+  }
+
   async function restoreLatestChange(undo: ToastUndo, restoreKeyboardFocus: boolean) {
     setPendingInterviewDate(null);
     if (undo.kind === "status") {
-      const application = applications.find(({ id }) => id === undo.applicationId);
-      if (!application) return;
-      // Throwing re-offers the Undo toast (useToastUndo), so an undo that did not run is never consumed.
-      const busyMessage = `${application.company} is still being updated. Try Undo again in a moment.`;
-      if (undo.expectedLatestStatusEventId) {
-        if (!beginMove(application.id)) throw new Error(busyMessage);
+      const application = await undoStatusChange(undo);
+      if (application && restoreKeyboardFocus && (BOARD_STATUSES as readonly Status[]).includes(undo.status)) focusKanbanCard(application.id);
+      return;
+    }
+    if (undo.kind === "batch") {
+      let failed = 0;
+      for (const item of undo.items) {
         try {
-          const response = await fetch(applicationApiPath(application.id, "undo-status"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              revision: undo.movedRevision,
-              expectedLatestStatusEventId: undo.expectedLatestStatusEventId,
-              archived: undo.archived,
-              interviewDate: undo.interviewDate?.slice(0, 10) ?? null,
-              interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
-            }),
-          });
-          const body = await response.json();
-          if (response.status === 409 && body.application) {
-            const latest = body.application as ApplicationRecord;
-            reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
-            throw new Error("This application changed elsewhere. The latest saved version has been loaded; review it before trying again.");
-          }
-          if (!response.ok) throw new Error(body.error ?? "Could not undo the status move");
-          reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
-        } finally {
-          endMove(application.id);
+          await undoStatusChange(item);
+        } catch {
+          failed += 1;
         }
-      } else {
-        const result = await moveApplication(application, undo.status, false, {
-          interviewDate: undo.interviewDate,
-          interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
-        }, undo.archived);
-        if (result === "busy") throw new Error(busyMessage);
-        if (result === "conflict") throw new Error("This application changed elsewhere. The latest saved version has been loaded; review it before trying again.");
       }
-      if (restoreKeyboardFocus && (BOARD_STATUSES as readonly Status[]).includes(undo.status)) focusKanbanCard(application.id);
+      // Re-offering the whole batch would retry the changes that were already undone, so a partial undo only reports.
+      if (failed) showToast(`Undid ${undo.items.length - failed} of ${undo.items.length} changes. The others changed elsewhere or were busy.`);
       return;
     }
 
@@ -695,10 +753,15 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }
 
   const sidebarItems = applications
-    .filter((item) => !item.archived)
-    .filter((item) => activeFilter === "all" || item.status === activeFilter)
-    .filter((item) => matchesApplicationSearch(item, searchTerm))
+    .filter((item) => matchesApplicationFilters(item, { search: searchTerm, status: activeFilter }))
     .sort(compareApplications);
+  const activeApplications = applications.filter((item) => !item.archived);
+  const boardApplications = activeApplications.filter((item) => matchesApplicationFilters(item, boardFilters));
+  const boardColumns = boards.filter((board) => boardFilters.status === "all"
+    || (boardFilters.status === "active" ? (ACTIVE_PIPELINE_STATUSES as readonly Status[]).includes(board.status) : board.status === boardFilters.status));
+  const boardFiltered = boardFilters.search.trim() !== "" || boardFilters.status !== "all" || boardFilters.source !== "";
+  const sources = applicationSources(applications);
+  const detailApplication = detailId ? applications.find(({ id }) => id === detailId) ?? null : null;
   const archivedItems = applications
     .filter((item) => item.archived)
     .sort(compareApplications);
@@ -714,24 +777,22 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }
 
   function focusSearch() {
-    if (page === "interviews") {
-      if (!interviewSearchRef.current) return false;
-      interviewSearchRef.current.focus();
-      return true;
-    }
-    if (page !== "job-board") return false;
-    if (!searchInputRef.current) return false;
-    pendingSearchFocusRef.current = true;
-    if (sidebarCollapsed) setSidebarCollapsed(false);
-    if (!allApplicationsExpanded) toggleAllApplications();
-    if (!sidebarCollapsed && allApplicationsExpanded) {
-      requestAnimationFrame(() => {
-        searchInputRef.current?.focus();
-        pendingSearchFocusRef.current = false;
-      });
-    }
+    const input = { interviews: interviewSearchRef, "job-board": boardSearchRef, table: tableSearchRef, dashboard: null }[page]?.current;
+    if (!input) return false;
+    input.focus();
     return true;
   }
+
+  const paletteCommands: PaletteCommand[] = [
+    { id: "go-overview", label: "Overview", group: "Pages", keywords: "dashboard needs attention stale", run: () => router.push("/dashboard") },
+    { id: "go-analytics", label: "Analytics", group: "Pages", keywords: "dashboard charts", run: () => router.push("/dashboard/analytics") },
+    { id: "go-job-board", label: "Job Board", group: "Pages", keywords: "kanban", run: () => router.push("/jobs") },
+    { id: "go-table", label: "Applications Table", group: "Pages", keywords: "list bulk", run: () => router.push("/table") },
+    { id: "go-interviews", label: "Interviews", group: "Pages", keywords: "calendar", run: () => router.push("/interviews") },
+    { id: "new-job", label: "New job", group: "Actions", keywords: "add application", run: openAddModal },
+    { id: "open-settings", label: "Open Settings", group: "Actions", keywords: "preferences theme backup", run: () => setSettingsOpen(true) },
+    { id: "show-shortcuts", label: "Keyboard Shortcuts", group: "Actions", keywords: "keys help", run: openShortcuts },
+  ];
 
   function moveApplicationFocus(direction: "up" | "down" | "left" | "right") {
     const focus = (element: HTMLElement | undefined) => {
@@ -785,11 +846,14 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     hasPendingInterviewDate: pendingInterviewDate !== null,
     shortcutsOpen,
     settingsOpen,
+    detailOpen: detailApplication !== null,
+    commandPaletteOpen,
     dragActive: activeId !== null,
     canUndo: Boolean(toast?.undo || deleteRecovery),
     onResumeUndoToastOnTab: resumeUndoToastOnTab,
     onNewJob: openAddModal,
     onOpenSettings: () => setSettingsOpen(true),
+    onOpenCommandPalette: () => setCommandPaletteOpen(true),
     onFocusSearch: focusSearch,
     onShowShortcuts: openShortcuts,
     onUndo: () => { void undoLatestChange(true); },
@@ -824,7 +888,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       <DndContext
         id={dndContextId}
         accessibility={{
-          screenReaderInstructions: { draggable: "Press Enter to edit. Press Space to pick up an application. For board cards, use Left and Right Arrow to move between status columns. Press Space to drop or Escape to cancel." },
+          screenReaderInstructions: { draggable: "Press Enter to open. Press Space to pick up an application. For board cards, use Left and Right Arrow to move between status columns. Press Space to drop or Escape to cancel." },
           announcements: {
             onDragStart: ({ active }) => `Picked up ${active.data.current?.label}.`,
             onDragOver: ({ active, over }) => {
@@ -891,34 +955,71 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onOpenSettings={() => setSettingsOpen(true)}
           onToggleArchived={toggleArchived}
           onToggleAllApplications={toggleAllApplications}
-          onEdit={startEdit}
+          onOpen={openDetail}
           onRequestDelete={(application, trigger) => requestDelete(application, trigger, false)}
           onRestore={async (application) => { await moveApplication(application, application.status, true, undefined, false); }}
         />
         <main ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto py-6">
           <div className={`page-shell ${page === "job-board" ? "h-full" : ""}`}>
             {page === "job-board" ? (
-              <>
-                <h1 className="sr-only">Job Board</h1>
-                <KanbanBoard applications={applications} boards={boards} dropDisabled={activeDragSource === "sidebar"} movingIds={movingIds} onEdit={startEdit} />
-              </>
-            ) : page === "interviews" ? (
-              <InterviewsList interviews={interviews} upcomingCount={upcomingInterviewCount} today={interviewToday} searchInputRef={interviewSearchRef} />
-            ) : (
-              dashboardSection === "overview" ? (
-                <DashboardOverview today={today} refreshKey={dataRevision} />
-              ) : dashboardSection === "analytics" ? (
-                <DashboardAnalytics today={today} refreshKey={dataRevision} />
-              ) : (
-                <DashboardStaleApplications
-                  today={today}
-                  refreshKey={dataRevision}
-                  applications={applications}
-                  onEdit={startEdit}
-                  onArchive={(application) => { void moveApplication(application, application.status, true, undefined, true); }}
-                  movingIds={movingIds}
+              <div className="flex h-full min-h-0 flex-col">
+                <BoardToolbar
+                  boards={boards}
+                  filters={boardFilters}
+                  onChange={setBoardFilters}
+                  searchInputRef={boardSearchRef}
+                  shownCount={boardApplications.length}
+                  sources={sources}
+                  totalCount={activeApplications.length}
                 />
-              )
+                <div className="min-h-0 flex-1">
+                  <KanbanBoard
+                    applications={boardApplications}
+                    boards={boardColumns}
+                    dropDisabled={activeDragSource === "sidebar"}
+                    emptyText={boardFiltered ? "No matching applications." : undefined}
+                    movingIds={movingIds}
+                    onOpen={openDetail}
+                    staleDays={staleDays}
+                    today={today}
+                  />
+                </div>
+              </div>
+            ) : page === "table" ? (
+              <ApplicationsTable
+                applications={applications}
+                boards={boards}
+                bulkBusy={bulkBusy}
+                initialFilters={tableFilters}
+                movingIds={movingIds}
+                onBulkArchive={(targets, archived) => bulkMove(targets, { archived })}
+                onBulkStatus={(targets, status) => bulkMove(targets, { status })}
+                onOpen={openDetail}
+                searchInputRef={tableSearchRef}
+                sources={sources}
+                staleDays={staleDays}
+                today={today}
+              />
+            ) : page === "interviews" ? (
+              <InterviewsList
+                interviews={interviews}
+                upcomingCount={upcomingInterviewCount}
+                today={interviewToday}
+                searchInputRef={interviewSearchRef}
+                onOpen={(id) => { const application = applications.find((item) => item.id === id); if (application) openDetail(application); }}
+              />
+            ) : dashboardSection === "analytics" ? (
+              <DashboardAnalytics today={today} refreshKey={dataRevision} />
+            ) : (
+              <DashboardOverview
+                applications={applications}
+                expandAttention={expandAttention}
+                movingIds={movingIds}
+                onArchive={(application) => { void moveApplication(application, application.status, true, undefined, true); }}
+                onOpen={openDetail}
+                refreshKey={dataRevision}
+                today={today}
+              />
             )}
           </div>
         </main>
@@ -945,6 +1046,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onRequestDelete={editingId ? requestDeleteCurrent : undefined}
           onSubmit={submit}
           saving={saving}
+          sourceSuggestions={sources}
         />
       </MotionPresence>
 
@@ -964,6 +1066,31 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           saving={saving}
         />
         )}
+      </MotionPresence>
+
+      <MotionPresence open={detailApplication !== null && !isModalOpen && pendingDelete === null}>
+        {detailApplication && (
+          <ApplicationDetailPanel
+            application={detailApplication}
+            boards={boards}
+            busy={movingIds.has(detailApplication.id)}
+            onArchive={() => { void moveApplication(detailApplication, detailApplication.status, true, undefined, !detailApplication.archived); }}
+            onClose={() => setDetailId(null)}
+            onEdit={() => { setDetailId(null); startEdit(detailApplication); }}
+            stale={staleById.get(detailApplication.id)}
+            today={today}
+          />
+        )}
+      </MotionPresence>
+
+      <MotionPresence open={commandPaletteOpen}>
+        <CommandPalette
+          applications={applications}
+          boards={boards}
+          commands={paletteCommands}
+          onClose={() => setCommandPaletteOpen(false)}
+          onOpenApplication={openDetail}
+        />
       </MotionPresence>
 
       <MotionPresence open={shortcutsOpen}>

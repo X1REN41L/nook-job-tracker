@@ -19,6 +19,7 @@ export function JobModal({
   onClose,
   onSubmit,
   onRequestDelete,
+  sourceSuggestions,
 }: {
   boards: BoardConfiguration[];
   editing: boolean;
@@ -29,6 +30,8 @@ export function JobModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onRequestDelete?: () => void;
+  /** Sources used on earlier applications, offered as suggestions. */
+  sourceSuggestions: string[];
 }) {
   const companyRef = useRef<HTMLInputElement>(null);
 
@@ -126,11 +129,15 @@ export function JobModal({
         <Field label="Source" hint="(optional)">
           <input
             className="input"
+            list="job-source-suggestions"
             maxLength={120}
             onChange={(e) => onChangeField("source", e.target.value)}
             placeholder="LinkedIn, referral…"
             value={form.source}
           />
+          <datalist id="job-source-suggestions">
+            {sourceSuggestions.map((source) => <option key={source} value={source} />)}
+          </datalist>
         </Field>
 
         <div className="text-xs font-semibold text-ink-soft">

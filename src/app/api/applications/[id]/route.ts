@@ -16,9 +16,11 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const { id } = await params;
     const application = await prisma.application.findUnique({
       where: { id },
+      include: { events: { select: { id: true, type: true, fromStatus: true, toStatus: true, detail: true, createdAt: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
     });
     if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
-    return NextResponse.json({ application });
+    const { events, ...record } = application;
+    return NextResponse.json({ application: record, events });
   } catch (error) {
     return apiError(error);
   }

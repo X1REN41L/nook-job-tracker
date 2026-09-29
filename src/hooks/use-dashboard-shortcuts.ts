@@ -16,11 +16,14 @@ type DashboardShortcutOptions = {
   hasPendingInterviewDate: boolean;
   shortcutsOpen: boolean;
   settingsOpen: boolean;
+  detailOpen: boolean;
+  commandPaletteOpen: boolean;
   dragActive: boolean;
   canUndo: boolean;
   onResumeUndoToastOnTab: () => void;
   onNewJob: () => void;
   onOpenSettings: () => void;
+  onOpenCommandPalette: () => void;
   onFocusSearch: () => boolean;
   onShowShortcuts: () => void;
   onUndo: () => void;
@@ -41,11 +44,14 @@ export function useDashboardShortcuts({
   hasPendingInterviewDate,
   shortcutsOpen,
   settingsOpen,
+  detailOpen,
+  commandPaletteOpen,
   dragActive,
   canUndo,
   onResumeUndoToastOnTab,
   onNewJob,
   onOpenSettings,
+  onOpenCommandPalette,
   onFocusSearch,
   onShowShortcuts,
   onUndo,
@@ -68,7 +74,7 @@ export function useDashboardShortcuts({
       // Escape belongs to the dialog stack (use-dialog-stack.ts), which closes only the topmost dialog.
       if (shortcut === "close") return;
 
-      const anotherDialogIsOpen = isModalOpen || hasPendingDuplicate || hasPendingDelete || hasPendingInterviewDate || shortcutsOpen || settingsOpen;
+      const anotherDialogIsOpen = isModalOpen || hasPendingDuplicate || hasPendingDelete || hasPendingInterviewDate || shortcutsOpen || settingsOpen || detailOpen || commandPaletteOpen;
       if (anotherDialogIsOpen || dragActive) return;
       if (startsShortcutSequence(event, page)) {
         pendingPrefixRef.current = { key: event.key.toLowerCase(), at: Date.now() };
@@ -94,12 +100,17 @@ export function useDashboardShortcuts({
         onNewJob();
         return;
       }
+      if (shortcut === "command-palette") {
+        event.preventDefault();
+        onOpenCommandPalette();
+        return;
+      }
       if (shortcut === "open-settings") {
         event.preventDefault();
         onOpenSettings();
         return;
       }
-      if (shortcut === "search-job-board" || shortcut === "search-interviews") {
+      if (shortcut === "search-job-board" || shortcut === "search-table" || shortcut === "search-interviews") {
         if (onFocusSearch()) event.preventDefault();
         return;
       }

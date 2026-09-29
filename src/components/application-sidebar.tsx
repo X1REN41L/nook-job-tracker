@@ -4,7 +4,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Status } from "@prisma/client";
 import Link from "next/link";
-import { Archive, CalendarClock, ChartNoAxesCombined, ClockAlert, Columns3, LayoutDashboard, PanelsTopLeft, Settings, type LucideIcon } from "lucide-react";
+import { Archive, CalendarClock, ChartNoAxesCombined, Columns3, LayoutDashboard, PanelsTopLeft, Settings, Table2, type LucideIcon } from "lucide-react";
 import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
@@ -43,7 +43,7 @@ type ApplicationSidebarProps = {
   onOpenSettings: () => void;
   onToggleArchived: () => void;
   onToggleAllApplications: () => void;
-  onEdit: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationRecord) => void;
   onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
   onRestore: (application: ApplicationRecord) => Promise<void>;
 };
@@ -90,7 +90,7 @@ export function ApplicationSidebar({
   onOpenSettings,
   onToggleArchived,
   onToggleAllApplications,
-  onEdit,
+  onOpen,
   onRequestDelete,
   onRestore,
 }: ApplicationSidebarProps) {
@@ -205,6 +205,16 @@ export function ApplicationSidebar({
               >
                 <span className="sidebar-nav-icon"><MainNavIcon Icon={Columns3} /></span>
                 <span className="sidebar-reveal ml-3 whitespace-nowrap">Job Board</span>
+              </Link>
+              <Link
+                aria-current={page === "table" ? "page" : undefined}
+                aria-label="Applications Table"
+                className={`${mainNavItemClass} ${page === "table" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                href="/table"
+                title={collapsed ? "Applications Table" : undefined}
+              >
+                <span className="sidebar-nav-icon"><MainNavIcon Icon={Table2} /></span>
+                <span className="sidebar-reveal ml-3 whitespace-nowrap">Table</span>
               </Link>
               <Link
                 aria-current={page === "interviews" ? "page" : undefined}
@@ -334,7 +344,7 @@ export function ApplicationSidebar({
                             application={application}
                             boards={boards}
                             disabled={movingIds.has(application.id)}
-                            onEdit={onEdit}
+                            onOpen={onOpen}
                           />
                         ))}
                       </div>
@@ -350,7 +360,7 @@ export function ApplicationSidebar({
                   className={archivedSectionClassName}
                   expanded={archivedExpanded}
                   movingIds={movingIds}
-                  onEdit={onEdit}
+                  onOpen={onOpen}
                   onRequestDelete={onRequestDelete}
                   onRestore={onRestore}
                   onToggle={onToggleArchived}
@@ -367,7 +377,6 @@ export function ApplicationSidebar({
                 {([
                   { section: "overview", label: "Overview", href: "/dashboard", icon: PanelsTopLeft },
                   { section: "analytics", label: "Analytics", href: "/dashboard/analytics", icon: ChartNoAxesCombined },
-                  { section: "stale", label: "Stale Applications", href: "/dashboard/stale", icon: ClockAlert },
                 ] as const).map(({ section, label, href, icon }) => (
                   <Link
                     key={section}
@@ -389,12 +398,12 @@ export function ApplicationSidebar({
   );
 }
 
-function SidebarApplicationRow({ application, boards, disabled, draggable = true, onEdit }: {
+function SidebarApplicationRow({ application, boards, disabled, draggable = true, onOpen }: {
   application: ApplicationRecord;
   boards: BoardConfiguration[];
   disabled: boolean;
   draggable?: boolean;
-  onEdit: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationRecord) => void;
 }) {
   const { listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `sidebar:${application.id}`,
@@ -408,12 +417,12 @@ function SidebarApplicationRow({ application, boards, disabled, draggable = true
       data-application-id={application.id}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={`flex w-full items-center gap-2.5 rounded-nook-sm px-2.5 py-2 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest ${draggable ? "touch-none cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "opacity-0 transition-none" : ""}`}
-      onClick={() => { if (!disabled && !isDragging) onEdit(application); }}
+      onClick={() => { if (!disabled && !isDragging) onOpen(application); }}
       type="button"
       {...(draggable ? listeners : {})}
-      aria-label={`Edit ${application.role} at ${application.company}`}
+      aria-label={`Open ${application.role} at ${application.company}`}
       onKeyDown={(event) => {
-        if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onEdit(application); }
+        if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onOpen(application); }
       }}
     >
       <span className={`status-dot ${boardDot(boards, application.status)}`} />
@@ -426,13 +435,13 @@ function SidebarApplicationRow({ application, boards, disabled, draggable = true
   );
 }
 
-function ArchivedSection({ applications, boards, className, expanded, movingIds, onEdit, onRequestDelete, onRestore, onToggle }: {
+function ArchivedSection({ applications, boards, className, expanded, movingIds, onOpen, onRequestDelete, onRestore, onToggle }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
   className: string;
   expanded: boolean;
   movingIds: ReadonlySet<string>;
-  onEdit: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationRecord) => void;
   onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
   onRestore: (application: ApplicationRecord) => Promise<void>;
   onToggle: () => void;
@@ -485,7 +494,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingIds,
                   key={application.id}
                   application={application}
                   disabled={movingIds.has(application.id)}
-                  onEdit={onEdit}
+                  onOpen={onOpen}
                   onRequestDelete={onRequestDelete}
                   onRestore={onRestore}
                 />
@@ -497,11 +506,11 @@ function ArchivedSection({ applications, boards, className, expanded, movingIds,
   );
 }
 
-function ArchivedRow({ application, boards, disabled, onEdit, onRequestDelete, onRestore }: {
+function ArchivedRow({ application, boards, disabled, onOpen, onRequestDelete, onRestore }: {
   application: ApplicationRecord;
   boards: BoardConfiguration[];
   disabled: boolean;
-  onEdit: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationRecord) => void;
   onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
   onRestore: (application: ApplicationRecord) => Promise<void>;
 }) {
@@ -520,12 +529,12 @@ function ArchivedRow({ application, boards, disabled, onEdit, onRequestDelete, o
     >
       <button
         className="flex w-full touch-none cursor-grab items-center gap-2.5 px-2.5 py-1 text-left active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
-        onClick={() => { if (!disabled && !isDragging) onEdit(application); }}
+        onClick={() => { if (!disabled && !isDragging) onOpen(application); }}
         type="button"
         {...listeners}
-        aria-label={`Edit archived ${application.role} at ${application.company}`}
+        aria-label={`Open archived ${application.role} at ${application.company}`}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onEdit(application); }
+          if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onOpen(application); }
         }}
       >
         <span className={`status-dot ${boardDot(boards, application.status)}`} />

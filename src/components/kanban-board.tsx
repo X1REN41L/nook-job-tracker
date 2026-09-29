@@ -9,18 +9,25 @@ import { CSS } from "@dnd-kit/utilities";
 import { useId, useLayoutEffect, useRef } from "react";
 
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
-import { formatCalendarDate } from "@/lib/application-date";
+import { formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
 import { BOARD_COLOR_CLASSES, type BoardConfiguration } from "@/lib/board-preferences";
 import { motionIsCurrentlyOff } from "@/lib/general-preferences";
 import type { ApplicationRecord } from "@/types/application";
 
-export function KanbanBoard({ applications, boards, dropDisabled = false, movingIds, onEdit }: {
+type CardContext = {
+  today: string;
+  staleDays: ReadonlyMap<string, number>;
+  onOpen: (application: ApplicationRecord) => void;
+};
+
+export function KanbanBoard({ applications, boards, dropDisabled = false, movingIds, emptyText, today, staleDays, onOpen }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
   dropDisabled?: boolean;
   movingIds: ReadonlySet<string>;
-  onEdit: (application: ApplicationRecord) => void;
-}) {
+  /** Replaces each column's empty-state text, e.g. while filters hide every card. */
+  emptyText?: string;
+} & CardContext) {
   const boardRef = useRef<HTMLDivElement>(null);
   const beforeUpdate = useRef(new Map<string, { top: number; column: string }>());
 
@@ -60,18 +67,19 @@ export function KanbanBoard({ applications, boards, dropDisabled = false, moving
     <div ref={boardRef} className="board-columns flex h-full min-h-0 w-full items-stretch gap-4" aria-label="Application status board">
       {boards.map((board) => {
         const items = applications.filter((application) => !application.archived && application.status === board.status);
-        return <KanbanColumn key={board.status} board={board} applications={items} dropDisabled={dropDisabled} movingIds={movingIds} onEdit={onEdit} />;
+        return <KanbanColumn key={board.status} board={board} applications={items} dropDisabled={dropDisabled} movingIds={movingIds} emptyText={emptyText ?? board.emptyText} card={{ today, staleDays, onOpen }} />;
       })}
     </div>
   );
 }
 
-function KanbanColumn({ board, applications, dropDisabled, movingIds, onEdit }: {
+function KanbanColumn({ board, applications, dropDisabled, movingIds, emptyText, card }: {
   board: BoardConfiguration;
   applications: ApplicationRecord[];
   dropDisabled: boolean;
   movingIds: ReadonlySet<string>;
-  onEdit: (application: ApplicationRecord) => void;
+  emptyText: string;
+  card: CardContext;
 }) {
   const scrollRef = useScrollbarActivity<HTMLDivElement>();
   const { isOver, setNodeRef } = useDroppable({ id: board.status, disabled: dropDisabled });
@@ -84,11 +92,11 @@ function KanbanColumn({ board, applications, dropDisabled, movingIds, onEdit }: 
       <div ref={scrollRef} className="kanban-column-scroll scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
         <div className="flex flex-col gap-2.5">
         {applications.map((application) => (
-          <KanbanCard key={application.id} application={application} disabled={movingIds.has(application.id)} onEdit={onEdit} />
+          <KanbanCard key={application.id} application={application} disabled={movingIds.has(application.id)} {...card} />
         ))}
         {applications.length === 0 && (
           <p className="mt-1 rounded-nook border border-dashed border-line px-3 py-5 text-center text-xs leading-5 text-ink-soft">
-            {board.emptyText}
+            {emptyText}
           </p>
         )}
         </div>
@@ -97,17 +105,17 @@ function KanbanColumn({ board, applications, dropDisabled, movingIds, onEdit }: 
   );
 }
 
-function KanbanCard({ application, disabled, onEdit }: {
+function KanbanCard({ application, disabled, today, staleDays, onOpen }: {
   application: ApplicationRecord;
   disabled: boolean;
-  onEdit: (application: ApplicationRecord) => void;
-}) {
+} & CardContext) {
   const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, isDragging } = useDraggable({
     id: application.id,
     data: { applicationId: application.id, label: `${application.role} at ${application.company}`, source: "board", status: application.status },
     disabled,
   });
   const datesId = useId();
+  const stale = staleDays.get(application.id);
   let postingUrl: string | undefined;
   try {
     const candidate = application.jobUrl?.trim();
@@ -127,14 +135,14 @@ function KanbanCard({ application, disabled, onEdit }: {
         ref={setActivatorNodeRef}
         className="kanban-card-action absolute inset-0 z-0 cursor-grab rounded-nook focus-visible:outline-none active:cursor-grabbing"
         data-kanban-card-id={application.id}
-        onClick={() => { if (!disabled && !isDragging) onEdit(application); }}
+        onClick={() => { if (!disabled && !isDragging) onOpen(application); }}
         type="button"
         {...attributes}
         {...listeners}
         aria-describedby={`${datesId} ${attributes["aria-describedby"]}`}
-        aria-label={`Edit or move ${application.role} at ${application.company}`}
+        aria-label={`Open or move ${application.role} at ${application.company}`}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onEdit(application); }
+          if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onOpen(application); }
           else listeners?.onKeyDown?.(event);
         }}
       />
@@ -169,6 +177,8 @@ function KanbanCard({ application, disabled, onEdit }: {
           </svg>
           <span className="sr-only">Applied </span>
           {formatCalendarDate(application.appliedDate)}
+          {today && <span aria-hidden="true">·</span>}
+          {today && <span>{formatDaysAgo(application.appliedDate, today)}</span>}
         </div>
         {application.status === Status.INTERVIEW && application.interviewDate && (
           <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-ink-soft">
@@ -179,6 +189,16 @@ function KanbanCard({ application, disabled, onEdit }: {
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
             Interview {formatCalendarDate(application.interviewDate)}
+          </div>
+        )}
+        {(application.source?.trim() || stale !== undefined) && (
+          <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] leading-4">
+            {application.source?.trim() && (
+              <span className="min-w-0 max-w-full truncate rounded-full border border-line bg-cream px-2 py-0.5 text-ink-soft"><span className="sr-only">Source: </span>{application.source.trim()}</span>
+            )}
+            {stale !== undefined && (
+              <span className="shrink-0 rounded-full bg-clay-tint px-2 py-0.5 font-medium text-ink" title="No status update for a while">Stale · {stale}d</span>
+            )}
           </div>
         )}
       </div>

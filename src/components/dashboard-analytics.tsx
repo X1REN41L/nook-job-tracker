@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
-import { analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod } from "@/lib/analytics-period";
+import { analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod, type AnalyticsRange } from "@/lib/analytics-period";
+import { applicationTableHref } from "@/lib/application-list";
 import type { DashboardAnalyticsData as AnalyticsData } from "@/types/dashboard";
 import { useBoards } from "@/hooks/use-boards";
 import { boardDot, boardLabel } from "@/lib/board-preferences";
@@ -20,6 +22,9 @@ const PERIODS: { value: AnalyticsPeriod; label: string }[] = [
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
   .map((label, index) => ({ value: String(index + 1).padStart(2, "0"), label }));
 const STATUSES = ["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW", "OFFER", "REJECTED"] as const;
+// Analytics counts archived applications too, so its links include them.
+const rangeHref = (range: AnalyticsRange, status?: (typeof STATUSES)[number]) =>
+  applicationTableHref({ archived: "all", appliedFrom: range.startDate, appliedTo: range.endDate, status });
 const controlClass = "h-10 rounded-nook-sm border border-line bg-paper px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 
 function formatMonth(dateKey: string, length: "short" | "long") {
@@ -82,21 +87,31 @@ function ApplicationsTrend({ trend }: { trend: AnalyticsData["applicationsTrend"
         <h2 className="font-serif text-xl font-semibold leading-tight" id="applications-trend-heading">Applications Trend</h2>
         <p className="mt-1 text-sm text-ink-soft">Applications submitted in this period</p>
       </div>
-      <div className="mt-6 min-w-0" role={hasData ? "img" : undefined} aria-label={hasData ? `Applications submitted: ${trend.buckets.map((bucket, index) => `${trend.granularity === "WEEK" ? `Week ${index + 1}` : `${formatMonth(bucket.startDate, "long")} ${bucket.startDate.slice(0, 4)}`}, ${bucket.count}`).join("; ")}` : undefined}>
+      <div className="mt-6 min-w-0">
         <div className="relative h-44 border-b border-line">
           {!hasData && <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-ink-soft">No trend to show. Give it something to trend.</p>}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex flex-col justify-between">
             {[0, 1, 2, 3].map((line) => <div className="border-t border-line/70" key={line} />)}
           </div>
-          <div aria-hidden="true" className="relative flex h-full items-end gap-1 px-1 sm:gap-2">
-            {trend.buckets.map((bucket) => (
-              <div className="flex h-full min-w-0 flex-1 items-end justify-center" key={bucket.startDate}>
-                <div className="relative w-full max-w-9 rounded-t-[3px] bg-forest" style={{ height: `${(bucket.count / scale) * 100}%` }}>
-                  {bucket.count > 0 && <span className="absolute bottom-full left-1/2 -translate-x-1/2 pb-1 text-[11px] leading-none tabular-nums text-ink">{bucket.count}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
+          <ul aria-label={hasData ? "Applications submitted" : undefined} aria-hidden={!hasData} className="relative flex h-full items-end gap-1 px-1 sm:gap-2">
+            {trend.buckets.map((bucket, index) => {
+              const label = `${trend.granularity === "WEEK" ? `Week ${index + 1}` : `${formatMonth(bucket.startDate, "long")} ${bucket.startDate.slice(0, 4)}`}: ${bucket.count} ${bucket.count === 1 ? "application" : "applications"}`;
+              const bar = (
+                <span className="relative block w-full max-w-9 rounded-t-[3px] bg-forest group-hover:bg-forest-deep" style={{ height: `${(bucket.count / scale) * 100}%` }}>
+                  {bucket.count > 0 && <span aria-hidden="true" className="absolute bottom-full left-1/2 -translate-x-1/2 pb-1 text-[11px] leading-none tabular-nums text-ink">{bucket.count}</span>}
+                </span>
+              );
+              return (
+                <li className="flex h-full min-w-0 flex-1 items-end justify-center" key={bucket.startDate}>
+                  {bucket.count > 0 ? (
+                    <Link aria-label={label} className="group flex h-full w-full items-end justify-center rounded-t-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" href={rangeHref({ startDate: bucket.startDate, endDate: bucket.endDate })} title={label}>
+                      {bar}
+                    </Link>
+                  ) : <span className="sr-only">{label}</span>}
+                </li>
+              );
+            })}
+          </ul>
         </div>
         <div aria-hidden="true" className="flex gap-1 px-1 pt-2 sm:gap-2">
           {trend.buckets.map((bucket, index) => (
@@ -110,7 +125,7 @@ function ApplicationsTrend({ trend }: { trend: AnalyticsData["applicationsTrend"
   );
 }
 
-function StatusBreakdown({ counts }: { counts: AnalyticsData["statusBreakdown"] }) {
+function StatusBreakdown({ counts, range }: { counts: AnalyticsData["statusBreakdown"]; range: AnalyticsRange }) {
   const boards = useBoards();
   const maxCount = Math.max(0, ...STATUSES.map((status) => counts[status]));
   return (
@@ -120,7 +135,9 @@ function StatusBreakdown({ counts }: { counts: AnalyticsData["statusBreakdown"] 
         {STATUSES.map((status) => (
           <li key={status}>
             <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="min-w-0 font-medium text-ink">{boardLabel(boards, status)}</span>
+              {counts[status] > 0
+                ? <Link className="min-w-0 rounded-nook-sm font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" href={rangeHref(range, status)}>{boardLabel(boards, status)}</Link>
+                : <span className="min-w-0 font-medium text-ink">{boardLabel(boards, status)}</span>}
               <span className="shrink-0 tabular-nums text-ink" aria-label={`${counts[status]} applications`}>{counts[status]}</span>
             </div>
             <div aria-hidden="true" className="mt-1.5 h-2 rounded-full bg-cream-2">
@@ -198,14 +215,14 @@ export function DashboardAnalytics({ today, refreshKey }: { today: string; refre
       {error && <p className="mt-4 rounded-nook-sm border border-rose bg-rose-tint px-4 py-3 text-sm text-ink" role="alert">Analytics could not be loaded. Please try another period or return later.</p>}
       {loading && <p className="sr-only" role="status">Loading Analytics</p>}
       <div className="mt-7 grid min-w-0 grid-cols-1 gap-3 @min-[520px]:grid-cols-2 @min-[850px]:grid-cols-4">
-        <DashboardMetricCard label="Applications" value={data?.applications ?? "—"} detail={data ? periodLabel(data) : " "} />
+        <DashboardMetricCard label="Applications" value={data?.applications ?? "—"} detail={data ? periodLabel(data) : " "} href={data ? rangeHref(data.range) : undefined} />
         {rateCard("Interview Rate", data?.interviewRate)}
         {rateCard("Offer Rate", data?.offerRate)}
         {rateCard("Rejection Rate", data?.rejectionRate)}
       </div>
       <div className="mt-9 grid min-w-0 grid-cols-1 gap-x-8 gap-y-9 @min-[760px]:grid-cols-2">
         {data ? <ApplicationsTrend trend={data.applicationsTrend} /> : <div className="min-w-0"><h2 className="border-b border-line pb-3 font-serif text-xl font-semibold">Applications Trend</h2><p className="mt-1 text-sm text-ink-soft">Applications submitted in this period</p><div className="h-52" /></div>}
-        {data ? <StatusBreakdown counts={data.statusBreakdown} /> : <div className="min-w-0"><h2 className="border-b border-line pb-3 font-serif text-xl font-semibold">Status Breakdown</h2><div className="h-52" /></div>}
+        {data ? <StatusBreakdown counts={data.statusBreakdown} range={data.range} /> : <div className="min-w-0"><h2 className="border-b border-line pb-3 font-serif text-xl font-semibold">Status Breakdown</h2><div className="h-52" /></div>}
       </div>
     </section>
   );

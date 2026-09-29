@@ -14,7 +14,7 @@ type ShortcutBinding =
   | { kind: "combo"; code: string; primary?: boolean; shift?: boolean; alt?: boolean }
   | { kind: "sequence"; keys: readonly [string, string] };
 
-export const shortcutSections = ["General", "Page Navigation", "Dashboard", "Job Board", "Interviews"] as const;
+export const shortcutSections = ["General", "Page Navigation", "Dashboard", "Job Board", "Applications Table", "Interviews"] as const;
 export type ShortcutSection = (typeof shortcutSections)[number];
 
 type ShortcutDefinition = {
@@ -27,6 +27,7 @@ type ShortcutDefinition = {
 };
 
 export const shortcutDefinitions = [
+  { id: "command-palette", action: "Command Palette", bindings: [{ kind: "combo", code: "KeyK", primary: true }], section: "General" },
   { id: "open-settings", action: "Open Settings", bindings: [{ kind: "combo", code: "Comma", primary: true, shift: true }], section: "General" },
   { id: "show-shortcuts", action: "Keyboard Shortcuts", bindings: [{ kind: "key", key: "?" }], section: "General" },
   { id: "toggle-sidebar", action: "Toggle Sidebar", bindings: [{ kind: "combo", code: "KeyS", primary: true, shift: true }], section: "General" },
@@ -34,10 +35,10 @@ export const shortcutDefinitions = [
   { id: "undo", action: "Undo latest action", bindings: [{ kind: "key", key: "u" }], section: "General" },
   { id: "go-dashboard", action: "Dashboard", bindings: [{ kind: "sequence", keys: ["g", "d"] }], section: "Page Navigation", destination: "/dashboard" },
   { id: "go-job-board", action: "Job Board", bindings: [{ kind: "sequence", keys: ["g", "j"] }], section: "Page Navigation", destination: "/jobs" },
+  { id: "go-table", action: "Applications Table", bindings: [{ kind: "sequence", keys: ["g", "t"] }], section: "Page Navigation", destination: "/table" },
   { id: "go-interviews", action: "Interviews", bindings: [{ kind: "sequence", keys: ["g", "i"] }], section: "Page Navigation", destination: "/interviews" },
   { id: "go-overview", action: "Overview", bindings: [{ kind: "sequence", keys: ["g", "o"] }], section: "Dashboard", page: "dashboard", destination: "/dashboard" },
   { id: "go-analytics", action: "Analytics", bindings: [{ kind: "sequence", keys: ["g", "a"] }], section: "Dashboard", page: "dashboard", destination: "/dashboard/analytics" },
-  { id: "go-stale", action: "Stale Applications", bindings: [{ kind: "sequence", keys: ["g", "s"] }], section: "Dashboard", page: "dashboard", destination: "/dashboard/stale" },
   { id: "new-job", action: "New Job", bindings: [{ kind: "combo", code: "KeyN", alt: true }], section: "Job Board", page: "job-board" },
   { id: "search-job-board", action: "Search", bindings: [{ kind: "key", key: "/" }], section: "Job Board", page: "job-board" },
   { id: "archive-focused", action: "Archive focused card", bindings: [{ kind: "combo", code: "KeyA", alt: true }], section: "Job Board", page: "job-board" },
@@ -46,6 +47,7 @@ export const shortcutDefinitions = [
   { id: "focus-application-down", action: "Next application", bindings: [{ kind: "key", key: "ArrowDown" }], section: "Job Board", page: "job-board" },
   { id: "focus-column-left", action: "Previous column", bindings: [{ kind: "key", key: "ArrowLeft" }], section: "Job Board", page: "job-board" },
   { id: "focus-column-right", action: "Next column", bindings: [{ kind: "key", key: "ArrowRight" }], section: "Job Board", page: "job-board" },
+  { id: "search-table", action: "Search", bindings: [{ kind: "key", key: "/" }], section: "Applications Table", page: "table" },
   { id: "search-interviews", action: "Search", bindings: [{ kind: "key", key: "/" }], section: "Interviews", page: "interviews" },
 ] as const satisfies readonly ShortcutDefinition[];
 

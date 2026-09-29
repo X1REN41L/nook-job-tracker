@@ -6,9 +6,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const TOAST_DURATION_MS = 2400;
 const UNDO_TOAST_DURATION_MS = 5000;
 
+export type StatusUndo = { kind: "status"; applicationId: string; status: Status; archived: boolean; interviewDate: string | null; interviewDatePromptDismissed: boolean; expectedLatestStatusEventId: string | null; movedRevision: number };
+
 export type ToastUndo =
   | { kind: "delete"; applicationId: string; token: string; expiresAt: string; company: string }
-  | { kind: "status"; applicationId: string; status: Status; archived: boolean; interviewDate: string | null; interviewDatePromptDismissed: boolean; expectedLatestStatusEventId: string | null; movedRevision: number };
+  | StatusUndo
+  // A bulk change from the table: one Undo reverts every application it changed.
+  | { kind: "batch"; items: StatusUndo[] };
 
 export type DeleteRecovery = Extract<ToastUndo, { kind: "delete" }>;
 

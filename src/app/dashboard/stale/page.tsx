@@ -1,7 +1,6 @@
-import { ApplicationPage } from "@/components/application-page";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+// Stale Applications is now the full Needs Attention list on Overview.
 export default function StaleApplicationsPage() {
-  return <ApplicationPage page="dashboard" dashboardSection="stale" />;
+  redirect("/dashboard?attention=all");
 }

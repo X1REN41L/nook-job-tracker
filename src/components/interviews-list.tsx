@@ -8,32 +8,40 @@ import { formatCalendarDate } from "@/lib/application-date";
 
 type InterviewTab = "upcoming" | "past";
 
-function InterviewRow({ interview }: { interview: InterviewListItem }) {
+function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onOpen: (id: string) => void }) {
   const date = interviewDateKey(interview.date);
   const note = interview.note?.trim();
 
   return (
-    <article className="grid grid-cols-1 gap-x-7 gap-y-1 border-b border-line/70 py-6 first:pt-0 last:border-b-0 last:pb-0 md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0">
-      <time className="text-sm font-medium text-ink-soft" dateTime={date}>
-        {formatCalendarDate(interview.date)}
-      </time>
-      <div className="min-w-0">
-        <h3 className="break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">
-          <span>{interview.role}</span>
-          <span aria-hidden="true" className="mx-1.5 text-ink-soft">—</span>
-          <span className="font-medium text-ink-soft">{interview.company}</span>
-        </h3>
-        {note && <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-ink-soft">{note}</p>}
-      </div>
+    <article className="border-b border-line/70 py-3 first:pt-0 last:border-b-0 last:pb-0">
+      <button
+        aria-label={`Open ${interview.role} at ${interview.company}`}
+        className="grid w-full grid-cols-1 gap-x-7 gap-y-1 rounded-nook-sm px-2 py-3 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0"
+        onClick={() => onOpen(interview.id)}
+        type="button"
+      >
+        <time className="text-sm font-medium text-ink-soft" dateTime={date}>
+          {formatCalendarDate(interview.date)}
+        </time>
+        <span className="block min-w-0">
+          <span className="block break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">
+            <span>{interview.role}</span>
+            <span aria-hidden="true" className="mx-1.5 text-ink-soft">—</span>
+            <span className="font-medium text-ink-soft">{interview.company}</span>
+          </span>
+          {note && <span className="mt-1 block whitespace-pre-wrap break-words text-sm leading-6 text-ink-soft">{note}</span>}
+        </span>
+      </button>
     </article>
   );
 }
 
-export function InterviewsList({ interviews, upcomingCount, today, searchInputRef }: {
+export function InterviewsList({ interviews, upcomingCount, today, searchInputRef, onOpen }: {
   interviews: InterviewListItem[];
   upcomingCount: number;
   today: string;
   searchInputRef: RefObject<HTMLInputElement | null>;
+  onOpen: (applicationId: string) => void;
 }) {
   const [selectedTab, setSelectedTab] = useState<InterviewTab>("upcoming");
   const [searchQuery, setSearchQuery] = useState("");
@@ -128,7 +136,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
                       {group.label}
                     </h3>
                     <div>
-                      {group.interviews.map((interview) => <InterviewRow key={interview.id} interview={interview} />)}
+                      {group.interviews.map((interview) => <InterviewRow key={interview.id} interview={interview} onOpen={onOpen} />)}
                     </div>
                   </section>
                 ))}
@@ -151,7 +159,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
             {past.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "None yet — patience, and a callback, will fix that."}</p>
             ) : (
-              <div>{past.map((interview) => <InterviewRow key={interview.id} interview={interview} />)}</div>
+              <div>{past.map((interview) => <InterviewRow key={interview.id} interview={interview} onOpen={onOpen} />)}</div>
             )}
           </section>
         )}

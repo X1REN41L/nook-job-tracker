@@ -30,7 +30,7 @@ The Overview shows your total applications, your active pipeline, upcoming inter
 
 ### Move applications through a board
 
-The Job Board has a column for each stage: **Applied**, **Online assessment**, **Interview**, **Offer**, and **Rejected**. Drag a card to update its status, or use the keyboard. Cards show the company, application date, interview date, and a link to the job posting. The sidebar lists every application, with search and status filters.
+The Job Board has a column for each stage: **Applied**, **Online assessment**, **Interview**, **Offer**, and **Rejected**. Drag a card to update its status, or use the keyboard. Cards show the company, how long ago you applied, the interview date, the source, a link to the job posting, and a **Stale** marker when an application has gone quiet. Search and filter the board by status or source from the toolbar above it. The sidebar lists every application, with its own search and status filters.
 
 <p align="center">
   <img src="docs/screenshots/job-board-dark.png" alt="Job Board in dark theme" width="100%">
@@ -38,33 +38,35 @@ The Job Board has a column for each stage: **Applied**, **Online assessment**, *
 
 ### Keep the details together
 
-Each application stores the company, role, status, date applied, interview date, source, a link to the posting, and your notes. If a new entry looks like one you already have, Nook shows the possible match before you save.
+Each application stores the company, role, status, date applied, interview date, source, a link to the posting, and your notes. Click any application to open its details panel, with every status change it went through; edit it from there. Sources you've used before are suggested as you type. If a new entry looks like one you already have, Nook shows the possible match before you save.
 
 ![Editing an application](docs/screenshots/edit-application.png)
 
+### See everything in a table
+
+The Table page lists every application in sortable columns. Filter by status, source, date applied, or archived, then select several applications to change their status or archive them at once. One Undo reverts the whole change.
+
 ### Stay on top of interviews
 
-The Interviews page groups upcoming interviews by when they happen (this week, next week, later) and shows your notes for each one. A **Past** tab keeps earlier interviews, and you can search by company or role.
+The Interviews page groups upcoming interviews by when they happen (this week, next week, later) and shows your notes for each one. Click an interview to open its application. A **Past** tab keeps earlier interviews, and you can search by company or role.
 
 ![Interviews page](docs/screenshots/interviews.png)
 
 ### Review your progress
 
-Analytics shows how many applications you sent in a period, your interview, offer, and rejection rates, and a breakdown by status. You can view the current month, the last 3 months, the current year, or a specific month or year.
+Analytics shows how many applications you sent in a period, your interview, offer, and rejection rates, and a breakdown by status. You can view the current month, the last 3 months, the current year, or a specific month or year. Click a number, a chart bar, or a status to see those applications in the Table.
 
 ![Analytics](docs/screenshots/analytics.png)
 
 ### Follow up on quiet applications
 
-Stale Applications lists active applications whose status hasn't changed for a while, grouped by how long they've been waiting. In Settings you can set the threshold to 7, 15, or 30 days.
-
-![Stale applications](docs/screenshots/stale.png)
+**Needs Attention** on the Overview lists active applications whose status hasn't changed for a while, longest waiting first. An application that never changed status counts from its applied date. Click **View all** for the full list. In Settings you can set the threshold to 7, 15, or 30 days.
 
 ### Make it yours
 
 - **Theme:** light, dark, or match your system.
 - **Motion:** turn animations on or off, or follow your system's reduced-motion setting.
-- **Boards:** rename columns, change their colors and empty-state messages, and reorder them.
+- **Board colors:** choose a color for each status.
 - **Startup page:** open to the Dashboard, the Job Board, or Interviews.
 - **Default board:** choose the status new applications start in.
 
@@ -126,7 +128,7 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000). Run `npm run build` ag
 
 1. **Add an application.** On the Job Board, click **Add job** or press `Alt+N` (`⌥N` on macOS). Only the company, role, and date applied are required.
 2. **Update its status.** Drag the card to another column. From the keyboard, focus the card, press `Space` to pick it up, use the Left and Right arrow keys to choose a column, and press `Space` again to drop it (`Esc` cancels).
-3. **Edit details.** Click a card, or focus it and press `Enter`, to add an interview date, notes, or a job link.
+3. **Review and edit details.** Click a card, or focus it and press `Enter`, to open its details. Choose **Edit** to add an interview date, notes, or a job link.
 4. **Check in regularly.** The Dashboard shows upcoming interviews and applications that need a follow-up.
 5. **Back up your data.** In **Settings → Backup & Restore**, export a backup from time to time.
 
@@ -137,11 +139,12 @@ Press `?` anywhere in Nook to see every shortcut.
 | Action | Shortcut |
 | --- | --- |
 | Show all shortcuts | `?` |
+| Command palette: go to a page, run an action, or find an application | `Ctrl+K` / `⌘K` |
 | New job (Job Board) | `Alt+N` / `⌥N` |
 | Search | `/` |
 | Undo latest action | `U` |
-| Go to Dashboard / Job Board / Interviews | `G` then `D` / `J` / `I` |
-| Go to Overview / Analytics / Stale Applications | `G` then `O` / `A` / `S` |
+| Go to Dashboard / Job Board / Table / Interviews | `G` then `D` / `J` / `T` / `I` |
+| Go to Overview / Analytics | `G` then `O` / `A` |
 | Archive focused card | `Alt+A` / `⌥A` |
 | Delete focused card | `Delete` or `Backspace` |
 | Move between cards and columns | Arrow keys |
