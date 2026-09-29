@@ -7,8 +7,7 @@ import { DashboardMetricCard, formatDashboardPercentage } from "@/components/das
 import { analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod, type AnalyticsRange } from "@/lib/analytics-period";
 import { applicationTableHref } from "@/lib/application-list";
 import type { DashboardAnalyticsData as AnalyticsData } from "@/types/dashboard";
-import { useBoards } from "@/hooks/use-boards";
-import { boardDot, boardLabel } from "@/lib/board-preferences";
+import { BOARDS, boardDot, boardLabel } from "@/lib/board-preferences";
 
 type Rate = AnalyticsData["interviewRate"];
 
@@ -77,7 +76,8 @@ function AnalyticsPeriodSelector({ period, month, year, onPeriodChange, onMonthC
   );
 }
 
-function ApplicationsTrend({ trend }: { trend: AnalyticsData["applicationsTrend"] }) {
+/** Every bar opens the table for the whole Analytics period, like the Applications card. */
+function ApplicationsTrend({ range, trend }: { range: AnalyticsRange; trend: AnalyticsData["applicationsTrend"] }) {
   const maxCount = Math.max(0, ...trend.buckets.map((bucket) => bucket.count));
   const scale = Math.max(1, maxCount);
   const hasData = maxCount > 0;
@@ -104,7 +104,7 @@ function ApplicationsTrend({ trend }: { trend: AnalyticsData["applicationsTrend"
               return (
                 <li className="flex h-full min-w-0 flex-1 items-end justify-center" key={bucket.startDate}>
                   {bucket.count > 0 ? (
-                    <Link aria-label={label} className="group flex h-full w-full items-end justify-center rounded-t-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" href={rangeHref({ startDate: bucket.startDate, endDate: bucket.endDate })} title={label}>
+                    <Link aria-label={label} className="group flex h-full w-full items-end justify-center rounded-t-[3px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" href={rangeHref(range)} title={label}>
                       {bar}
                     </Link>
                   ) : <span className="sr-only">{label}</span>}
@@ -126,7 +126,6 @@ function ApplicationsTrend({ trend }: { trend: AnalyticsData["applicationsTrend"
 }
 
 function StatusBreakdown({ counts, range }: { counts: AnalyticsData["statusBreakdown"]; range: AnalyticsRange }) {
-  const boards = useBoards();
   const maxCount = Math.max(0, ...STATUSES.map((status) => counts[status]));
   return (
     <section className="min-w-0" aria-labelledby="status-breakdown-heading">
@@ -136,12 +135,12 @@ function StatusBreakdown({ counts, range }: { counts: AnalyticsData["statusBreak
           <li key={status}>
             <div className="flex items-baseline justify-between gap-3 text-sm">
               {counts[status] > 0
-                ? <Link className="min-w-0 rounded-nook-sm font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" href={rangeHref(range, status)}>{boardLabel(boards, status)}</Link>
-                : <span className="min-w-0 font-medium text-ink">{boardLabel(boards, status)}</span>}
+                ? <Link className="min-w-0 rounded-nook-sm font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" href={rangeHref(range, status)}>{boardLabel(BOARDS, status)}</Link>
+                : <span className="min-w-0 font-medium text-ink">{boardLabel(BOARDS, status)}</span>}
               <span className="shrink-0 tabular-nums text-ink" aria-label={`${counts[status]} applications`}>{counts[status]}</span>
             </div>
             <div aria-hidden="true" className="mt-1.5 h-2 rounded-full bg-cream-2">
-              <div className={`h-full rounded-full ${boardDot(boards, status)}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 90 : 0}%` }} />
+              <div className={`h-full rounded-full ${boardDot(BOARDS, status)}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 90 : 0}%` }} />
             </div>
           </li>
         ))}
@@ -221,7 +220,7 @@ export function DashboardAnalytics({ today, refreshKey }: { today: string; refre
         {rateCard("Rejection Rate", data?.rejectionRate)}
       </div>
       <div className="mt-9 grid min-w-0 grid-cols-1 gap-x-8 gap-y-9 @min-[760px]:grid-cols-2">
-        {data ? <ApplicationsTrend trend={data.applicationsTrend} /> : <div className="min-w-0"><h2 className="border-b border-line pb-3 font-serif text-xl font-semibold">Applications Trend</h2><p className="mt-1 text-sm text-ink-soft">Applications submitted in this period</p><div className="h-52" /></div>}
+        {data ? <ApplicationsTrend range={data.range} trend={data.applicationsTrend} /> : <div className="min-w-0"><h2 className="border-b border-line pb-3 font-serif text-xl font-semibold">Applications Trend</h2><p className="mt-1 text-sm text-ink-soft">Applications submitted in this period</p><div className="h-52" /></div>}
         {data ? <StatusBreakdown counts={data.statusBreakdown} range={data.range} /> : <div className="min-w-0"><h2 className="border-b border-line pb-3 font-serif text-xl font-semibold">Status Breakdown</h2><div className="h-52" /></div>}
       </div>
     </section>

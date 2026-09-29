@@ -40,7 +40,6 @@ export const shortcutDefinitions = [
   { id: "go-overview", action: "Overview", bindings: [{ kind: "sequence", keys: ["g", "o"] }], section: "Dashboard", page: "dashboard", destination: "/dashboard" },
   { id: "go-analytics", action: "Analytics", bindings: [{ kind: "sequence", keys: ["g", "a"] }], section: "Dashboard", page: "dashboard", destination: "/dashboard/analytics" },
   { id: "new-job", action: "New Job", bindings: [{ kind: "combo", code: "KeyN", alt: true }], section: "Job Board", page: "job-board" },
-  { id: "search-job-board", action: "Search", bindings: [{ kind: "key", key: "/" }], section: "Job Board", page: "job-board" },
   { id: "archive-focused", action: "Archive focused card", bindings: [{ kind: "combo", code: "KeyA", alt: true }], section: "Job Board", page: "job-board" },
   { id: "delete-focused", action: "Delete focused card", bindings: [{ kind: "key", key: "Delete" }, { kind: "key", key: "Backspace" }], section: "Job Board", page: "job-board" },
   { id: "focus-application-up", action: "Previous application", bindings: [{ kind: "key", key: "ArrowUp" }], section: "Job Board", page: "job-board" },

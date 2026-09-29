@@ -49,7 +49,7 @@ function useApplicationHistory(application: ApplicationRecord) {
   return { events: result?.key === key ? result.events : null, error: failedKey === key };
 }
 
-export function ApplicationDetailPanel({ application, boards, today, stale, busy, returnFocusRef, onClose, onEdit, onArchive, onSave }: {
+export function ApplicationDetailPanel({ application, boards, today, stale, busy, returnFocusRef, onClose, onEdit, onArchive, onDelete, onSave }: {
   application: ApplicationRecord;
   boards: BoardConfiguration[];
   today: string;
@@ -59,6 +59,7 @@ export function ApplicationDetailPanel({ application, boards, today, stale, busy
   onClose: () => void;
   onEdit: () => void;
   onArchive: () => void;
+  onDelete: () => void;
   onSave: SaveChange;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -129,8 +130,11 @@ export function ApplicationDetailPanel({ application, boards, today, stale, busy
       </div>
 
       <div className="flex gap-3 border-t border-line px-6 py-4">
-        <button className="btn-ghost mr-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={busy} onClick={onArchive} type="button">
+        <button className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={busy} onClick={onArchive} type="button">
           {application.archived ? "Restore" : "Archive"}
+        </button>
+        <button className="btn-ghost mr-auto text-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose" disabled={busy} onClick={onDelete} type="button">
+          Delete
         </button>
         <button className="btn-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper" disabled={busy} onClick={onEdit} type="button">
           Edit

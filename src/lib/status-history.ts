@@ -18,6 +18,42 @@ export function statusTransitionDetail(fromStatus: Status | null, toStatus: Stat
   return `${fromStatus ?? "null"} → ${toStatus}`;
 }
 
+export type StatusEventDeletion = {
+  deleteIds: string[];
+  update: { id: string; fromStatus: Status; detail: string } | null;
+  status: Status;
+};
+
+/**
+ * Plans removing one status change while keeping the rest of the history a connected sequence:
+ * the following change is reattached to the step before the removed one, and if that makes it a
+ * no-op (back to the same status) it goes too. Removing the latest change moves the application
+ * back to the status it came from. Returns null when the event is not a status change.
+ */
+export function planStatusEventDeletion(currentStatus: Status, events: StatusHistoryEvent[], eventId: string): StatusEventDeletion | null {
+  const statusEvents = events
+    .filter((event) => event.type === EventType.STATUS_CHANGE)
+    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime() || left.id.localeCompare(right.id));
+  const index = statusEvents.findIndex((event) => event.id === eventId);
+  if (index < 0) return null;
+  const target = statusEvents[index];
+  const next = statusEvents[index + 1];
+
+  if (!next) {
+    const revert = target.fromStatus !== null && target.toStatus === currentStatus;
+    return { deleteIds: [target.id], update: null, status: revert ? target.fromStatus! : currentStatus };
+  }
+  if (target.fromStatus === null || target.toStatus === null || next.fromStatus !== target.toStatus || next.toStatus === null) {
+    return { deleteIds: [target.id], update: null, status: currentStatus };
+  }
+  if (next.toStatus === target.fromStatus) return { deleteIds: [target.id, next.id], update: null, status: currentStatus };
+  return {
+    deleteIds: [target.id],
+    update: { id: next.id, fromStatus: target.fromStatus, detail: statusTransitionDetail(target.fromStatus, next.toStatus) },
+    status: currentStatus,
+  };
+}
+
 // A new event must sort after the existing history even if the clock is behind its latest event.
 export function nextStatusEventTime(latestEventAt: Date | null, now = new Date()) {
   return latestEventAt && latestEventAt.getTime() >= now.getTime() ? new Date(latestEventAt.getTime() + 1) : now;

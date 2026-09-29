@@ -33,14 +33,13 @@ import { useDashboardShortcuts } from "@/hooks/use-dashboard-shortcuts";
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { useStaleApplications } from "@/hooks/use-stale-applications";
 import { useToastUndo, type StatusUndo, type ToastUndo } from "@/hooks/use-toast-undo";
-import { useBoards } from "@/hooks/use-boards";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
 import { currentLocalDate } from "@/lib/application-date";
-import { ACTIVE_PIPELINE_STATUSES, applicationSources, compareApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationFilters, type ApplicationFilters } from "@/lib/application-list";
+import { applicationSources, compareApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationFilters, matchesBoardStatusFilter, type ApplicationFilters } from "@/lib/application-list";
 import { subscribeToLocalDate } from "@/lib/local-date-subscription";
 import { setSettingsState } from "@/lib/settings-store";
-import { BOARD_STATUSES, boardLabel } from "@/lib/board-preferences";
+import { BOARDS, BOARD_STATUSES, boardLabel } from "@/lib/board-preferences";
 import { applicationApiPath } from "@/lib/application-api-path";
 import { applicationInputSchema, interviewDateSchema } from "@/lib/application-schema";
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
@@ -104,7 +103,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 }) {
   const router = useRouter();
   const boardScrollRef = useScrollbarActivity<HTMLElement>();
-  const boards = useBoards();
   const settings = useSettings();
   const [applications, setApplications] = useState(initialApplications);
   const [form, setForm] = useState<JobFormState>(blankForm);
@@ -161,7 +159,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const focusExpandOnCollapseRef = useRef(false);
   const interviewSearchRef = useRef<HTMLInputElement | null>(null);
-  const boardSearchRef = useRef<HTMLInputElement | null>(null);
   const tableSearchRef = useRef<HTMLInputElement | null>(null);
   const shortcutTriggerRef = useRef<HTMLElement | null>(null);
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -485,6 +482,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       if (!response.ok) throw new Error(body.error ?? "Could not delete the application");
       reconcileApplications((current) => current.filter((item) => item.id !== deletedApplication.id));
       if (editingId === deletedApplication.id) resetForm();
+      if (detailId === deletedApplication.id) setDetailId(null);
       showToast(`Deleted ${deletedApplication.company}`, {
         kind: "delete",
         applicationId: deletedApplication.id,
@@ -563,7 +561,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       } else if (offerUndo) {
         const message = previousArchived !== archived
           ? `${archived ? "Archived" : "Restored"} ${application.company}`
-          : `${application.company} moved from ${boardLabel(boards, previousStatus)} to ${boardLabel(boards, status)}`;
+          : `${application.company} moved from ${boardLabel(BOARDS, previousStatus)} to ${boardLabel(BOARDS, status)}`;
         showToast(message, undo);
       }
       if (!batch && !restoration && previousStatus !== Status.INTERVIEW && needsInterviewPrompt(body.application)) {
@@ -601,7 +599,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     const summary = moved === 0 && failed === 0
       ? "Nothing to change"
       : "status" in change
-        ? `Moved ${moved} ${noun} to ${boardLabel(boards, change.status)}`
+        ? `Moved ${moved} ${noun} to ${boardLabel(BOARDS, change.status)}`
         : `${change.archived ? "Archived" : "Restored"} ${moved} ${noun}`;
     const problems = failed ? `. ${failed} could not be updated because ${failed === 1 ? "it" : "they"} changed elsewhere or ${failed === 1 ? "was" : "were"} busy.` : "";
     showToast(`${summary}${problems}`, moved ? { kind: "batch", items: undo } : undefined);
@@ -793,10 +791,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     .filter((item) => matchesApplicationFilters(item, { search: searchTerm, status: activeFilter }))
     .sort(compareApplications);
   const activeApplications = applications.filter((item) => !item.archived);
-  const boardApplications = activeApplications.filter((item) => matchesApplicationFilters(item, boardFilters));
-  const boardColumns = boards.filter((board) => boardFilters.status === "all"
-    || (boardFilters.status === "active" ? (ACTIVE_PIPELINE_STATUSES as readonly Status[]).includes(board.status) : board.status === boardFilters.status));
-  const boardFiltered = boardFilters.search.trim() !== "" || boardFilters.status !== "all" || boardFilters.source !== "";
+  const boardApplications = activeApplications.filter((item) => matchesBoardStatusFilter(item.status, boardFilters.status));
+  const boardColumns = BOARDS.filter((board) => matchesBoardStatusFilter(board.status, boardFilters.status));
+  const boardFiltered = boardFilters.status !== "all";
   const sources = applicationSources(applications);
   const detailApplication = detailId ? applications.find(({ id }) => id === detailId) ?? null : null;
   const archivedItems = applications
@@ -810,11 +807,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   function dropTargetLabel(id: string | number) {
     if (id === ARCHIVED_DROP_ID) return "Archived";
     if (id === SIDEBAR_EDGE_DROP_ID) return "Archive";
-    return Object.values(Status).includes(id as Status) ? boardLabel(boards, id as Status) : "another drop target";
+    return Object.values(Status).includes(id as Status) ? boardLabel(BOARDS, id as Status) : "another drop target";
   }
 
   function focusSearch() {
-    const input = { interviews: interviewSearchRef, "job-board": boardSearchRef, table: tableSearchRef, dashboard: null }[page]?.current;
+    const input = { interviews: interviewSearchRef, "job-board": null, table: tableSearchRef, dashboard: null }[page]?.current;
     if (!input) return false;
     input.focus();
     return true;
@@ -906,7 +903,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
   return (
     <div className="select-none-ui flex h-screen flex-col overflow-hidden bg-cream text-ink">
-      {page === "job-board" && (
+      {(page === "job-board" || page === "table") && (
         <button aria-label="Add job" className="btn-primary fixed bottom-6 right-6 z-50 flex origin-bottom-right scale-[1.2] items-center gap-2 shadow-lg" onClick={openAddModal} type="button">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19" />
@@ -941,7 +938,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             onDragCancel: ({ active }) => {
               const origin = active.data.current?.status as Status | undefined;
               return origin
-                ? `Movement canceled. ${active.data.current?.label} remains in ${boardLabel(boards, origin)}.`
+                ? `Movement canceled. ${active.data.current?.label} remains in ${boardLabel(BOARDS, origin)}.`
                 : `Movement canceled. ${active.data.current?.label} was not moved.`;
             },
           },
@@ -960,7 +957,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
         >
         <ApplicationSidebar
-          boards={boards}
+          boards={BOARDS}
           sidebarItems={sidebarItems}
           archivedItems={archivedItems}
           totalApplications={applications.length}
@@ -1001,12 +998,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             {page === "job-board" ? (
               <div className="flex h-full min-h-0 flex-col">
                 <BoardToolbar
-                  boards={boards}
                   filters={boardFilters}
                   onChange={setBoardFilters}
-                  searchInputRef={boardSearchRef}
                   shownCount={boardApplications.length}
-                  sources={sources}
                   totalCount={activeApplications.length}
                 />
                 <div className="min-h-0 flex-1">
@@ -1025,7 +1019,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             ) : page === "table" ? (
               <ApplicationsTable
                 applications={applications}
-                boards={boards}
+                boards={BOARDS}
                 bulkBusy={bulkBusy}
                 initialFilters={tableFilters}
                 movingIds={movingIds}
@@ -1077,7 +1071,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
       <MotionPresence open={isModalOpen && !pendingDuplicate} immediateExit={pendingDuplicate !== null || pendingDelete !== null}>
         <JobModal
-          boards={boards}
+          boards={BOARDS}
           editing={Boolean(editingId)}
           error={formError}
           form={form}
@@ -1094,7 +1088,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         {pendingDuplicate && (
         <DuplicateWarningDialog
           fromImport={hasPendingImport}
-          boards={boards}
+          boards={BOARDS}
           editing={pendingDuplicate.editingId !== null}
           match={pendingDuplicate.match}
           onAddAnyway={() => void addDuplicateAnyway()}
@@ -1112,10 +1106,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         {detailApplication && (
           <ApplicationDetailPanel
             application={detailApplication}
-            boards={boards}
+            boards={BOARDS}
             busy={movingIds.has(detailApplication.id)}
             onArchive={() => { void moveApplication(detailApplication, detailApplication.status, true, undefined, !detailApplication.archived); }}
             onClose={() => setDetailId(null)}
+            onDelete={() => requestDelete(detailApplication, sidebarHeadingRef.current, false)}
             onEdit={() => { setDetailId(null); startEdit(detailApplication); }}
             onSave={(change) => saveApplicationChange(detailApplication, change)}
             stale={staleById.get(detailApplication.id)}
@@ -1127,7 +1122,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       <MotionPresence open={commandPaletteOpen}>
         <CommandPalette
           applications={applications}
-          boards={boards}
+          boards={BOARDS}
           commands={paletteCommands}
           onClose={() => setCommandPaletteOpen(false)}
           onOpenApplication={openDetail}

@@ -2,24 +2,22 @@
 
 import { useRef, useState, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
-import { Columns3, DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
+import { DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
 
 import { ShortcutList } from "@/components/shortcut-list";
-import { BoardSettings } from "@/components/board-settings";
 import { DeleteAllDataDialog } from "@/components/delete-all-data-dialog";
 import { Dialog } from "@/components/dialog";
 import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-modal-shell";
-import { useBoards } from "@/hooks/use-boards";
+import { BOARDS } from "@/lib/board-preferences";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
 import { STALE_THRESHOLDS, STARTUP_PAGES } from "@/lib/settings-values";
 import { MOTION_MODES } from "@/lib/motion-mode";
 
-type SettingsCategory = "general" | "board" | "shortcuts" | "backup";
+type SettingsCategory = "general" | "shortcuts" | "backup";
 
 const SETTINGS_CATEGORIES = [
   { id: "general", label: "General", Icon: SlidersHorizontal },
-  { id: "board", label: "Board", Icon: Columns3 },
   { id: "shortcuts", label: "Shortcuts", Icon: Keyboard },
   { id: "backup", label: "Backup & Restore", Icon: DatabaseBackup },
 ] satisfies Array<{ id: SettingsCategory; label: string; Icon: typeof SlidersHorizontal }>;
@@ -44,7 +42,6 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
   const defaultBoard = settings.defaultBoard;
   const startupPage = settings.startupPage;
   const staleThreshold = settings.staleApplicationThreshold;
-  const boards = useBoards();
   const motion = settings.motion;
   const [importError, setImportError] = useState("");
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
@@ -135,7 +132,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                   <div className="flex min-h-16 items-center justify-between gap-3 py-3">
                     <label className="text-sm font-semibold" htmlFor="default-board">New Applications Default Board</label>
                     <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="default-board" onChange={(event) => saveSettings({ defaultBoard: event.target.value as typeof defaultBoard })} value={defaultBoard}>
-                      {boards.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
+                      {BOARDS.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
                     </select>
                   </div>
                   <div className="flex min-h-16 items-center justify-between gap-3 py-3">
@@ -170,8 +167,6 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                 </div>
               </div>
             )}
-
-            {category === "board" && <BoardSettings showToast={showToast} />}
 
             {category === "shortcuts" && (
               <div>

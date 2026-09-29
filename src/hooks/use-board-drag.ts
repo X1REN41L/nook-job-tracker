@@ -18,11 +18,11 @@ import {
 import { Status } from "@prisma/client";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { getBoards } from "@/lib/board-preferences";
+import { BOARDS } from "@/lib/board-preferences";
 
 export const ARCHIVED_DROP_ID = "archived";
 export const SIDEBAR_EDGE_DROP_ID = "sidebar-edge";
-// Shared by the board and board-settings reorder so touch drags start the same way in both.
+// Touch drags wait briefly so scrolling the board and sidebar still works.
 export const TOUCH_ACTIVATION_CONSTRAINT = { delay: 200, tolerance: 6 };
 const SIDEBAR_EDGE_DWELL_MS = 450;
 type DragSource = "board" | "sidebar" | "archived";
@@ -36,7 +36,7 @@ const kanbanKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
 
   const overId = args.context.over?.id as Status | undefined;
   const originStatus = activeData.status as Status | undefined;
-  const statuses: Status[] = getBoards().map((board) => board.status);
+  const statuses: Status[] = BOARDS.map((board) => board.status);
   const currentStatus = overId && statuses.includes(overId) ? overId : originStatus;
   const currentIndex = currentStatus ? statuses.indexOf(currentStatus) : -1;
   if (currentIndex < 0) return args.currentCoordinates;

@@ -3,16 +3,19 @@
 import type { Status } from "@prisma/client";
 import { useEffect, useRef, useState, type RefObject } from "react";
 
-import { formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
+import { currentLocalDate, formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
 import {
-  applicationTableHref, compareTableApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationFilters, STATUS_FILTER_LABELS,
-  type ApplicationFilters, type ArchiveScope, type StatusFilter, type TableSort, type TableSortKey,
+  appliedRangeForPreset, appliedRangePreset, applicationTableHref, compareTableApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationFilters,
+  monthEndKey, monthStartKey, STATUS_FILTER_LABELS,
+  type AppliedRangePreset, type ApplicationFilters, type ArchiveScope, type StatusFilter, type TableSort, type TableSortKey,
 } from "@/lib/application-list";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
 import { featuredInterview } from "@/lib/interviews";
 import type { ApplicationRecord } from "@/types/application";
 
 const controlClass = "h-9 rounded-nook-sm border border-line bg-paper px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-60";
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const APPLIED_RANGE_LABELS: Record<AppliedRangePreset, string> = { any: "Any time", week: "This week", month: "This month", year: "This year", custom: "Custom range" };
 const COLUMNS: Array<{ key: TableSortKey; label: string }> = [
   { key: "role", label: "Role" },
   { key: "company", label: "Company" },
@@ -39,6 +42,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
   const [filters, setFilters] = useState(initialFilters);
   const [sort, setSort] = useState<TableSort>({ key: "appliedDate", direction: "desc" });
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const [customRange, setCustomRange] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   // Keep the address in step with the filters so a reload or a shared link shows the same rows.
@@ -52,6 +56,11 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
   const allSelected = rows.length > 0 && selectedRows.length === rows.length;
   const archiveTarget = selectedRows.some((application) => !application.archived);
   const busy = bulkBusy || selectedRows.some((application) => movingIds.has(application.id));
+  const rangePreset = customRange ? "custom" : appliedRangePreset(filters, today);
+  const currentYear = Number((today || currentLocalDate()).slice(0, 4));
+  const rangeYears = [currentYear - 10, ...applications.map((application) => Number(application.appliedDate.slice(0, 4))), ...[filters.appliedFrom, filters.appliedTo].filter(Boolean).map((value) => Number(value.slice(0, 4)))];
+  const newestYear = Math.max(currentYear, ...rangeYears);
+  const years = Array.from({ length: newestYear - Math.min(...rangeYears) + 1 }, (_, index) => newestYear - index);
   const filtered = (Object.keys(DEFAULT_APPLICATION_FILTERS) as Array<keyof ApplicationFilters>).some((key) => filters[key] !== DEFAULT_APPLICATION_FILTERS[key]);
 
   useEffect(() => {
@@ -60,6 +69,20 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
 
   function update(patch: Partial<ApplicationFilters>) {
     setFilters((current) => ({ ...current, ...patch }));
+  }
+
+  function selectRangePreset(preset: AppliedRangePreset) {
+    const localToday = today || currentLocalDate();
+    setCustomRange(preset === "custom");
+    if (preset !== "custom") update(appliedRangeForPreset(preset, localToday));
+    else if (!filters.appliedFrom && !filters.appliedTo) update(appliedRangeForPreset("month", localToday));
+  }
+
+  function updateRangeEdge(edge: "from" | "to", value: string) {
+    setFilters((current) => {
+      if (edge === "from") return { ...current, appliedFrom: value, appliedTo: current.appliedTo && current.appliedTo < value ? monthEndKey(Number(value.slice(0, 4)), Number(value.slice(5, 7))) : current.appliedTo };
+      return { ...current, appliedTo: value, appliedFrom: current.appliedFrom && current.appliedFrom > value ? value.slice(0, 8) + "01" : current.appliedFrom };
+    });
   }
 
   function toggleSort(key: TableSortKey) {
@@ -110,16 +133,18 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
           <option value="archived">Archived only</option>
           <option value="all">Archived and not</option>
         </select>
-        <label className="flex items-center gap-2 text-sm text-ink-soft">
-          Applied from
-          <input aria-label="Applied from" className={controlClass} max={filters.appliedTo || undefined} onChange={(event) => update({ appliedFrom: event.target.value })} type="date" value={filters.appliedFrom} />
-        </label>
-        <label className="flex items-center gap-2 text-sm text-ink-soft">
-          to
-          <input aria-label="Applied to" className={controlClass} min={filters.appliedFrom || undefined} onChange={(event) => update({ appliedTo: event.target.value })} type="date" value={filters.appliedTo} />
-        </label>
+        <select aria-label="Applied date range" className={controlClass} onChange={(event) => selectRangePreset(event.target.value as AppliedRangePreset)} value={rangePreset}>
+          {(Object.keys(APPLIED_RANGE_LABELS) as AppliedRangePreset[]).map((preset) => <option key={preset} value={preset}>{APPLIED_RANGE_LABELS[preset]}</option>)}
+        </select>
+        {rangePreset === "custom" && (
+          <div className="motion-small-reveal flex flex-wrap items-center gap-2 text-sm text-ink-soft">
+            <MonthYearPicker edge="from" label="Applied from" onChange={(value) => updateRangeEdge("from", value)} today={today} value={filters.appliedFrom} years={years} />
+            <span>to</span>
+            <MonthYearPicker edge="to" label="Applied to" onChange={(value) => updateRangeEdge("to", value)} today={today} value={filters.appliedTo} years={years} />
+          </div>
+        )}
         {filtered && (
-          <button className="btn-ghost h-9 px-3 py-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => setFilters(DEFAULT_APPLICATION_FILTERS)} type="button">
+          <button className="btn-ghost h-9 px-3 py-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => { setFilters(DEFAULT_APPLICATION_FILTERS); setCustomRange(false); }} type="button">
             Clear filters
           </button>
         )}
@@ -211,5 +236,37 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
         </div>
       )}
     </section>
+  );
+}
+
+/** Month and year selects for one end of the applied range; "from" picks the month's first day and "to" its last. */
+function MonthYearPicker({ edge, label, today, value, years, onChange }: {
+  edge: "from" | "to";
+  label: string;
+  today: string;
+  value: string;
+  years: number[];
+  onChange: (value: string) => void;
+}) {
+  const year = value ? Number(value.slice(0, 4)) : null;
+  const month = value ? Number(value.slice(5, 7)) : null;
+
+  function change(nextYear: number | null, nextMonth: number | null) {
+    const resolvedYear = nextYear ?? Number((today || currentLocalDate()).slice(0, 4));
+    const resolvedMonth = nextMonth ?? (edge === "from" ? 1 : 12);
+    onChange(edge === "from" ? monthStartKey(resolvedYear, resolvedMonth) : monthEndKey(resolvedYear, resolvedMonth));
+  }
+
+  return (
+    <span className="flex items-center gap-1">
+      <select aria-label={`${label} month`} className={controlClass} onChange={(event) => change(year, Number(event.target.value))} value={month ?? ""}>
+        {month === null && <option value="">Any month</option>}
+        {MONTH_NAMES.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
+      </select>
+      <select aria-label={`${label} year`} className={controlClass} onChange={(event) => change(Number(event.target.value), month)} value={year ?? ""}>
+        {year === null && <option value="">Any year</option>}
+        {years.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </span>
   );
 }

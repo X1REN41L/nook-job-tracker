@@ -110,7 +110,7 @@ export function useDashboardShortcuts({
         onOpenSettings();
         return;
       }
-      if (shortcut === "search-job-board" || shortcut === "search-table" || shortcut === "search-interviews") {
+      if (shortcut === "search-table" || shortcut === "search-interviews") {
         if (onFocusSearch()) event.preventDefault();
         return;
       }

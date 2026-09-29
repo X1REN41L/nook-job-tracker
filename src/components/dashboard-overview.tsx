@@ -8,8 +8,7 @@ import type { DashboardOverviewData as OverviewData, StaleApplication } from "@/
 import type { ApplicationRecord } from "@/types/application";
 import { currentBrowserTimeZone, formatCalendarDate } from "@/lib/application-date";
 import { applicationTableHref } from "@/lib/application-list";
-import { boardLabel } from "@/lib/board-preferences";
-import { useBoards } from "@/hooks/use-boards";
+import { BOARDS, boardLabel } from "@/lib/board-preferences";
 import { useSettings } from "@/hooks/use-settings";
 import { useStaleApplications } from "@/hooks/use-stale-applications";
 import { staleAgeLabel } from "@/lib/stale-label";
@@ -62,7 +61,6 @@ function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchi
   onOpen: (application: ApplicationRecord) => void;
   onArchive: (application: ApplicationRecord) => void;
 }) {
-  const boards = useBoards();
   return (
     <li className="stale-application-row relative min-w-0">
       <button
@@ -75,7 +73,7 @@ function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchi
         <span className="mt-1 block break-words text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
         <span className="mt-1 flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm text-ink-soft">
           <span>{staleAgeLabel(item)}</span>
-          <span>{boardLabel(boards, item.status)}</span>
+          <span>{boardLabel(BOARDS, item.status)}</span>
         </span>
       </button>
       {application && (

@@ -11,7 +11,7 @@ import type { ApplicationRecord, ContactRecord, InterviewRecord } from "@/types/
 
 export type ApplicationChange =
   | { kind: "follow-up"; followUpDate: string | null }
-  | { kind: "item"; collection: "interviews" | "contacts" | "notes"; method: "POST" | "PUT" | "DELETE"; itemId?: string; fields?: Record<string, unknown> };
+  | { kind: "item"; collection: "interviews" | "contacts" | "notes" | "status-events"; method: "POST" | "PUT" | "DELETE"; itemId?: string; fields?: Record<string, unknown> };
 export type SaveChange = (change: ApplicationChange) => Promise<string | null>;
 export type HistoryEvent = { id: string; type: EventType; fromStatus: Status | null; toStatus: Status | null; detail: string | null; createdAt: string };
 
@@ -304,7 +304,10 @@ function statusEventLabel(event: HistoryEvent, boards: BoardConfiguration[]) {
   return `Moved from ${boardLabel(boards, event.fromStatus)} to ${boardLabel(boards, event.toStatus)}`;
 }
 
-/** Status changes and dated notes, newest first. Notes can be added, edited (keeping their date), and deleted. */
+/**
+ * Status changes and dated notes, newest first. Notes can be added, edited (keeping their date), and deleted;
+ * status changes can be deleted, and removing the latest one moves the application back to its previous status.
+ */
 export function TimelineSection({ boards, events, loadError, onSave }: {
   boards: BoardConfiguration[];
   events: HistoryEvent[] | null;
@@ -368,7 +371,10 @@ export function TimelineSection({ boards, events, loadError, onSave }: {
               ) : (
                 <>
                   <p className="text-sm font-medium">{statusEventLabel(event, boards)}</p>
-                  <p className="mt-0.5 text-xs text-ink-soft"><time dateTime={event.createdAt}>{formatTimestamp(event.createdAt)}</time></p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-ink-soft">
+                    <time dateTime={event.createdAt}>{formatTimestamp(event.createdAt)}</time>
+                    <DeleteButton disabled={saving || editing !== null} label="this status change" onDelete={() => void run({ kind: "item", collection: "status-events", method: "DELETE", itemId: event.id })} />
+                  </p>
                 </>
               )}
             </li>

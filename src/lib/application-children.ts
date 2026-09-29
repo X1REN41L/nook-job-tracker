@@ -6,6 +6,7 @@ import { contactInputSchema, interviewInputSchema, noteInputSchema, revisionOnly
 import { applicationInclude, type StoredApplication } from "@/lib/application-record";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma, serializeWrite } from "@/lib/prisma";
+import { planStatusEventDeletion } from "@/lib/status-history";
 
 type Transaction = Prisma.TransactionClient;
 type ChildResult =
@@ -141,4 +142,29 @@ export function childItemRoute(collection: Collection) {
     }
   }
   return { PUT, DELETE };
+}
+
+/** DELETE handler that removes one status change and reconnects the history around it. */
+export function statusEventRoute() {
+  return async function DELETE(request: Request, { params }: Params) {
+    try {
+      const check = await checkMutationRequest(request);
+      if (!check.ok) return check.response;
+      const { id, itemId = "" } = await params;
+      const { revision } = parseRequest(revisionOnlySchema, parseMutationJson(check.body));
+      return respond(await mutateChildren(id, revision, async (tx) => {
+        const application = await tx.application.findUniqueOrThrow({ where: { id }, select: { status: true } });
+        const events = await tx.applicationEvent.findMany({ where: { applicationId: id, type: EventType.STATUS_CHANGE } });
+        const plan = planStatusEventDeletion(application.status, events, itemId);
+        if (!plan) throw new ChildNotFound();
+        await tx.applicationEvent.deleteMany({ where: { id: { in: plan.deleteIds }, applicationId: id } });
+        if (plan.update) {
+          await tx.applicationEvent.update({ where: { id: plan.update.id }, data: { fromStatus: plan.update.fromStatus, detail: plan.update.detail } });
+        }
+        if (plan.status !== application.status) await tx.application.update({ where: { id }, data: { status: plan.status } });
+      }));
+    } catch (error) {
+      return apiError(error);
+    }
+  };
 }

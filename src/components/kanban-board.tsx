@@ -10,7 +10,7 @@ import { useId, useLayoutEffect, useRef } from "react";
 
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
-import { BOARD_COLOR_CLASSES, type BoardConfiguration } from "@/lib/board-preferences";
+import type { BoardConfiguration } from "@/lib/board-preferences";
 import { motionIsCurrentlyOff } from "@/lib/general-preferences";
 import { featuredInterview, formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
 import type { ApplicationRecord } from "@/types/application";
@@ -87,7 +87,7 @@ function KanbanColumn({ board, applications, dropDisabled, movingIds, emptyText,
   return (
     <section ref={setNodeRef} data-board-status={board.status} className={`motion-surface kanban-column flex h-full min-h-0 flex-col rounded-nook-lg border p-3 ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
       <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1.5 pt-1">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><span className={`status-dot ${BOARD_COLOR_CLASSES[board.color]}`} />{board.label}</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><span className={`status-dot ${board.dot}`} />{board.label}</h3>
         <span className="rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-medium text-ink-soft">{applications.length}</span>
       </div>
       <div ref={scrollRef} className="kanban-column-scroll scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
