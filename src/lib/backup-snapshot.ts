@@ -55,7 +55,7 @@ const timestamp = z.iso.datetime({ offset: true }).transform((value) => new Date
 const rawEventSnapshotSchema = z.object({
   id: recordIdSchema, type: z.enum(EventType), detail: eventTextSchema,
   fromStatus: z.enum(Status).nullable(), toStatus: z.enum(Status).nullable(),
-  emailSnippet: eventTextSchema, createdAt: timestamp,
+  createdAt: timestamp,
 }).strict();
 export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, context) => {
   if (event.type !== EventType.STATUS_CHANGE) {
@@ -185,7 +185,7 @@ const storedTimestamp = z.iso.datetime().transform((value) => new Date(value));
 const storedEventSchema = z.object({
   id: z.string().min(1), type: z.enum(EventType), detail: z.string().nullable(),
   fromStatus: z.enum(Status).nullable(), toStatus: z.enum(Status).nullable(),
-  emailSnippet: z.string().nullable(), createdAt: storedTimestamp,
+  createdAt: storedTimestamp,
 }).strict();
 const storedInterviewSchema = z.object({
   id: z.string().min(1), date: storedTimestamp, time: z.string().nullable(), type: z.enum(InterviewType),
@@ -204,7 +204,7 @@ export const applicationRestoreSnapshotSchema = z.object({
 }).strict();
 
 type StoredChildren = {
-  events: Array<{ id: string; type: EventType; detail: string | null; fromStatus?: Status | null; toStatus?: Status | null; emailSnippet: string | null; createdAt: string | Date }>;
+  events: Array<{ id: string; type: EventType; detail: string | null; fromStatus?: Status | null; toStatus?: Status | null; createdAt: string | Date }>;
   interviews: Array<{ id: string; date: string | Date; time: string | null; type: InterviewType; interviewers: string | null; notes: string | null; createdAt: string | Date }>;
   contacts: Array<{ id: string; name: string; role: string | null; email: string | null; linkedinUrl: string | null; notes: string | null; createdAt: string | Date }>;
 };
@@ -215,7 +215,7 @@ export function storedChildren({ events, interviews, contacts }: StoredChildren)
   return {
     events: events.map((event) => ({
       id: event.id, type: event.type, detail: event.detail, fromStatus: event.fromStatus, toStatus: event.toStatus,
-      emailSnippet: event.emailSnippet, createdAt: asString(event.createdAt),
+      createdAt: asString(event.createdAt),
     })),
     interviews: interviews.map((interview) => ({
       id: interview.id, date: asString(interview.date), time: interview.time, type: interview.type,

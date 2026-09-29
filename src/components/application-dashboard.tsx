@@ -882,7 +882,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         </button>
       )}
 
-      {error && !isModalOpen && (
+      {/* While the application view is open, it shows the error itself. */}
+      {error && !isModalOpen && !detailApplication && (
         <p className="mx-7 mt-4 rounded-nook border border-rose bg-rose-tint p-3 text-sm text-ink" role="alert">
           {error}
         </p>
@@ -1069,16 +1070,17 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         )}
       </MotionPresence>
 
-      <MotionPresence open={detailApplication !== null && !isModalOpen && pendingDelete === null}>
+      <MotionPresence open={detailApplication !== null && !isModalOpen}>
         {detailApplication && (
           <ApplicationDetailPanel
             application={detailApplication}
             boards={BOARDS}
             busy={movingIds.has(detailApplication.id)}
+            error={error}
             onArchive={() => { void moveApplication(detailApplication, detailApplication.status, true, undefined, !detailApplication.archived); }}
-            onClose={() => setDetailId(null)}
+            onClose={() => { setDetailId(null); setError(""); }}
             onChangeStatus={(status) => { void moveApplication(detailApplication, status); }}
-            onDelete={() => requestDelete(detailApplication, sidebarHeadingRef.current)}
+            onDelete={(trigger) => requestDelete(detailApplication, trigger)}
             onSave={(change) => saveApplicationChange(detailApplication, change)}
             sourceSuggestions={sources}
             stale={staleById.get(detailApplication.id)}
@@ -1142,7 +1144,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         )}
       </MotionPresence>
 
-      <div className={`nook-toast-wrap ${toast ? "nook-toast-show" : ""}`} role="status" aria-live="polite" aria-hidden={!toast} inert={!toast}>
+      {/* Hidden while the Add form is open so it never covers the form's buttons; it returns when the form closes. */}
+      <div className={`nook-toast-wrap ${toast && !isModalOpen ? "nook-toast-show" : ""}`} role="status" aria-live="polite" aria-hidden={!toast || isModalOpen} inert={!toast || isModalOpen}>
         {visibleToast && (
           <div
             className="nook-toast"

@@ -41,7 +41,6 @@ model ApplicationEvent {
   fromStatus    Status?
   toStatus      Status?
   detail        String?
-  emailSnippet  String?
   createdAt     DateTime    @default(now())
 
   @@index([applicationId, createdAt])

@@ -63,7 +63,7 @@ function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchi
   onArchive: (application: ApplicationRecord) => void;
 }) {
   return (
-    <li className="stale-application-row relative min-w-0">
+    <li className="attention-row relative min-w-0">
       <button
         className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
         disabled={!application}
@@ -80,7 +80,7 @@ function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchi
       </button>
       {application && (
         <button
-          className="stale-row-archive btn-ghost absolute right-2 top-2.5 px-3 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+          className="attention-row-action btn-ghost absolute right-2 top-2.5 px-3 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
           disabled={archiveDisabled}
           onClick={() => onArchive(application)}
           type="button"
@@ -100,24 +100,26 @@ function FollowUpRow({ item, application, busy, onOpen, onDone }: {
   onDone: (application: ApplicationRecord) => void;
 }) {
   return (
-    <li className="relative min-w-0">
+    <li className="attention-row relative min-w-0">
       <button
-        className="block w-full min-w-0 rounded-nook-sm py-4 pl-2 pr-24 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
+        className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
         disabled={!application}
         onClick={() => { if (application) onOpen(application); }}
         type="button"
       >
         <span className="block text-xs font-semibold tracking-wide text-clay">FOLLOW UP</span>
-        <span className="mt-1 block break-words text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
-        <span className="mt-1 block text-sm text-ink-soft">
-          {item.daysOverdue === 0 ? "Due today" : item.daysOverdue === 1 ? "Due yesterday" : `Due ${formatCalendarDate(item.followUpDate)} · ${item.daysOverdue} days overdue`}
-        </span>
+        {/* The title leaves room for Done, which sits at the top right. */}
+        <span className="mt-1 block break-words pr-20 text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
         {item.followUpNote && <span className="mt-1 block break-words text-sm text-ink">{item.followUpNote}</span>}
+        <span className="mt-1 flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm text-ink-soft">
+          <span>{item.daysOverdue === 0 ? "Due today" : item.daysOverdue === 1 ? "Due yesterday" : `Due ${formatCalendarDate(item.followUpDate)} · ${item.daysOverdue} days overdue`}</span>
+          <span>{boardLabel(BOARDS, item.status)}</span>
+        </span>
       </button>
       {application && (
         <button
           aria-label={`Mark the follow-up for ${item.role} at ${item.company} done`}
-          className="btn-ghost absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+          className="attention-row-action btn-ghost absolute right-2 top-2.5 px-3 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
           disabled={busy}
           onClick={() => onDone(application)}
           type="button"

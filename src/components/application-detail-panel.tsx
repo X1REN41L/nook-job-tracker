@@ -39,18 +39,20 @@ function useApplicationHistory(application: ApplicationRecord) {
   return { events: result?.key === key ? result.events : null, error: failedKey === key };
 }
 
-export function ApplicationDetailPanel({ application, boards, today, stale, busy, sourceSuggestions, returnFocusRef, onClose, onChangeStatus, onArchive, onDelete, onSave }: {
+export function ApplicationDetailPanel({ application, boards, today, stale, busy, error: actionError, sourceSuggestions, returnFocusRef, onClose, onChangeStatus, onArchive, onDelete, onSave }: {
   application: ApplicationRecord;
   boards: BoardConfiguration[];
   today: string;
   stale?: StaleApplication;
   busy: boolean;
+  /** A failed status change, archive, or delete for this application. */
+  error: string;
   sourceSuggestions: string[];
   returnFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
   onChangeStatus: (status: Status) => void;
   onArchive: () => void;
-  onDelete: () => void;
+  onDelete: (trigger: HTMLElement) => void;
   onSave: SaveChange;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -76,8 +78,7 @@ export function ApplicationDetailPanel({ application, boards, today, stale, busy
             <span className="relative inline-flex">
               <span aria-hidden="true" className={`status-dot pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 ${boardDot(boards, application.status)}`} />
               <select
-                className={`badge ${STATUS_META[application.status].badge} cursor-pointer appearance-none py-1 pl-6 pr-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:cursor-default disabled:opacity-60`}
-                disabled={busy}
+                className={`badge ${STATUS_META[application.status].badge} cursor-pointer appearance-none py-1 pl-6 pr-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest `}
                 id={statusId}
                 onChange={(event) => onChangeStatus(event.target.value as Status)}
                 value={application.status}
@@ -117,11 +118,12 @@ export function ApplicationDetailPanel({ application, boards, today, stale, busy
         <TimelineSection boards={boards} events={events} loadError={error} onSave={onSave} />
       </div>
 
+      {actionError && <p className="shrink-0 border-t border-line bg-rose-tint px-6 py-2.5 text-sm text-ink" role="alert">{actionError}</p>}
       <div className="flex shrink-0 gap-3 border-t border-line px-6 py-4">
         <button className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={busy} onClick={onArchive} type="button">
           {application.archived ? "Restore" : "Archive"}
         </button>
-        <button className="btn-ghost mr-auto text-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose" disabled={busy} onClick={onDelete} type="button">
+        <button className="btn-ghost mr-auto text-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose" disabled={busy} onClick={(event) => onDelete(event.currentTarget)} type="button">
           Delete
         </button>
         <button className="btn-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper" disabled={busy || editingDetails} onClick={() => setEditingDetails(true)} type="button">
