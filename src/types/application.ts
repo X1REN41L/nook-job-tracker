@@ -1,8 +1,19 @@
-import type { Status } from "@prisma/client";
+import type { InterviewType, Status } from "@prisma/client";
+
+export type InterviewRecord = {
+  id: string; applicationId: string; date: string; time: string | null; type: InterviewType;
+  interviewers: string | null; notes: string | null; createdAt: string;
+};
+
+export type ContactRecord = {
+  id: string; applicationId: string; name: string; role: string | null; email: string | null;
+  linkedinUrl: string | null; notes: string | null; createdAt: string;
+};
 
 export type ApplicationRecord = {
   id: string; company: string; role: string; status: Status; archived: boolean; revision: number;
-  source: string | null; appliedDate: string; interviewDate: string | null; interviewDatePromptDismissed: boolean; notes: string | null; jobUrl: string | null;
+  source: string | null; appliedDate: string; interviewDatePromptDismissed: boolean; followUpDate: string | null;
+  notes: string | null; jobUrl: string | null; interviews: InterviewRecord[]; contacts: ContactRecord[];
   lastUpdated: string; createdAt: string;
 };
 
@@ -12,7 +23,7 @@ export type JobFormState = {
   status: Status;
   source: string;
   appliedDate: string;
-  interviewDate: string;
+  followUpDate: string;
   notes: string;
   jobUrl: string;
 };

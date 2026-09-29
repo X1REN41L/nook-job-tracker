@@ -16,12 +16,15 @@ model Application {
   revision    Int                @default(0)
   source      String?
   appliedDate DateTime
-  interviewDate DateTime?
+  // Set when the "add an interview" prompt is skipped; cleared when the application leaves Interview.
   interviewDatePromptDismissed Boolean @default(false)
+  followUpDate DateTime?
   lastUpdated DateTime           @updatedAt
   notes       String?
   jobUrl      String?
   events      ApplicationEvent[]
+  interviews  Interview[]
+  contacts    Contact[]
   createdAt   DateTime           @default(now())
 
   @@index([status])
@@ -40,6 +43,36 @@ model ApplicationEvent {
   createdAt     DateTime    @default(now())
 
   @@index([applicationId, createdAt])
+}
+
+// One interview round. `date` is a calendar date stored at UTC midnight; `time` is an optional local "HH:MM".
+model Interview {
+  id            String        @id @default(cuid())
+  applicationId String
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  date          DateTime
+  time          String?
+  type          InterviewType @default(OTHER)
+  interviewers  String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+
+  @@index([applicationId])
+  @@index([date])
+}
+
+model Contact {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  name          String
+  role          String?
+  email         String?
+  linkedinUrl   String?
+  notes         String?
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId])
 }
 
 model UndoSnapshot {
@@ -63,6 +96,13 @@ enum Status {
   INTERVIEW
   OFFER
   REJECTED
+}
+
+enum InterviewType {
+  PHONE
+  TECHNICAL
+  ONSITE
+  OTHER
 }
 
 enum EventType {

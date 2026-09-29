@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { apiError, isDatabaseContention, parseRequest } from "@/lib/api";
+import { applicationInclude, type StoredApplication } from "@/lib/application-record";
 import { applicationEditSchema, applicationMutationSchema } from "@/lib/application-schema";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma, serializeWrite } from "@/lib/prisma";
@@ -16,7 +17,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const { id } = await params;
     const application = await prisma.application.findUnique({
       where: { id },
-      include: { events: { select: { id: true, type: true, fromStatus: true, toStatus: true, detail: true, createdAt: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+      include: { ...applicationInclude, events: { select: { id: true, type: true, fromStatus: true, toStatus: true, detail: true, createdAt: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
     });
     if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
     const { events, ...record } = application;
@@ -47,14 +48,15 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     if (!checked.ok) return checked.response;
     const { id } = await params;
     const mutation = parseRequest(applicationMutationSchema, parseMutationJson(checked.body));
-    if ("archived" in mutation && !("status" in mutation)) {
-      const result = await updateApplication(id, mutation.revision, { archived: mutation.archived });
+    if (!("status" in mutation)) {
+      const data = "archived" in mutation ? { archived: mutation.archived } : { followUpDate: mutation.followUpDate };
+      const result = await updateApplication(id, mutation.revision, data);
       if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
       if (result.conflict) return revisionConflict(result.application);
       return NextResponse.json({ application: result.application });
     }
-    const { revision, status, archived, interviewDate, interviewDatePromptDismissed } = mutation as Extract<typeof mutation, { status: Status }>;
-    const result = await updateApplication(id, revision, { status, archived, interviewDate, interviewDatePromptDismissed }, status);
+    const { revision, status, archived, interviewDatePromptDismissed } = mutation;
+    const result = await updateApplication(id, revision, { status, archived, interviewDatePromptDismissed }, status);
     if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
     if (result.conflict) return revisionConflict(result.application);
     return NextResponse.json({ application: result.application, latestStatusEventId: result.latestStatusEventId ?? null });
@@ -71,7 +73,7 @@ async function updateApplication(
 ) {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     try {
-      const current = await prisma.application.findUnique({ where: { id } });
+      const current = await prisma.application.findUnique({ where: { id }, include: applicationInclude });
       if (!current) return null;
       if (current.revision !== expectedRevision) return { application: current, conflict: true as const };
       const leavingInterview = current.status === Status.INTERVIEW && nextStatus !== undefined && nextStatus !== Status.INTERVIEW;
@@ -81,7 +83,7 @@ async function updateApplication(
           data: { ...data, ...(leavingInterview && { interviewDatePromptDismissed: false }), revision: { increment: 1 } },
         });
         if (!updated.count) {
-          const latest = await transaction.application.findUnique({ where: { id } });
+          const latest = await transaction.application.findUnique({ where: { id }, include: applicationInclude });
           return latest ? { application: latest, conflict: true as const } : null;
         }
         let latestStatusEventId: string | null = null;
@@ -103,7 +105,7 @@ async function updateApplication(
           });
           latestStatusEventId = event.id;
         }
-        const application = await transaction.application.findUniqueOrThrow({ where: { id } });
+        const application = await transaction.application.findUniqueOrThrow({ where: { id }, include: applicationInclude });
         return { application, conflict: false as const, latestStatusEventId };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
     } catch (error) {
@@ -114,7 +116,7 @@ async function updateApplication(
   throw new Error("Application update retry limit reached");
 }
 
-function revisionConflict(application: NonNullable<Awaited<ReturnType<typeof prisma.application.findUnique>>>) {
+function revisionConflict(application: StoredApplication) {
   return NextResponse.json({
     error: "Application changed since it was loaded. The current version is included so you can review it.",
     application,
@@ -131,7 +133,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       const token = randomUUID();
       const expiresAt = new Date(Date.now() + UNDO_SNAPSHOT_TTL_MS);
       const deleted = await serializeWrite(() => prisma.$transaction(async (transaction) => {
-        const application = await transaction.application.findUnique({ where: { id }, include: { events: true } });
+        const application = await transaction.application.findUnique({ where: { id }, include: { events: true, interviews: true, contacts: true } });
         if (!application) return null;
         await transaction.undoSnapshot.create({ data: { token, applicationId: id, payload: JSON.stringify(application), expiresAt } });
         await transaction.application.delete({ where: { id } });

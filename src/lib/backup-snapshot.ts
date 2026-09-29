@@ -1,9 +1,9 @@
-import { EventType, Status } from "@prisma/client";
+import { EventType, InterviewType, Status } from "@prisma/client";
 import { z } from "zod";
 
 import {
-  applicationIdSchema, eventTextSchema, recordIdSchema, storedCalendarDateSchema, storedJobUrlSchema,
-  storedOptionalText, storedRequiredText,
+  applicationIdSchema, eventTextSchema, recordIdSchema, storedCalendarDateSchema, storedHttpUrlSchema, storedJobUrlSchema,
+  storedOptionalText, storedRequiredText, storedTimeSchema,
 } from "@/lib/application-schema";
 import { MAX_BACKUP_APPLICATIONS } from "@/lib/backup-limits";
 import { settingsSchema } from "@/lib/backup-settings-schema";
@@ -63,6 +63,10 @@ export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, cont
       context.addIssue({ code: "custom", message: "Only status change events can include status fields" });
       return z.NEVER;
     }
+    if (event.type === EventType.NOTE_ADDED && (!event.detail || event.detail.trim() !== event.detail)) {
+      context.addIssue({ code: "custom", message: "A dated note must have text without leading or trailing spaces" });
+      return z.NEVER;
+    }
     return event;
   }
 
@@ -93,12 +97,22 @@ export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, cont
 
   return event;
 });
+export const interviewSnapshotSchema = z.object({
+  id: recordIdSchema, date: storedCalendarDateSchema, time: storedTimeSchema, type: z.enum(InterviewType),
+  interviewers: storedOptionalText(200), notes: storedOptionalText(2_000), createdAt: timestamp,
+}).strict();
+export const contactSnapshotSchema = z.object({
+  id: recordIdSchema, name: storedRequiredText(120), role: storedOptionalText(120),
+  email: storedOptionalText(254).refine((value) => value === null || z.email().safeParse(value).success, "Enter a valid email address"),
+  linkedinUrl: storedHttpUrlSchema, notes: storedOptionalText(2_000), createdAt: timestamp,
+}).strict();
 export const applicationSnapshotSchema = z.object({
   id: applicationIdSchema, company: storedRequiredText(120), role: storedRequiredText(120),
   status: z.enum(Status), archived: z.boolean(), source: storedOptionalText(120), appliedDate: storedCalendarDateSchema,
-  interviewDate: storedCalendarDateSchema.nullable(), interviewDatePromptDismissed: z.boolean(),
+  interviewDatePromptDismissed: z.boolean(), followUpDate: storedCalendarDateSchema.nullable(),
   notes: storedOptionalText(5_000), jobUrl: storedJobUrlSchema,
   createdAt: timestamp, lastUpdated: timestamp, events: z.array(eventSnapshotSchema),
+  interviews: z.array(interviewSnapshotSchema), contacts: z.array(contactSnapshotSchema),
 }).strict().superRefine((application, context) => {
   const statusEvents = application.events
     .map((event, index) => ({ event, index }))
@@ -170,13 +184,46 @@ const storedEventSchema = z.object({
   fromStatus: z.enum(Status).nullable(), toStatus: z.enum(Status).nullable(),
   emailSnippet: z.string().nullable(), createdAt: storedTimestamp,
 }).strict();
+const storedInterviewSchema = z.object({
+  id: z.string().min(1), date: storedTimestamp, time: z.string().nullable(), type: z.enum(InterviewType),
+  interviewers: z.string().nullable(), notes: z.string().nullable(), createdAt: storedTimestamp,
+}).strict();
+const storedContactSchema = z.object({
+  id: z.string().min(1), name: z.string(), role: z.string().nullable(), email: z.string().nullable(),
+  linkedinUrl: z.string().nullable(), notes: z.string().nullable(), createdAt: storedTimestamp,
+}).strict();
 export const applicationRestoreSnapshotSchema = z.object({
   id: z.string().min(1), company: z.string(), role: z.string(), status: z.enum(Status), archived: z.boolean(),
   revision: z.number().int().nonnegative(), source: z.string().nullable(), appliedDate: storedTimestamp,
-  interviewDate: storedTimestamp.nullable(), interviewDatePromptDismissed: z.boolean(),
+  interviewDatePromptDismissed: z.boolean(), followUpDate: storedTimestamp.nullable(),
   notes: z.string().nullable(), jobUrl: z.string().nullable(), createdAt: storedTimestamp, lastUpdated: storedTimestamp,
-  events: z.array(storedEventSchema),
+  events: z.array(storedEventSchema), interviews: z.array(storedInterviewSchema), contacts: z.array(storedContactSchema),
 }).strict();
+
+type StoredChildren = {
+  events: Array<{ id: string; type: EventType; detail: string | null; fromStatus?: Status | null; toStatus?: Status | null; emailSnippet: string | null; createdAt: string | Date }>;
+  interviews: Array<{ id: string; date: string | Date; time: string | null; type: InterviewType; interviewers: string | null; notes: string | null; createdAt: string | Date }>;
+  contacts: Array<{ id: string; name: string; role: string | null; email: string | null; linkedinUrl: string | null; notes: string | null; createdAt: string | Date }>;
+};
+const asString = (date: unknown) => date instanceof Date ? date.toISOString() : date;
+
+/** Keeps only the stored child fields (dropping `applicationId`), with dates as ISO strings. */
+export function storedChildren({ events, interviews, contacts }: StoredChildren) {
+  return {
+    events: events.map((event) => ({
+      id: event.id, type: event.type, detail: event.detail, fromStatus: event.fromStatus, toStatus: event.toStatus,
+      emailSnippet: event.emailSnippet, createdAt: asString(event.createdAt),
+    })),
+    interviews: interviews.map((interview) => ({
+      id: interview.id, date: asString(interview.date), time: interview.time, type: interview.type,
+      interviewers: interview.interviewers, notes: interview.notes, createdAt: asString(interview.createdAt),
+    })),
+    contacts: contacts.map((contact) => ({
+      id: contact.id, name: contact.name, role: contact.role, email: contact.email, linkedinUrl: contact.linkedinUrl,
+      notes: contact.notes, createdAt: asString(contact.createdAt),
+    })),
+  };
+}
 const storedComparisonSchema = applicationRestoreSnapshotSchema.omit({ revision: true });
 export const backupSnapshotSchema = z.object({
   version: z.literal(1), applications: z.array(applicationSnapshotSchema).max(MAX_BACKUP_APPLICATIONS), settings: settingsSchema,
@@ -191,23 +238,22 @@ export const backupSnapshotSchema = z.object({
 export type BackupSnapshot = z.input<typeof backupSnapshotSchema>;
 
 export function canonicalSnapshot(value: unknown) {
-  const input = value as Record<string, unknown> & { events: Array<{
-    id: string; type: EventType; detail: string | null; fromStatus?: Status | null; toStatus?: Status | null;
-    emailSnippet: string | null; createdAt: string | Date;
-  }> };
-  const { revision, ...snapshotInput } = input;
+  const input = value as Record<string, unknown> & StoredChildren;
+  const { revision, events, interviews, contacts, ...snapshotInput } = input;
   void revision;
-  const asString = (date: unknown) => date instanceof Date ? date.toISOString() : date;
   const record = storedComparisonSchema.parse({
     ...snapshotInput,
     appliedDate: asString(snapshotInput.appliedDate),
-    interviewDate: asString(snapshotInput.interviewDate),
+    followUpDate: asString(snapshotInput.followUpDate),
     createdAt: asString(snapshotInput.createdAt),
     lastUpdated: asString(snapshotInput.lastUpdated),
-    events: snapshotInput.events.map((event) => ({
-      id: event.id, type: event.type, detail: event.detail, fromStatus: event.fromStatus, toStatus: event.toStatus,
-      emailSnippet: event.emailSnippet, createdAt: asString(event.createdAt),
-    })),
+    ...storedChildren({ events, interviews, contacts }),
   });
-  return JSON.stringify({ ...record, events: [...record.events].sort((a, b) => a.id.localeCompare(b.id)) });
+  const byId = (left: { id: string }, right: { id: string }) => left.id.localeCompare(right.id);
+  return JSON.stringify({
+    ...record,
+    events: [...record.events].sort(byId),
+    interviews: [...record.interviews].sort(byId),
+    contacts: [...record.contacts].sort(byId),
+  });
 }

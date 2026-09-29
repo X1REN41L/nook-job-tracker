@@ -5,12 +5,13 @@ import {
   DragEndEvent,
   DragOverlay,
 } from "@dnd-kit/core";
-import { Status } from "@prisma/client";
+import { InterviewType, Status } from "@prisma/client";
 import { FormEvent, useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { ApplicationDetailPanel } from "@/components/application-detail-panel";
+import type { ApplicationChange } from "@/components/application-detail-sections";
 import { ApplicationSidebar } from "@/components/application-sidebar";
 import { ApplicationsTable } from "@/components/applications-table";
 import { BoardToolbar, DEFAULT_BOARD_FILTERS, type BoardFilters } from "@/components/board-toolbar";
@@ -46,12 +47,12 @@ import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { findPossibleDuplicate, type DuplicateMatch } from "@/lib/duplicate-match";
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";
 import { getDefaultBoard } from "@/lib/general-preferences";
-import { getInterviewListItems, getUpcomingInterviewCount } from "@/lib/interviews";
+import { getInterviewListItems, getUpcomingInterviewCount, hasUpcomingInterview } from "@/lib/interviews";
 import type { ApplicationRecord, JobFormState } from "@/types/application";
 import type { StaleApplication } from "@/types/dashboard";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
-const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), interviewDate: "", notes: "", jobUrl: "" });
+const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), followUpDate: "", notes: "", jobUrl: "" });
 type DragSource = "board" | "sidebar" | "archived";
 const SIDEBAR_WIDTH_KEY = "nook-sidebar-width";
 const SIDEBAR_WIDTH_EVENT = "nook-sidebar-width-change";
@@ -113,6 +114,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const [pendingDelete, setPendingDelete] = useState<ApplicationRecord | null>(null);
   const [pendingInterviewDate, setPendingInterviewDate] = useState<ApplicationRecord | null>(null);
   const [interviewDateDraft, setInterviewDateDraft] = useState("");
+  const [interviewTypeDraft, setInterviewTypeDraft] = useState<InterviewType>(InterviewType.OTHER);
   const [interviewDateError, setInterviewDateError] = useState("");
   const [savingInterviewDate, setSavingInterviewDate] = useState(false);
   const [error, setError] = useState("");
@@ -366,7 +368,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setPendingDuplicate(null);
     setEditingId(application.id);
     setEditingRevision(application.revision);
-    setForm({ company: application.company, role: application.role, status: application.status, source: application.source ?? "", appliedDate: application.appliedDate.slice(0, 10), interviewDate: application.interviewDate?.slice(0, 10) ?? "", notes: application.notes ?? "", jobUrl: application.jobUrl ?? "" });
+    setForm({ company: application.company, role: application.role, status: application.status, source: application.source ?? "", appliedDate: application.appliedDate.slice(0, 10), followUpDate: application.followUpDate?.slice(0, 10) ?? "", notes: application.notes ?? "", jobUrl: application.jobUrl ?? "" });
     setFormError("");
     setIsModalOpen(true);
   }
@@ -419,7 +421,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       });
       showToast(targetEditingId ? `Saved changes to ${body.application.company}` : `Added ${body.application.company}`);
       closeModal();
-      if (previous && previous.status !== Status.INTERVIEW && body.application.status === Status.INTERVIEW && !body.application.interviewDate && !body.application.interviewDatePromptDismissed) {
+      if (previous && previous.status !== Status.INTERVIEW && needsInterviewPrompt(body.application)) {
         openInterviewDatePrompt(body.application);
       }
       return true;
@@ -513,7 +515,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     application: ApplicationRecord,
     status: Status,
     offerUndo = true,
-    restoration?: Pick<ApplicationRecord, "interviewDate" | "interviewDatePromptDismissed">,
+    restoration?: Pick<ApplicationRecord, "interviewDatePromptDismissed">,
     archived = application.archived,
     // Collects undo entries for a bulk change instead of offering one toast per application.
     batch?: StatusUndo[],
@@ -526,7 +528,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     if (application.status === status && application.archived === archived) return "unchanged";
     const previousStatus = application.status;
     const previousArchived = application.archived;
-    const previousInterviewDate = application.interviewDate;
     const previousInterviewDatePromptDismissed = application.interviewDatePromptDismissed;
     setError("");
     beginMove(application.id);
@@ -542,7 +543,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
               status,
               ...(archived !== previousArchived && { archived }),
               ...(restoration && {
-                interviewDate: restoration.interviewDate?.slice(0, 10) ?? null,
                 interviewDatePromptDismissed: restoration.interviewDatePromptDismissed,
               }),
             }),
@@ -557,7 +557,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       }
       if (!response.ok) throw new Error(body.error ?? "Could not update the application status");
       reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
-      const undo: StatusUndo = { kind: "status", applicationId: application.id, status: previousStatus, archived: previousArchived, interviewDate: previousInterviewDate, interviewDatePromptDismissed: previousInterviewDatePromptDismissed, expectedLatestStatusEventId: body.latestStatusEventId ?? null, movedRevision: body.application.revision };
+      const undo: StatusUndo = { kind: "status", applicationId: application.id, status: previousStatus, archived: previousArchived, interviewDatePromptDismissed: previousInterviewDatePromptDismissed, expectedLatestStatusEventId: body.latestStatusEventId ?? null, movedRevision: body.application.revision };
       if (batch) {
         batch.push(undo);
       } else if (offerUndo) {
@@ -566,13 +566,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           : `${application.company} moved from ${boardLabel(boards, previousStatus)} to ${boardLabel(boards, status)}`;
         showToast(message, undo);
       }
-      if (!batch && !restoration && previousStatus !== Status.INTERVIEW && status === Status.INTERVIEW && !body.application.interviewDate && !body.application.interviewDatePromptDismissed) {
+      if (!batch && !restoration && previousStatus !== Status.INTERVIEW && needsInterviewPrompt(body.application)) {
         openInterviewDatePrompt(body.application);
       }
       return "moved";
     } catch (caught) {
       if (!batch) setError(caught instanceof Error ? caught.message : "Could not update the application status");
-      setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status: previousStatus, archived: previousArchived, interviewDate: previousInterviewDate, interviewDatePromptDismissed: previousInterviewDatePromptDismissed } : item));
+      setApplications((current) => current.map((item) => item.id === application.id ? { ...item, status: previousStatus, archived: previousArchived, interviewDatePromptDismissed: previousInterviewDatePromptDismissed } : item));
       if (!offerUndo) throw caught;
       return "failed";
     } finally {
@@ -607,10 +607,47 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     showToast(`${summary}${problems}`, moved ? { kind: "batch", items: undo } : undefined);
   }
 
+  // Moving to Interview asks for the first round unless one is already scheduled or the prompt was skipped.
+  function needsInterviewPrompt(application: ApplicationRecord) {
+    return application.status === Status.INTERVIEW && !application.interviewDatePromptDismissed && !hasUpcomingInterview(application, currentLocalDate());
+  }
+
   function openInterviewDatePrompt(application: ApplicationRecord) {
     setInterviewDateDraft(currentLocalDate());
+    setInterviewTypeDraft(InterviewType.OTHER);
     setInterviewDateError("");
     setPendingInterviewDate(application);
+  }
+
+  /**
+   * Saves one change to an application: its follow-up date (PATCH), or an interview round, contact, or dated
+   * note. Each request carries the application's revision. Returns an error message, or null once saved.
+   */
+  async function saveApplicationChange(application: ApplicationRecord, change: ApplicationChange) {
+    try {
+      const response = change.kind === "follow-up"
+        ? await fetch(applicationApiPath(application.id), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision: application.revision, followUpDate: change.followUpDate }),
+        })
+        : await fetch(applicationApiPath(application.id, change.collection, change.itemId), {
+          method: change.method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...change.fields, revision: application.revision }),
+        });
+      const body = await response.json();
+      if (response.status === 409 && body.application) {
+        const latest = body.application as ApplicationRecord;
+        reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+        return "This application changed elsewhere. The latest version is loaded; review it and try again.";
+      }
+      if (!response.ok) return (body.issues?.[0]?.message as string | undefined) ?? body.error ?? "Could not save the change";
+      reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
+      return null;
+    } catch {
+      return "Could not save the change";
+    }
   }
 
   async function saveInterviewDate(skip: boolean) {
@@ -623,15 +660,17 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setSavingInterviewDate(true);
     setInterviewDateError("");
     try {
-      const response = await fetch(applicationApiPath(pendingInterviewDate.id), {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          revision: pendingInterviewDate.revision,
-          status: Status.INTERVIEW,
-          ...(skip ? { interviewDatePromptDismissed: true } : { interviewDate: interviewDateDraft }),
-        }),
-      });
+      const response = skip
+        ? await fetch(applicationApiPath(pendingInterviewDate.id), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision: pendingInterviewDate.revision, status: Status.INTERVIEW, interviewDatePromptDismissed: true }),
+        })
+        : await fetch(applicationApiPath(pendingInterviewDate.id, "interviews"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision: pendingInterviewDate.revision, date: interviewDateDraft, type: interviewTypeDraft }),
+        });
       const body = await response.json();
       if (response.status === 409 && body.application) {
         const latest = body.application as ApplicationRecord;
@@ -671,7 +710,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             revision: undo.movedRevision,
             expectedLatestStatusEventId: undo.expectedLatestStatusEventId,
             archived: undo.archived,
-            interviewDate: undo.interviewDate?.slice(0, 10) ?? null,
             interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
           }),
         });
@@ -688,7 +726,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       }
     } else {
       const result = await moveApplication(application, undo.status, false, {
-        interviewDate: undo.interviewDate,
         interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
       }, undo.archived);
       if (result === "busy") throw new Error(busyMessage);
@@ -1006,7 +1043,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
                 upcomingCount={upcomingInterviewCount}
                 today={interviewToday}
                 searchInputRef={interviewSearchRef}
-                onOpen={(id) => { const application = applications.find((item) => item.id === id); if (application) openDetail(application); }}
+                onOpen={(applicationId) => { const application = applications.find((item) => item.id === applicationId); if (application) openDetail(application); }}
               />
             ) : dashboardSection === "analytics" ? (
               <DashboardAnalytics today={today} refreshKey={dataRevision} />
@@ -1016,6 +1053,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
                 expandAttention={expandAttention}
                 movingIds={movingIds}
                 onArchive={(application) => { void moveApplication(application, application.status, true, undefined, true); }}
+                onFollowUpDone={(application) => {
+                  void saveApplicationChange(application, { kind: "follow-up", followUpDate: null }).then((message) => showToast(message ?? `Follow-up for ${application.company} marked done`));
+                }}
                 onOpen={openDetail}
                 refreshKey={dataRevision}
                 today={today}
@@ -1077,6 +1117,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             onArchive={() => { void moveApplication(detailApplication, detailApplication.status, true, undefined, !detailApplication.archived); }}
             onClose={() => setDetailId(null)}
             onEdit={() => { setDetailId(null); startEdit(detailApplication); }}
+            onSave={(change) => saveApplicationChange(detailApplication, change)}
             stale={staleById.get(detailApplication.id)}
             today={today}
           />
@@ -1128,6 +1169,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           error={interviewDateError}
           onAddDate={() => void saveInterviewDate(false)}
           onChangeDate={setInterviewDateDraft}
+          onChangeType={setInterviewTypeDraft}
+          type={interviewTypeDraft}
           onClose={() => setPendingInterviewDate(null)}
           onSkip={() => void saveInterviewDate(true)}
           saving={savingInterviewDate}

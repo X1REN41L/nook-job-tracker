@@ -2,9 +2,12 @@
 
 import { useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
-import { groupUpcomingInterviews, interviewDateKey, type InterviewListItem } from "@/lib/interviews";
+import { compareInterviews, formatInterviewTime, groupUpcomingInterviews, interviewDateKey, INTERVIEW_TYPE_LABELS, type InterviewListItem } from "@/lib/interviews";
 import { matchesApplicationSearch } from "@/lib/application-list";
 import { formatCalendarDate } from "@/lib/application-date";
+import { downloadCalendar, type CalendarInterview } from "@/lib/ics";
+
+const toCalendar = (interview: InterviewListItem): CalendarInterview => ({ ...interview, notes: interview.note });
 
 type InterviewTab = "upcoming" | "past";
 
@@ -13,24 +16,37 @@ function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onO
   const note = interview.note?.trim();
 
   return (
-    <article className="border-b border-line/70 py-3 first:pt-0 last:border-b-0 last:pb-0">
+    <article className="relative border-b border-line/70 py-3 first:pt-0 last:border-b-0 last:pb-0">
       <button
         aria-label={`Open ${interview.role} at ${interview.company}`}
-        className="grid w-full grid-cols-1 gap-x-7 gap-y-1 rounded-nook-sm px-2 py-3 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0"
-        onClick={() => onOpen(interview.id)}
+        className="grid w-full grid-cols-1 gap-x-7 gap-y-1 rounded-nook-sm py-3 pl-2 pr-16 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0"
+        onClick={() => onOpen(interview.applicationId)}
         type="button"
       >
-        <time className="text-sm font-medium text-ink-soft" dateTime={date}>
-          {formatCalendarDate(interview.date)}
-        </time>
+        <span className="block text-sm font-medium text-ink-soft">
+          <time dateTime={date}>{formatCalendarDate(interview.date)}</time>
+          {interview.time && <span className="block text-xs font-normal">{formatInterviewTime(interview.time)}</span>}
+        </span>
         <span className="block min-w-0">
           <span className="block break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">
             <span>{interview.role}</span>
             <span aria-hidden="true" className="mx-1.5 text-ink-soft">—</span>
             <span className="font-medium text-ink-soft">{interview.company}</span>
           </span>
+          <span className="mt-0.5 block text-sm text-ink-soft">
+            {INTERVIEW_TYPE_LABELS[interview.type]}{interview.interviewers && ` · With ${interview.interviewers}`}
+          </span>
           {note && <span className="mt-1 block whitespace-pre-wrap break-words text-sm leading-6 text-ink-soft">{note}</span>}
         </span>
+      </button>
+      <button
+        aria-label={`Add the ${interview.company} interview on ${formatCalendarDate(interview.date)} to your calendar`}
+        className="absolute right-2 top-5 rounded-nook-sm px-2 py-1 text-xs font-medium text-forest motion-interactive hover:bg-forest-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+        onClick={() => downloadCalendar(`interview-${date}.ics`, [toCalendar(interview)])}
+        title="Download an .ics calendar file"
+        type="button"
+      >
+        .ics
       </button>
     </article>
   );
@@ -55,7 +71,7 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
     .filter((interview) => interviewDateKey(interview.date) >= today && matchesApplicationSearch(interview, query));
   const past = interviews
     .filter((interview) => interviewDateKey(interview.date) < today && matchesApplicationSearch(interview, query))
-    .sort((a, b) => (pastSort === "recent" ? -1 : 1) * interviewDateKey(a.date).localeCompare(interviewDateKey(b.date)));
+    .sort((a, b) => (pastSort === "recent" ? -1 : 1) * compareInterviews(a, b));
   const groups = groupUpcomingInterviews(upcoming, today);
   const panelId = `${id}-panel`;
 
@@ -123,9 +139,20 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
       <div aria-labelledby={`${id}-${selectedTab}-tab`} className="pb-10 pt-7" id={panelId} role="tabpanel">
         {selectedTab === "upcoming" ? (
           <section aria-labelledby={`${id}-upcoming-heading`}>
-            <h2 className="mb-7 font-serif text-2xl font-semibold text-ink" id={`${id}-upcoming-heading`}>
-              Upcoming Interviews <span className="font-sans text-base font-medium text-ink-soft">({query ? upcoming.length : upcomingCount})</span>
-            </h2>
+            <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
+              <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-upcoming-heading`}>
+                Upcoming Interviews <span className="font-sans text-base font-medium text-ink-soft">({query ? upcoming.length : upcomingCount})</span>
+              </h2>
+              {upcoming.length > 0 && (
+                <button
+                  className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook motion-interactive hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+                  onClick={() => downloadCalendar(`nook-upcoming-interviews-${today}.ics`, [...upcoming].sort(compareInterviews).map(toCalendar))}
+                  type="button"
+                >
+                  Export {query ? "shown" : "all"} to calendar (.ics)
+                </button>
+              )}
+            </div>
             {groups.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "All caught up — no interviews on the horizon."}</p>
             ) : (

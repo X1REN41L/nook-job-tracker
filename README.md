@@ -30,7 +30,7 @@ The Overview shows your total applications, your active pipeline, upcoming inter
 
 ### Move applications through a board
 
-The Job Board has a column for each stage: **Applied**, **Online assessment**, **Interview**, **Offer**, and **Rejected**. Drag a card to update its status, or use the keyboard. Cards show the company, how long ago you applied, the interview date, the source, a link to the job posting, and a **Stale** marker when an application has gone quiet. Search and filter the board by status or source from the toolbar above it. The sidebar lists every application, with its own search and status filters.
+The Job Board has a column for each stage: **Applied**, **Online assessment**, **Interview**, **Offer**, and **Rejected**. Drag a card to update its status, or use the keyboard. Cards show the company, how long ago you applied, the next interview round, a follow-up reminder, the source, a link to the job posting, and a **Stale** marker when an application has gone quiet. Search and filter the board by status or source from the toolbar above it. The sidebar lists every application, with its own search and status filters.
 
 <p align="center">
   <img src="docs/screenshots/job-board-dark.png" alt="Job Board in dark theme" width="100%">
@@ -38,7 +38,14 @@ The Job Board has a column for each stage: **Applied**, **Online assessment**, *
 
 ### Keep the details together
 
-Each application stores the company, role, status, date applied, interview date, source, a link to the posting, and your notes. Click any application to open its details panel, with every status change it went through; edit it from there. Sources you've used before are suggested as you type. If a new entry looks like one you already have, Nook shows the possible match before you save.
+Each application stores the company, role, status, date applied, source, a link to the posting, and a summary note. Click any application to open its details panel. There you can:
+
+- add **interview rounds**, each with a date, an optional time, a type (phone, technical, onsite, or other), who you met, and notes
+- keep **contacts** such as recruiters and referrers, with their role, email, and LinkedIn
+- set a **follow-up reminder**; when it's due, the application shows up in Needs Attention
+- write **dated notes** that appear in the timeline next to every status change, and edit or delete them later
+
+Choose **Edit** in the panel to change the main details. Sources you've used before are suggested as you type. If a new entry looks like one you already have, Nook shows the possible match before you save.
 
 ![Editing an application](docs/screenshots/edit-application.png)
 
@@ -48,7 +55,9 @@ The Table page lists every application in sortable columns. Filter by status, so
 
 ### Stay on top of interviews
 
-The Interviews page groups upcoming interviews by when they happen (this week, next week, later) and shows your notes for each one. Click an interview to open its application. A **Past** tab keeps earlier interviews, and you can search by company or role.
+The Interviews page lists every interview round, grouped by when it happens (this week, next week, later), with its type, time, who you're meeting, and your notes. Click an interview to open its application. When you move an application to Interview, Nook asks for the first round's date.
+
+**Add interviews to your calendar:** download an `.ics` file for a single round, or export all upcoming interviews at once, and open it with your calendar app. A **Past** tab keeps earlier interviews, and you can search by company or role.
 
 ![Interviews page](docs/screenshots/interviews.png)
 
@@ -60,7 +69,7 @@ Analytics shows how many applications you sent in a period, your interview, offe
 
 ### Follow up on quiet applications
 
-**Needs Attention** on the Overview lists active applications whose status hasn't changed for a while, longest waiting first. An application that never changed status counts from its applied date. Click **View all** for the full list. In Settings you can set the threshold to 7, 15, or 30 days.
+**Needs Attention** on the Overview lists follow-up reminders that are due, then active applications whose status hasn't changed for a while, longest waiting first. An application that never changed status counts from its applied date. Click **View all** for the full list. In Settings you can set the threshold to 7, 15, or 30 days.
 
 ### Make it yours
 
@@ -128,7 +137,7 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000). Run `npm run build` ag
 
 1. **Add an application.** On the Job Board, click **Add job** or press `Alt+N` (`⌥N` on macOS). Only the company, role, and date applied are required.
 2. **Update its status.** Drag the card to another column. From the keyboard, focus the card, press `Space` to pick it up, use the Left and Right arrow keys to choose a column, and press `Space` again to drop it (`Esc` cancels).
-3. **Review and edit details.** Click a card, or focus it and press `Enter`, to open its details. Choose **Edit** to add an interview date, notes, or a job link.
+3. **Review and edit details.** Click a card, or focus it and press `Enter`, to open its details. Add interview rounds, contacts, notes, and a follow-up reminder there, or choose **Edit** to change the main details.
 4. **Check in regularly.** The Dashboard shows upcoming interviews and applications that need a follow-up.
 5. **Back up your data.** In **Settings → Backup & Restore**, export a backup from time to time.
 
@@ -184,7 +193,9 @@ npm install
 npm run setup
 ```
 
-Your data file is kept, but it's a good idea to export a backup before you update.
+Your data file is kept. When an update changes how data is stored, `npm run setup` upgrades the file for you; for example, it turns each application's saved interview date into an interview round.
+
+Backups exported by an older version may not import into a newer one, so export a fresh backup after you update.
 
 ## Troubleshooting
 

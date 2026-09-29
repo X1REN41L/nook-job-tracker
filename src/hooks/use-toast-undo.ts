@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const TOAST_DURATION_MS = 2400;
 const UNDO_TOAST_DURATION_MS = 5000;
 
-export type StatusUndo = { kind: "status"; applicationId: string; status: Status; archived: boolean; interviewDate: string | null; interviewDatePromptDismissed: boolean; expectedLatestStatusEventId: string | null; movedRevision: number };
+export type StatusUndo = { kind: "status"; applicationId: string; status: Status; archived: boolean; interviewDatePromptDismissed: boolean; expectedLatestStatusEventId: string | null; movedRevision: number };
 
 export type ToastUndo =
   | { kind: "delete"; applicationId: string; token: string; expiresAt: string; company: string }

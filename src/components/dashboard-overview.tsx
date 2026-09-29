@@ -6,13 +6,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
 import type { DashboardOverviewData as OverviewData, StaleApplication } from "@/types/dashboard";
 import type { ApplicationRecord } from "@/types/application";
-import { currentBrowserTimeZone } from "@/lib/application-date";
+import { currentBrowserTimeZone, formatCalendarDate } from "@/lib/application-date";
 import { applicationTableHref } from "@/lib/application-list";
 import { boardLabel } from "@/lib/board-preferences";
 import { useBoards } from "@/hooks/use-boards";
 import { useSettings } from "@/hooks/use-settings";
 import { useStaleApplications } from "@/hooks/use-stale-applications";
 import { staleAgeLabel } from "@/lib/stale-label";
+import { formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
 
 type Rate = OverviewData["interviewRate"];
 
@@ -91,8 +92,46 @@ function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchi
   );
 }
 
-function NeedsAttention({ preview, loading, error, today, refreshKey, initiallyExpanded, applications, movingIds, onOpen, onArchive }: {
+function FollowUpRow({ item, application, busy, onOpen, onDone }: {
+  item: OverviewData["followUps"][number];
+  application: ApplicationRecord | undefined;
+  busy: boolean;
+  onOpen: (application: ApplicationRecord) => void;
+  onDone: (application: ApplicationRecord) => void;
+}) {
+  return (
+    <li className="relative min-w-0">
+      <button
+        className="block w-full min-w-0 rounded-nook-sm py-4 pl-2 pr-24 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
+        disabled={!application}
+        onClick={() => { if (application) onOpen(application); }}
+        type="button"
+      >
+        <span className="block text-xs font-semibold tracking-wide text-clay">FOLLOW UP</span>
+        <span className="mt-1 block break-words text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
+        <span className="mt-1 block text-sm text-ink-soft">
+          {item.daysOverdue === 0 ? "Due today" : `Due ${formatCalendarDate(item.followUpDate)} · ${item.daysOverdue} ${item.daysOverdue === 1 ? "day" : "days"} overdue`}
+        </span>
+      </button>
+      {application && (
+        <button
+          aria-label={`Mark the follow-up for ${item.role} at ${item.company} done`}
+          className="btn-ghost absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+          disabled={busy}
+          onClick={() => onDone(application)}
+          type="button"
+        >
+          Done
+        </button>
+      )}
+    </li>
+  );
+}
+
+function NeedsAttention({ preview, followUps, loading, error, today, refreshKey, initiallyExpanded, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
   preview: OverviewData["staleApplications"];
+  followUps: OverviewData["followUps"];
+  onFollowUpDone: (application: ApplicationRecord) => void;
   loading: boolean;
   error: boolean;
   today: string;
@@ -111,6 +150,11 @@ function NeedsAttention({ preview, loading, error, today, refreshKey, initiallyE
       .filter((item) => applicationById.get(item.id)?.archived === false)
     : null;
   const items = expanded ? fullItems ?? [] : preview.filter((item) => applicationById.get(item.id)?.archived !== true);
+  // Follow-ups come from Overview, so they show in both views; a reminder cleared here disappears at once.
+  const dueFollowUps = followUps.filter((item) => {
+    const application = applicationById.get(item.id);
+    return application && !application.archived && application.followUpDate !== null && application.followUpDate.slice(0, 10) <= today;
+  });
   const excluded = expanded ? full.data?.timingCoverage.withoutReliableStatusTimestamp ?? 0 : 0;
   const listLoading = expanded ? !full.data && !full.error : loading;
   const listError = expanded ? full.error : error;
@@ -143,10 +187,13 @@ function NeedsAttention({ preview, loading, error, today, refreshKey, initiallyE
         <p className="py-6 text-sm text-ink-soft" role={expanded ? "status" : undefined}>Loading applications…</p>
       ) : listError ? (
         <p className="py-6 text-sm text-ink-soft">{expanded ? "Needs Attention could not be loaded. Please try again later." : "Preview unavailable."}</p>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && dueFollowUps.length === 0 ? (
         <p className="py-6 text-sm text-ink-soft">{expanded ? "Nothing's gone quiet yet — good sign." : "No applications need attention right now."}</p>
       ) : (
         <ul className="divide-y divide-line/70">
+          {dueFollowUps.map((item) => (
+            <FollowUpRow application={applicationById.get(item.id)} busy={movingIds.has(item.id)} item={item} key={`follow-up-${item.id}`} onDone={onFollowUpDone} onOpen={onOpen} />
+          ))}
           {items.map((item) => (
             <NeedsAttentionRow application={applicationById.get(item.id)} archiveDisabled={movingIds.has(item.id)} item={item} key={item.id} onArchive={onArchive} onOpen={onOpen} />
           ))}
@@ -174,7 +221,7 @@ function UpcomingInterviewsPreview({ items, loading, error }: { items: OverviewD
         <div className="divide-y divide-line/70">
           {items.slice(0, 3).map((item) => (
             <article key={item.id} className="min-w-0 py-4 first:pt-5">
-              <p className="text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}</p>
+              <p className="text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time)}`}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></p>
               <h3 className="mt-1 break-words text-sm font-semibold leading-5">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></h3>
             </article>
           ))}
@@ -184,7 +231,7 @@ function UpcomingInterviewsPreview({ items, loading, error }: { items: OverviewD
   );
 }
 
-export function DashboardOverview({ today, refreshKey, expandAttention, applications, movingIds, onOpen, onArchive }: {
+export function DashboardOverview({ today, refreshKey, expandAttention, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
   today: string;
   refreshKey: unknown;
   expandAttention: boolean;
@@ -192,6 +239,7 @@ export function DashboardOverview({ today, refreshKey, expandAttention, applicat
   movingIds: ReadonlySet<string>;
   onOpen: (application: ApplicationRecord) => void;
   onArchive: (application: ApplicationRecord) => void;
+  onFollowUpDone: (application: ApplicationRecord) => void;
 }) {
   const staleApplicationThreshold = useSettings().staleApplicationThreshold;
   const [result, setResult] = useState<{ today: string; threshold: number; data: OverviewData } | null>(null);
@@ -234,10 +282,12 @@ export function DashboardOverview({ today, refreshKey, expandAttention, applicat
         <NeedsAttention
           applications={applications}
           error={error}
+          followUps={data?.followUps ?? []}
           initiallyExpanded={expandAttention}
           loading={loading}
           movingIds={movingIds}
           onArchive={onArchive}
+          onFollowUpDone={onFollowUpDone}
           onOpen={onOpen}
           preview={data?.staleApplications ?? []}
           refreshKey={refreshKey}

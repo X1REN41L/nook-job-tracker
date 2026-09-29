@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { apiError, parseRequest } from "@/lib/api";
 import { applicationInputSchema } from "@/lib/application-schema";
+import { applicationInclude } from "@/lib/application-record";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma, serializeWrite } from "@/lib/prisma";
 import { statusTransitionDetail } from "@/lib/status-history";
@@ -9,6 +10,7 @@ import { statusTransitionDetail } from "@/lib/status-history";
 export async function GET() {
   try {
     const applications = await prisma.application.findMany({
+      include: applicationInclude,
       orderBy: [{ appliedDate: "desc" }, { createdAt: "desc" }],
     });
     return NextResponse.json({ applications });
@@ -35,6 +37,7 @@ export async function POST(request: Request) {
           },
         },
       },
+      include: applicationInclude,
     }));
     return NextResponse.json({ application }, { status: 201 });
   } catch (error) {

@@ -1,11 +1,12 @@
 import type { Status } from "@prisma/client";
 
+import { featuredInterview } from "@/lib/interviews";
 import { STATUS_VALUES } from "@/lib/status-values";
 
 type SearchableApplication = { company: string; role: string };
 type SortableApplication = { appliedDate: string; createdAt: string };
 type FilterableApplication = SearchableApplication & { status: Status; source: string | null; archived: boolean; appliedDate: string };
-type TableApplication = FilterableApplication & SortableApplication & { interviewDate: string | null };
+type TableApplication = FilterableApplication & SortableApplication & { interviews: Array<{ id: string; date: string; time: string | null }> };
 
 export const ACTIVE_PIPELINE_STATUSES = ["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW"] as const satisfies readonly Status[];
 
@@ -60,14 +61,17 @@ export const TABLE_SORT_KEYS = ["role", "company", "status", "source", "appliedD
 export type TableSortKey = (typeof TABLE_SORT_KEYS)[number];
 export type TableSort = { key: TableSortKey; direction: "asc" | "desc" };
 
-/** Sorts by one column; empty values always go last, and ties keep the default application order. */
-export function compareTableApplications(sort: TableSort) {
+/**
+ * Sorts by one column; empty values always go last, and ties keep the default application order.
+ * The Interview column shows (and sorts by) the next round on or after `today`, or else the latest one.
+ */
+export function compareTableApplications(sort: TableSort, today: string) {
   const sign = sort.direction === "asc" ? 1 : -1;
   return (left: TableApplication, right: TableApplication) => {
     const value = (application: TableApplication) => {
       if (sort.key === "status") return String(STATUS_VALUES.indexOf(application.status)).padStart(2, "0");
       if (sort.key === "source") return application.source?.trim() ?? "";
-      if (sort.key === "interviewDate") return application.interviewDate?.slice(0, 10) ?? "";
+      if (sort.key === "interviewDate") return featuredInterview(application.interviews, today)?.date.slice(0, 10) ?? "";
       if (sort.key === "appliedDate") return application.appliedDate.slice(0, 10);
       return application[sort.key];
     };

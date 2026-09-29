@@ -1,0 +1,5 @@
+import { childItemRoute } from "@/lib/application-children";
+
+const handlers = childItemRoute("notes");
+export const PUT = handlers.PUT;
+export const DELETE = handlers.DELETE;

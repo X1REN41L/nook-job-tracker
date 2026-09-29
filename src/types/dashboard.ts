@@ -1,4 +1,4 @@
-import type { Status } from "@prisma/client";
+import type { InterviewType, Status } from "@prisma/client";
 
 import type { AnalyticsPeriod, AnalyticsRange } from "@/lib/analytics-period";
 
@@ -42,8 +42,13 @@ export type DashboardOverviewData = {
   activePipeline: number;
   upcomingInterviews: {
     count: number;
-    items: Array<{ id: string; role: string; company: string; interviewDate: string; daysUntilInterview: number }>;
+    items: Array<{
+      id: string; applicationId: string; role: string; company: string;
+      interviewDate: string; time: string | null; type: InterviewType; daysUntilInterview: number;
+    }>;
   };
+  /** Follow-up reminders due today or earlier, oldest first. */
+  followUps: Array<{ id: string; role: string; company: string; status: Status; followUpDate: string; daysOverdue: number }>;
   interviewRate: RateMetric;
   offerRate: RateMetric;
   staleApplications: StaleApplication[];

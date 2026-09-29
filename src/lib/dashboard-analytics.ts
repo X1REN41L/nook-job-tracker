@@ -1,4 +1,4 @@
-import { Prisma, Status } from "@prisma/client";
+import { InterviewType, Prisma, Status } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { calendarDateInTimeZone } from "@/lib/calendar-date";
@@ -25,7 +25,8 @@ type DashboardApplication = {
   status: Status;
   archived: boolean;
   appliedDate: Date;
-  interviewDate: Date | null;
+  followUpDate: Date | null;
+  interviews: Array<{ id: string; date: Date; time: string | null; type: InterviewType }>;
   events: StatusHistoryEvent[];
 };
 type AnalyzedApplication = DashboardApplication & { history: ReturnType<typeof analyzeStatusHistory> };
@@ -46,7 +47,8 @@ const baseSelection = {
   status: true,
   archived: true,
   appliedDate: true,
-  interviewDate: true,
+  followUpDate: true,
+  interviews: { select: { id: true, date: true, time: true, type: true } },
   events: { select: eventSelection },
 } as const;
 
@@ -215,16 +217,29 @@ function staleGroups(applications: StaleApplication[]) {
 export async function getDashboardOverview(today: string, timeZone: string, staleApplicationThreshold = 15): Promise<DashboardOverviewData> {
   const applications = await loadApplications();
   const historyCoverage = coverageFor(applications);
+  // Each interview round counts separately, for applications still in progress.
   const upcoming = applications
     .filter((application) =>
       !application.archived &&
-      application.interviewDate !== null &&
-      dateKey(application.interviewDate) >= today &&
       !TERMINAL_INTERVIEW_STATUSES.includes(application.status as typeof TERMINAL_INTERVIEW_STATUSES[number]),
     )
+    .flatMap((application) => application.interviews
+      .filter((interview) => dateKey(interview.date) >= today)
+      .map((interview) => ({ application, interview, date: dateKey(interview.date) })))
     .sort((left, right) =>
-      dateKey(left.interviewDate!).localeCompare(dateKey(right.interviewDate!)) || left.id.localeCompare(right.id),
+      left.date.localeCompare(right.date) || (left.interview.time ?? "").localeCompare(right.interview.time ?? "") || left.interview.id.localeCompare(right.interview.id),
     );
+  const followUps = applications
+    .filter((application) => !application.archived && application.followUpDate !== null && dateKey(application.followUpDate) <= today)
+    .map((application) => ({
+      id: application.id,
+      role: application.role,
+      company: application.company,
+      status: application.status,
+      followUpDate: dateKey(application.followUpDate!),
+      daysOverdue: daysBetween(dateKey(application.followUpDate!), today),
+    }))
+    .sort((left, right) => left.followUpDate.localeCompare(right.followUpDate) || left.id.localeCompare(right.id));
   const stale = staleApplications(applications, today, timeZone, staleApplicationThreshold);
 
   return {
@@ -234,17 +249,18 @@ export async function getDashboardOverview(today: string, timeZone: string, stal
     ).length,
     upcomingInterviews: {
       count: upcoming.length,
-      items: upcoming.slice(0, 3).map((application) => {
-        const interviewDate = dateKey(application.interviewDate!);
-        return {
-          id: application.id,
-          role: application.role,
-          company: application.company,
-          interviewDate,
-          daysUntilInterview: daysBetween(today, interviewDate),
-        };
-      }),
+      items: upcoming.slice(0, 3).map(({ application, interview, date }) => ({
+        id: interview.id,
+        applicationId: application.id,
+        role: application.role,
+        company: application.company,
+        interviewDate: date,
+        time: interview.time,
+        type: interview.type,
+        daysUntilInterview: daysBetween(today, date),
+      })),
     },
+    followUps,
     interviewRate: rateFor(applications, Status.INTERVIEW, historyCoverage),
     offerRate: rateFor(applications, Status.OFFER, historyCoverage),
     staleApplications: stale.slice(0, 3),

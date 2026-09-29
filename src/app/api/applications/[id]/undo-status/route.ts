@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { apiError, isDatabaseContention, parseRequest } from "@/lib/api";
+import { applicationInclude, type StoredApplication } from "@/lib/application-record";
 import { applicationStatusUndoSchema } from "@/lib/application-schema";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma, serializeWrite } from "@/lib/prisma";
@@ -9,7 +10,7 @@ import { prisma, serializeWrite } from "@/lib/prisma";
 type RouteContext = { params: Promise<{ id: string }> };
 class StaleStatusEvent extends Error {}
 
-function revisionConflict(application: NonNullable<Awaited<ReturnType<typeof prisma.application.findUnique>>>) {
+function revisionConflict(application: StoredApplication) {
   return NextResponse.json({
     error: "Application changed since it was loaded. The current version is included so you can review it.",
     application,
@@ -25,7 +26,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
       try {
-        const current = await prisma.application.findUnique({ where: { id } });
+        const current = await prisma.application.findUnique({ where: { id }, include: applicationInclude });
         if (!current) return NextResponse.json({ error: "Application not found" }, { status: 404 });
         if (current.revision !== undo.revision) return revisionConflict(current);
 
@@ -49,18 +50,18 @@ export async function POST(request: Request, { params }: RouteContext) {
             data: {
               status: latest.fromStatus,
               archived: undo.archived,
-              interviewDate: undo.interviewDate,
               interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
             },
+            include: applicationInclude,
           });
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 
         if (result) return NextResponse.json({ application: result });
-        const latest = await prisma.application.findUnique({ where: { id } });
+        const latest = await prisma.application.findUnique({ where: { id }, include: applicationInclude });
         return latest ? revisionConflict(latest) : NextResponse.json({ error: "Application not found" }, { status: 404 });
       } catch (error) {
         if (error instanceof StaleStatusEvent) {
-          const latest = await prisma.application.findUnique({ where: { id } });
+          const latest = await prisma.application.findUnique({ where: { id }, include: applicationInclude });
           return latest ? revisionConflict(latest) : NextResponse.json({ error: "Application not found" }, { status: 404 });
         }
         if (!isDatabaseContention(error) || attempt === 5) throw error;

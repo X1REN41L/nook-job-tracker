@@ -9,6 +9,7 @@ import {
   type ApplicationFilters, type ArchiveScope, type StatusFilter, type TableSort, type TableSortKey,
 } from "@/lib/application-list";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
+import { featuredInterview } from "@/lib/interviews";
 import type { ApplicationRecord } from "@/types/application";
 
 const controlClass = "h-9 rounded-nook-sm border border-line bg-paper px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-60";
@@ -46,7 +47,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
     if (`${window.location.pathname}${window.location.search}` !== href) window.history.replaceState(null, "", href);
   }, [filters]);
 
-  const rows = applications.filter((application) => matchesApplicationFilters(application, filters)).sort(compareTableApplications(sort));
+  const rows = applications.filter((application) => matchesApplicationFilters(application, filters)).sort(compareTableApplications(sort, today));
   const selectedRows = rows.filter((application) => selected.has(application.id));
   const allSelected = rows.length > 0 && selectedRows.length === rows.length;
   const archiveTarget = selectedRows.some((application) => !application.archived);
@@ -179,6 +180,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
             <tbody className="divide-y divide-line/70">
               {rows.map((application) => {
                 const stale = staleDays.get(application.id);
+                const interview = featuredInterview(application.interviews, today);
                 return (
                   <tr className={`motion-interactive hover:bg-cream-2 ${selected.has(application.id) ? "bg-forest-tint/60" : ""}`} data-application-id={application.id} key={application.id}>
                     <td className="px-3 py-2.5">
@@ -200,7 +202,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
                       {formatCalendarDate(application.appliedDate)}
                       {today && <span className="ml-1.5 text-xs text-ink-soft">{formatDaysAgo(application.appliedDate, today)}</span>}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-ink-soft">{application.interviewDate ? formatCalendarDate(application.interviewDate) : "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-ink-soft">{interview ? formatCalendarDate(interview.date) : "—"}</td>
                   </tr>
                 );
               })}

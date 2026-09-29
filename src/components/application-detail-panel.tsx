@@ -1,18 +1,16 @@
 "use client";
 
-import type { EventType, Status } from "@prisma/client";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
+import { ContactsSection, FollowUpSection, InterviewsSection, TimelineSection, type HistoryEvent, type SaveChange } from "@/components/application-detail-sections";
 import { Dialog } from "@/components/dialog";
 import { applicationApiPath } from "@/lib/application-api-path";
-import { formatCalendarDate, formatDaysAgo, formatTimestamp } from "@/lib/application-date";
+import { formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
 import { staleAgeLabel } from "@/lib/stale-label";
 import { STATUS_META } from "@/lib/status-meta";
 import type { ApplicationRecord } from "@/types/application";
 import type { StaleApplication } from "@/types/dashboard";
-
-type HistoryEvent = { id: string; type: EventType; fromStatus: Status | null; toStatus: Status | null; detail: string | null; createdAt: string };
 
 function safePostingUrl(value: string | null) {
   try {
@@ -51,7 +49,7 @@ function useApplicationHistory(application: ApplicationRecord) {
   return { events: result?.key === key ? result.events : null, error: failedKey === key };
 }
 
-export function ApplicationDetailPanel({ application, boards, today, stale, busy, returnFocusRef, onClose, onEdit, onArchive }: {
+export function ApplicationDetailPanel({ application, boards, today, stale, busy, returnFocusRef, onClose, onEdit, onArchive, onSave }: {
   application: ApplicationRecord;
   boards: BoardConfiguration[];
   today: string;
@@ -61,6 +59,7 @@ export function ApplicationDetailPanel({ application, boards, today, stale, busy
   onClose: () => void;
   onEdit: () => void;
   onArchive: () => void;
+  onSave: SaveChange;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const { events, error } = useApplicationHistory(application);
@@ -105,7 +104,6 @@ export function ApplicationDetailPanel({ application, boards, today, stale, busy
         )}
         <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm">
           <Detail label="Applied">{formatCalendarDate(application.appliedDate)} <span className="text-ink-soft">· {formatDaysAgo(application.appliedDate, today)}</span></Detail>
-          {application.interviewDate && <Detail label="Interview">{formatCalendarDate(application.interviewDate)}</Detail>}
           <Detail label="Source">{application.source?.trim() || <span className="text-ink-soft">Not set</span>}</Detail>
           <Detail label="Job link">
             {postingUrl ? (
@@ -116,33 +114,18 @@ export function ApplicationDetailPanel({ application, boards, today, stale, busy
           </Detail>
         </dl>
 
+        <FollowUpSection application={application} onSave={onSave} today={today} />
+        <InterviewsSection application={application} onSave={onSave} today={today} />
+        <ContactsSection application={application} onSave={onSave} />
+
         <section aria-labelledby="application-detail-notes" className="mt-7">
-          <h3 className="font-serif text-base font-semibold" id="application-detail-notes">Notes</h3>
+          <h3 className="font-serif text-base font-semibold" id="application-detail-notes">Summary</h3>
           {notes
             ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{notes}</p>
-            : <p className="mt-2 text-sm text-ink-soft">No notes yet.</p>}
+            : <p className="mt-2 text-sm text-ink-soft">No summary yet. Add one with Edit.</p>}
         </section>
 
-        <section aria-labelledby="application-detail-timeline" className="mt-7">
-          <h3 className="font-serif text-base font-semibold" id="application-detail-timeline">Status timeline</h3>
-          {error ? (
-            <p className="mt-2 text-sm text-ink-soft">The status history could not be loaded.</p>
-          ) : !events ? (
-            <p className="mt-2 text-sm text-ink-soft" role="status">Loading history…</p>
-          ) : events.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-soft">No status changes recorded.</p>
-          ) : (
-            <ol className="mt-3 border-l border-line pl-4">
-              {[...events].reverse().map((event) => (
-                <li className="relative pb-4 last:pb-0" key={event.id}>
-                  <span aria-hidden="true" className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-paper ${event.toStatus ? boardDot(boards, event.toStatus) : "bg-neutral-dim"}`} />
-                  <p className="text-sm font-medium">{eventLabel(event, boards)}</p>
-                  <p className="mt-0.5 text-xs text-ink-soft"><time dateTime={event.createdAt}>{formatTimestamp(event.createdAt)}</time></p>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
+        <TimelineSection boards={boards} events={events} loadError={error} onSave={onSave} />
       </div>
 
       <div className="flex gap-3 border-t border-line px-6 py-4">
@@ -164,11 +147,4 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
       <dd className="min-w-0 break-words">{children}</dd>
     </>
   );
-}
-
-function eventLabel(event: HistoryEvent, boards: BoardConfiguration[]) {
-  if (event.type === "NOTE_ADDED") return event.detail?.trim() || "Note added";
-  if (!event.toStatus) return event.detail?.trim() || "Status changed";
-  if (!event.fromStatus) return `Added as ${boardLabel(boards, event.toStatus)}`;
-  return `Moved from ${boardLabel(boards, event.fromStatus)} to ${boardLabel(boards, event.toStatus)}`;
 }

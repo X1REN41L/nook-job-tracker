@@ -117,12 +117,12 @@ export function JobModal({
           </Field>
         </div>
 
-        <Field label="Interview date" hint="(optional)">
+        <Field label="Follow up on" hint="(optional)">
           <input
             className="input"
-            onChange={(e) => onChangeField("interviewDate", e.target.value)}
+            onChange={(e) => onChangeField("followUpDate", e.target.value)}
             type="date"
-            value={form.interviewDate}
+            value={form.followUpDate}
           />
         </Field>
 
