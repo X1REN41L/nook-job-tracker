@@ -191,7 +191,7 @@ export function DashboardAnalytics({ today, refreshKey }: { today: string; refre
   return (
     <section className="@container w-full min-w-0 pb-10" aria-labelledby="analytics-heading">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <h1 className="font-serif text-[clamp(1.875rem,calc(1.65rem_+_0.15vw),2.125rem)] font-semibold leading-tight tracking-tight" id="analytics-heading">Analytics{range ? ` - ${analyticsCohortLabel(range, period, today.slice(0, 4))}` : ""}</h1>
+        <h1 className="font-serif text-[clamp(1.875rem,calc(1.65rem_+_0.15vw),2.125rem)] font-semibold leading-tight tracking-tight" id="analytics-heading">Analytics{range ? ` — ${analyticsCohortLabel(range, period, today.slice(0, 4))}` : ""}</h1>
         <AnalyticsPeriodSelector period={period} month={month} year={year} onPeriodChange={setPeriod} onMonthChange={setCustomMonth} onYearChange={setCustomYear} />
       </div>
       {invalidYear && <p className="mt-3 text-sm text-rose" role="status">Enter a four-digit year.</p>}

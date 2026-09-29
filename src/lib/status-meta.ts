@@ -24,8 +24,8 @@ export const STATUS_META: Record<
   },
   OFFER: {
     label: "Offer",
-    dot: "bg-clay",
-    badge: "bg-clay-tint text-ink",
+    dot: "bg-teal",
+    badge: "bg-teal-tint text-ink",
     empty: "Fingers crossed — offers will land here.",
   },
   REJECTED: {

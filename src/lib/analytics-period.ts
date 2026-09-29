@@ -74,7 +74,7 @@ export function analyticsCohortLabel({ startDate, endDate }: AnalyticsRange, per
 
   const start = monthParts(startDate);
   if (period === "CUSTOM_MONTH" && startDate.slice(0, 4) !== currentYear) {
-    return `${MONTH_NAMES[start.month - 1]} - ${startDate.slice(0, 4)}`;
+    return `${MONTH_NAMES[start.month - 1]} ${startDate.slice(0, 4)}`;
   }
   const end = monthParts(endDate);
   const sameYear = start.year === end.year;
@@ -85,7 +85,7 @@ export function analyticsCohortLabel({ startDate, endDate }: AnalyticsRange, per
     const isLast = cursor.year === end.year && cursor.month === end.month;
     let label = MONTH_NAMES[cursor.month - 1];
     if (isFirst && !sameYear) label += ` ${cursor.year}`;
-    if (isLast && endDate !== monthEnd(end.year, end.month)) label += ` 1-${Number(endDate.slice(8))}`;
+    if (isLast && endDate !== monthEnd(end.year, end.month)) label += ` 1–${Number(endDate.slice(8))}`;
     months.push(label);
     cursor = shiftMonth(cursor.year, cursor.month, 1);
   }

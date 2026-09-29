@@ -4,16 +4,9 @@ import { useId, useRef, useState, type KeyboardEvent, type RefObject } from "rea
 
 import { groupUpcomingInterviews, interviewDateKey, type InterviewListItem } from "@/lib/interviews";
 import { matchesApplicationSearch } from "@/lib/application-list";
+import { formatCalendarDate } from "@/lib/application-date";
 
 type InterviewTab = "upcoming" | "past";
-
-function formatInterviewDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "2-digit",
-    timeZone: "UTC",
-  }).format(new Date(`${interviewDateKey(value)}T00:00:00.000Z`));
-}
 
 function InterviewRow({ interview }: { interview: InterviewListItem }) {
   const date = interviewDateKey(interview.date);
@@ -22,7 +15,7 @@ function InterviewRow({ interview }: { interview: InterviewListItem }) {
   return (
     <article className="grid grid-cols-1 gap-x-7 gap-y-1 border-b border-line/70 py-6 first:pt-0 last:border-b-0 last:pb-0 md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0">
       <time className="text-sm font-medium text-ink-soft" dateTime={date}>
-        {formatInterviewDate(interview.date)}
+        {formatCalendarDate(interview.date)}
       </time>
       <div className="min-w-0">
         <h3 className="break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">

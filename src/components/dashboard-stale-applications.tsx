@@ -8,6 +8,7 @@ import { useBoards } from "@/hooks/use-boards";
 import { boardLabel } from "@/lib/board-preferences";
 import type { ApplicationRecord } from "@/types/application";
 import type { StaleApplication, StaleApplicationsData as StaleData, StaleSeverity as Severity } from "@/types/dashboard";
+import { staleAgeLabel } from "@/lib/stale-label";
 
 const severityOrder: Severity[] = ["CRITICAL", "HIGH", "MEDIUM"];
 const severityColor: Record<Severity, string> = {
@@ -35,7 +36,7 @@ function StaleApplicationRow({ application, onEdit, onArchive, archiveDisabled }
         </span>
         <span className="mt-1.5 flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm text-ink-soft">
           <span>{boardLabel(boards, application.status)}</span>
-          <span>Last status update {application.staleDays} {application.staleDays === 1 ? "day" : "days"} ago</span>
+          <span>{staleAgeLabel(application)}</span>
         </span>
       </button>
       <button

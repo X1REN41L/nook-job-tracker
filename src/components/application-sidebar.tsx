@@ -9,7 +9,7 @@ import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, 
 
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { ARCHIVED_DROP_ID, SIDEBAR_EDGE_DROP_ID } from "@/hooks/use-board-drag";
-import { formatAppliedDate } from "@/lib/application-date";
+import { formatCalendarDate } from "@/lib/application-date";
 import type { ApplicationRecord } from "@/types/application";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
@@ -164,6 +164,7 @@ export function ApplicationSidebar({
               aria-label="Expand sidebar"
               className="sidebar-logo-button absolute top-4 z-10 flex h-9 w-9 items-center justify-center rounded-[10px] text-cream focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
               onClick={handleToggleSidebar}
+              title="Expand sidebar"
               type="button"
             >
               <PanelChevron direction="right" />
@@ -420,7 +421,7 @@ function SidebarApplicationRow({ application, boards, disabled, draggable = true
         <span className="block truncate text-sm font-semibold">{application.role}</span>
         <span className="block truncate text-xs text-ink-soft">{application.company}</span>
       </span>
-      <span className="shrink-0 text-xs text-ink-soft">{formatAppliedDate(application.appliedDate)}</span>
+      <span className="shrink-0 text-xs text-ink-soft">{formatCalendarDate(application.appliedDate)}</span>
     </button>
   );
 }
@@ -532,7 +533,7 @@ function ArchivedRow({ application, boards, disabled, onEdit, onRequestDelete, o
           <span className="block truncate text-sm font-semibold">{application.role}</span>
           <span className="block truncate text-xs text-ink-soft">{application.company}</span>
         </span>
-        <span className="shrink-0 text-xs text-ink-soft">{formatAppliedDate(application.appliedDate)}</span>
+        <span className="shrink-0 text-xs text-ink-soft">{formatCalendarDate(application.appliedDate)}</span>
       </button>
       <div className="flex justify-end gap-2 px-2.5 pb-1">
         <button

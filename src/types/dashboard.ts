@@ -25,6 +25,7 @@ export type StaleApplication = {
   company: string;
   status: Status;
   lastStatusChangedAt: string;
+  staleSince: "APPLIED_DATE" | "STATUS_CHANGE";
   staleDays: number;
   severity: StaleSeverity;
 };

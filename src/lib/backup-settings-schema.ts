@@ -7,8 +7,6 @@ import { STATUS_VALUES } from "@/lib/status-values";
 const boardSchema = z.object({
   status: z.enum(STATUS_VALUES),
   color: z.enum(BOARD_COLORS),
-  label: z.string().min(1).max(80).refine((value) => value.trim().length > 0),
-  emptyText: z.string().min(1).max(240).refine((value) => value.trim().length > 0),
 }).strict();
 
 const boardsSchema = z.array(boardSchema).superRefine((boards, context) => {

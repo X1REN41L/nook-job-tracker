@@ -123,7 +123,7 @@ export function JobModal({
           />
         </Field>
 
-        <Field label="Source">
+        <Field label="Source" hint="(optional)">
           <input
             className="input"
             maxLength={120}

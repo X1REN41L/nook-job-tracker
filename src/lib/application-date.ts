@@ -18,6 +18,10 @@ export function currentBrowserTimeZone() {
   }
 }
 
-export function formatAppliedDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, { timeZone: "UTC" }).format(new Date(value));
+// Calendar dates are stored at UTC midnight. The year is shown only outside the current local year.
+export function formatCalendarDate(value: string, currentYear = currentLocalDate().slice(0, 4)) {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short", day: "numeric", ...(value.slice(0, 4) !== currentYear && { year: "numeric" }), timeZone: "UTC",
+  }).format(date);
 }

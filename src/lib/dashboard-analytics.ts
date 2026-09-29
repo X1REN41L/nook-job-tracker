@@ -154,7 +154,11 @@ function staleApplications(applications: AnalyzedApplication[], today: string, t
     const lastStatusEvent = application.history.latestStatusEvent;
     if (!lastStatusEvent) continue;
 
-    const staleDays = Math.max(0, daysBetween(calendarDateInTimeZone(new Date(lastStatusEvent.createdAt), timeZone), today));
+    const statusChangedOn = calendarDateInTimeZone(new Date(lastStatusEvent.createdAt), timeZone);
+    // An application that never changed status has waited since it was applied, even when it was entered later.
+    const appliedOn = dateKey(application.appliedDate);
+    const staleSince = lastStatusEvent.fromStatus === null && appliedOn < statusChangedOn ? "APPLIED_DATE" : "STATUS_CHANGE";
+    const staleDays = Math.max(0, daysBetween(staleSince === "APPLIED_DATE" ? appliedOn : statusChangedOn, today));
     if (staleDays < threshold) continue;
     const severity = staleDays >= STALE_CRITICAL_DAYS ? "CRITICAL" : staleDays >= STALE_HIGH_DAYS ? "HIGH" : "MEDIUM";
     result.push({
@@ -163,13 +167,15 @@ function staleApplications(applications: AnalyzedApplication[], today: string, t
       company: application.company,
       status: application.status,
       lastStatusChangedAt: new Date(lastStatusEvent.createdAt).toISOString(),
+      staleSince,
       staleDays,
       severity,
     });
   }
   return result.sort((left, right) => {
     const severityOrder = STALE_SEVERITY_ORDER.indexOf(left.severity) - STALE_SEVERITY_ORDER.indexOf(right.severity);
-    return severityOrder || left.lastStatusChangedAt.localeCompare(right.lastStatusChangedAt) || left.id.localeCompare(right.id);
+    return severityOrder || right.staleDays - left.staleDays
+      || left.lastStatusChangedAt.localeCompare(right.lastStatusChangedAt) || left.id.localeCompare(right.id);
   });
 }
 

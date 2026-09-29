@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 
-import { formatAppliedDate } from "@/lib/application-date";
+import { formatCalendarDate } from "@/lib/application-date";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
 import type { DuplicateMatch } from "@/lib/duplicate-match";
 import { STATUS_META } from "@/lib/status-meta";
@@ -67,7 +67,7 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
           </div>
           <span className={`badge shrink-0 ${meta.badge}`}><span className={`status-dot ${boardDot(boards, application.status)}`} />{boardLabel(boards, application.status)}</span>
         </div>
-        <p className="mt-3 text-xs text-ink-soft">Applied {formatAppliedDate(application.appliedDate)}</p>
+        <p className="mt-3 text-xs text-ink-soft">Applied {formatCalendarDate(application.appliedDate)}</p>
       </div>
 
       <p className="mt-4 text-sm leading-6 text-ink-soft">

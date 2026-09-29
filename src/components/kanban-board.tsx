@@ -9,7 +9,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useId, useLayoutEffect, useRef } from "react";
 
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
-import { formatAppliedDate } from "@/lib/application-date";
+import { formatCalendarDate } from "@/lib/application-date";
 import { BOARD_COLOR_CLASSES, type BoardConfiguration } from "@/lib/board-preferences";
 import { motionIsCurrentlyOff } from "@/lib/general-preferences";
 import type { ApplicationRecord } from "@/types/application";
@@ -168,7 +168,7 @@ function KanbanCard({ application, disabled, onEdit }: {
             <line x1="3" y1="10" x2="21" y2="10" />
           </svg>
           <span className="sr-only">Applied </span>
-          {formatAppliedDate(application.appliedDate)}
+          {formatCalendarDate(application.appliedDate)}
         </div>
         {application.status === Status.INTERVIEW && application.interviewDate && (
           <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-ink-soft">
@@ -178,7 +178,7 @@ function KanbanCard({ application, disabled, onEdit }: {
               <line x1="8" y1="2" x2="8" y2="6" />
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
-            Interview {formatAppliedDate(application.interviewDate)}
+            Interview {formatCalendarDate(application.interviewDate)}
           </div>
         )}
       </div>

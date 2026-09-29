@@ -7,6 +7,7 @@ import { DashboardMetricCard, formatDashboardPercentage } from "@/components/das
 import type { DashboardOverviewData as OverviewData } from "@/types/dashboard";
 import { currentBrowserTimeZone } from "@/lib/application-date";
 import { useSettings } from "@/hooks/use-settings";
+import { staleAgeLabel } from "@/lib/stale-label";
 
 type Rate = OverviewData["interviewRate"];
 
@@ -65,7 +66,7 @@ function NeedsAttentionPreview({ items, loading, error }: { items: OverviewData[
             <article key={item.id} className="min-w-0 py-4 first:pt-5">
               <p className={`text-xs font-semibold tracking-wide ${severityClass[item.severity]}`}>{item.severity}</p>
               <h3 className="mt-1 break-words text-sm font-semibold leading-5">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></h3>
-              <p className="mt-1 text-sm text-ink-soft">Last status update {item.staleDays} {item.staleDays === 1 ? "day" : "days"} ago</p>
+              <p className="mt-1 text-sm text-ink-soft">{staleAgeLabel(item)}</p>
             </article>
           ))}
         </div>

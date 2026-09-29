@@ -1,7 +1,9 @@
+import { useMemo } from "react";
+
 import { useSettings } from "@/hooks/use-settings";
-import { DEFAULT_BOARDS } from "@/lib/board-preferences";
+import { resolveBoards } from "@/lib/board-preferences";
 
 export function useBoards() {
   const boards = useSettings().boards;
-  return boards.length ? boards : DEFAULT_BOARDS;
+  return useMemo(() => resolveBoards(boards), [boards]);
 }
