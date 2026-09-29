@@ -56,14 +56,5 @@ prisma/migrations/
 .vscode/
 .idea/
 
-# development-only files (kept locally, not needed to run Nook)
-/tests/
-/scripts/*
-!/scripts/setup.mjs
-/playwright.config.ts
-/eslint.config.mjs
-/AUDIT.md
-/audit/
-/restructure-plan/
-AGENTS.md
-CLAUDE.md
+# Everything else is tracked during v2 development (tests, scripts, configs, agent notes, audits).
+# Development-only files get cleaned up for production before the v2 release.
