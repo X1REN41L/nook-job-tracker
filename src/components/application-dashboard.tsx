@@ -51,7 +51,7 @@ import type { ApplicationRecord, JobFormState } from "@/types/application";
 import type { StaleApplication } from "@/types/dashboard";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
-const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), followUpDate: "", notes: "", jobUrl: "" });
+const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), notes: "", jobUrl: "" });
 type DragSource = "board" | "sidebar" | "archived";
 const SIDEBAR_WIDTH_KEY = "nook-sidebar-width";
 const SIDEBAR_WIDTH_EVENT = "nook-sidebar-width-change";
@@ -62,11 +62,11 @@ const MAX_SIDEBAR_WIDTH = 420;
 const SIDEBAR_COLLAPSE_THRESHOLD = 180;
 const SIDEBAR_REOPEN_THRESHOLD = 80;
 type MoveResult = "moved" | "unchanged" | "busy" | "conflict" | "failed";
-type PendingDuplicate = {
-  candidate: JobFormState;
-  editingId: string | null;
-  match: DuplicateMatch<ApplicationRecord>;
-};
+// A possible duplicate found while adding (or importing) a job, or while editing an application's details.
+// A details edit waits on `resolve` for the choice to save anyway.
+type PendingDuplicate =
+  | { kind: "add"; candidate: JobFormState; match: DuplicateMatch<ApplicationRecord> }
+  | { kind: "details"; match: DuplicateMatch<ApplicationRecord>; resolve: (saveAnyway: boolean) => void };
 
 function subscribeToSidebarPreference(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
@@ -106,8 +106,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const settings = useSettings();
   const [applications, setApplications] = useState(initialApplications);
   const [form, setForm] = useState<JobFormState>(blankForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingRevision, setEditingRevision] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ApplicationRecord | null>(null);
   const [pendingInterviewDate, setPendingInterviewDate] = useState<ApplicationRecord | null>(null);
@@ -148,11 +146,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const { importProgress, hasPendingImport, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport } = useApplicationBackup({
     applications,
     insertApplications,
-    onDuplicate: (candidate, match) => setPendingDuplicate({ candidate, editingId: null, match }),
+    onDuplicate: (candidate, match) => setPendingDuplicate({ kind: "add", candidate, match }),
     showToast,
   });
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
-  const reopenModalAfterDelete = useRef(false);
   const sidebarHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
@@ -176,8 +173,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const staleDays = new Map([...staleById].map(([id, item]) => [id, item.staleDays]));
   const cancelDelete = useCallback(() => {
     setPendingDelete(null);
-    if (reopenModalAfterDelete.current) setIsModalOpen(true);
-    reopenModalAfterDelete.current = false;
   }, []);
 
   function reconcileApplications(update: (current: ApplicationRecord[]) => ApplicationRecord[]) {
@@ -334,7 +329,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       resetForm();
       setIsModalOpen(false);
       setPendingDelete(null);
-      reopenModalAfterDelete.current = false;
       deleteTriggerRef.current = null;
       setPendingInterviewDate(null);
       setInterviewDateDraft("");
@@ -358,18 +352,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   function updateField<K extends keyof JobFormState>(field: K, value: JobFormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
   }
-  function resetForm() { setForm(blankForm()); setEditingId(null); setEditingRevision(null); setPendingDuplicate(null); setFormError(""); }
+  function resetForm() { setForm(blankForm()); setPendingDuplicate(null); setFormError(""); }
   function openAddModal() { resetForm(); setForm({ ...blankForm(), status: getDefaultBoard() }); setIsModalOpen(true); }
   function closeModal() { setIsModalOpen(false); resetForm(); }
-  function startEdit(application: ApplicationRecord) {
-    setPendingDuplicate(null);
-    setEditingId(application.id);
-    setEditingRevision(application.revision);
-    setForm({ company: application.company, role: application.role, status: application.status, source: application.source ?? "", appliedDate: application.appliedDate.slice(0, 10), followUpDate: application.followUpDate?.slice(0, 10) ?? "", notes: application.notes ?? "", jobUrl: application.jobUrl ?? "" });
-    setFormError("");
-    setIsModalOpen(true);
-  }
-
   function openDetail(application: ApplicationRecord) {
     setDetailId(application.id);
   }
@@ -380,47 +365,29 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setFormError("");
     const parsed = applicationInputSchema.safeParse(form);
     if (!parsed.success) { setFormError(parsed.error.issues[0]?.message ?? "Check the form and try again."); return; }
-    const match = findPossibleDuplicate(form, applications, editingId ?? undefined);
+    const match = findPossibleDuplicate(form, applications);
     if (match) {
-      setPendingDuplicate({ candidate: { ...form }, editingId, match });
+      setPendingDuplicate({ kind: "add", candidate: { ...form }, match });
       return;
     }
-    await saveApplication({ ...form }, editingId);
+    await saveApplication({ ...form });
   }
 
-  async function saveApplication(candidate: JobFormState, targetEditingId: string | null) {
+  async function saveApplication(candidate: JobFormState) {
     if (submissionInFlight.current) return false;
     submissionInFlight.current = true;
     setSaving(true);
     try {
-      const expectedRevision = targetEditingId
-        ? editingRevision ?? applications.find((item) => item.id === targetEditingId)?.revision
-        : undefined;
-      if (targetEditingId && expectedRevision === undefined) throw new Error("Could not find the application version to update");
-      const response = await fetch(targetEditingId ? applicationApiPath(targetEditingId) : "/api/applications", {
-        method: targetEditingId ? "PUT" : "POST",
+      const response = await fetch("/api/applications", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(targetEditingId ? { ...candidate, revision: expectedRevision } : candidate),
+        body: JSON.stringify(candidate),
       });
       const body = await response.json();
-      if (response.status === 409 && targetEditingId && body.application) {
-        const latest = body.application as ApplicationRecord;
-        reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
-        setEditingRevision(latest.revision);
-        setFormError("This application changed while you were editing. The latest saved version is loaded, and your form is still open with your changes. Review them, then save again to apply them.");
-        return false;
-      }
       if (!response.ok) throw new Error(body.error ?? "Could not save the application");
-      const previous = targetEditingId ? applications.find((item) => item.id === targetEditingId) : undefined;
-      reconcileApplications((current) => {
-        const next = targetEditingId ? current.map((item) => item.id === targetEditingId ? body.application : item) : [body.application, ...current];
-        return next.sort(compareApplications);
-      });
-      showToast(targetEditingId ? `Saved changes to ${body.application.company}` : `Added ${body.application.company}`);
+      reconcileApplications((current) => [body.application, ...current].sort(compareApplications));
+      showToast(`Added ${body.application.company}`);
       closeModal();
-      if (previous && previous.status !== Status.INTERVIEW && needsInterviewPrompt(body.application)) {
-        openInterviewDatePrompt(body.application);
-      }
       return true;
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : "Could not save the application");
@@ -434,38 +401,38 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   async function addDuplicateAnyway() {
     if (!pendingDuplicate || submissionInFlight.current) return;
     const pending = pendingDuplicate;
+    if (pending.kind === "details") {
+      setPendingDuplicate(null);
+      pending.resolve(true);
+      return;
+    }
     if (hasPendingImport) {
       setPendingDuplicate(null);
       await resumeImportAllowDuplicate();
       return;
     }
-    const saved = await saveApplication(pending.candidate, pending.editingId);
+    const saved = await saveApplication(pending.candidate);
     if (!saved) setPendingDuplicate(null);
   }
 
   function viewExistingDuplicate() {
     if (!pendingDuplicate || saving) return;
-    if (hasPendingImport) {
+    if (pendingDuplicate.kind === "details") pendingDuplicate.resolve(false);
+    else if (hasPendingImport) {
       abandonImport();
       setPendingDuplicate(null);
       showToast("Import cancelled; no applications were added");
       return;
     }
     const existing = applications.find(({ id }) => id === pendingDuplicate.match.application.id) ?? pendingDuplicate.match.application;
-    startEdit(existing);
+    setPendingDuplicate(null);
+    closeModal();
+    openDetail(existing);
   }
 
-  function requestDelete(application: ApplicationRecord, trigger: HTMLElement | null, reopenModal: boolean) {
+  function requestDelete(application: ApplicationRecord, trigger: HTMLElement | null) {
     deleteTriggerRef.current = trigger;
-    reopenModalAfterDelete.current = reopenModal;
-    setIsModalOpen(false);
     setPendingDelete(application);
-  }
-
-  function requestDeleteCurrent() {
-    const application = applications.find((item) => item.id === editingId);
-    if (!application) return;
-    requestDelete(application, sidebarHeadingRef.current, true);
   }
 
   async function confirmDelete() {
@@ -481,7 +448,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Could not delete the application");
       reconcileApplications((current) => current.filter((item) => item.id !== deletedApplication.id));
-      if (editingId === deletedApplication.id) resetForm();
       if (detailId === deletedApplication.id) setDetailId(null);
       showToast(`Deleted ${deletedApplication.company}`, {
         kind: "delete",
@@ -491,19 +457,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         company: deletedApplication.company,
       });
       setPendingDelete(null);
-      reopenModalAfterDelete.current = false;
       requestAnimationFrame(() => sidebarHeadingRef.current?.focus());
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Could not delete the application";
       setPendingDelete(null);
-      if (reopenModalAfterDelete.current) {
-        // The Edit form (with any unsaved changes) is still in state; bring it back with the error.
-        setFormError(message);
-        setIsModalOpen(true);
-      } else {
-        setError(message);
-      }
-      reopenModalAfterDelete.current = false;
+      setError(caught instanceof Error ? caught.message : "Could not delete the application");
     } finally {
       setDeleting(false);
     }
@@ -618,16 +575,28 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }
 
   /**
-   * Saves one change to an application: its follow-up date (PATCH), or an interview round, contact, or dated
-   * note. Each request carries the application's revision. Returns an error message, or null once saved.
+   * Saves one change to an application: its details (PUT, after a duplicate check), its follow-up (PATCH), or an
+   * interview round, contact, dated note, or status change. Each request carries the application's revision.
+   * Returns an error message, or null once saved.
    */
   async function saveApplicationChange(application: ApplicationRecord, change: ApplicationChange) {
+    if (change.kind === "details") {
+      const match = findPossibleDuplicate(change.fields, applications, application.id);
+      // An empty message keeps the form open without an error when the user decides not to save.
+      if (match && !await new Promise<boolean>((resolve) => setPendingDuplicate({ kind: "details", match, resolve }))) return "";
+    }
     try {
       const response = change.kind === "follow-up"
         ? await fetch(applicationApiPath(application.id), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ revision: application.revision, followUpDate: change.followUpDate }),
+          body: JSON.stringify({ revision: application.revision, followUpDate: change.followUpDate, followUpNote: change.followUpNote }),
+        })
+        : change.kind === "details"
+        ? await fetch(applicationApiPath(application.id), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...change.fields, revision: application.revision }),
         })
         : await fetch(applicationApiPath(application.id, change.collection, change.itemId), {
           method: change.method,
@@ -898,7 +867,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       if (application.archived) return;
       void moveApplication(application, application.status, true, undefined, true);
     },
-    onDeleteFocused: (application, focused) => requestDelete(application, focused, false),
+    onDeleteFocused: (application, focused) => requestDelete(application, focused),
   });
 
   return (
@@ -990,7 +959,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onToggleArchived={toggleArchived}
           onToggleAllApplications={toggleAllApplications}
           onOpen={openDetail}
-          onRequestDelete={(application, trigger) => requestDelete(application, trigger, false)}
+          onRequestDelete={(application, trigger) => requestDelete(application, trigger)}
           onRestore={async (application) => { await moveApplication(application, application.status, true, undefined, false); }}
         />
         <main ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto py-6">
@@ -1034,7 +1003,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             ) : page === "interviews" ? (
               <InterviewsList
                 interviews={interviews}
-                upcomingCount={upcomingInterviewCount}
                 today={interviewToday}
                 searchInputRef={interviewSearchRef}
                 onOpen={(applicationId) => { const application = applications.find((item) => item.id === applicationId); if (application) openDetail(application); }}
@@ -1072,12 +1040,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       <MotionPresence open={isModalOpen && !pendingDuplicate} immediateExit={pendingDuplicate !== null || pendingDelete !== null}>
         <JobModal
           boards={BOARDS}
-          editing={Boolean(editingId)}
           error={formError}
           form={form}
           onChangeField={updateField}
           onClose={closeModal}
-          onRequestDelete={editingId ? requestDeleteCurrent : undefined}
           onSubmit={submit}
           saving={saving}
           sourceSuggestions={sources}
@@ -1089,11 +1055,12 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         <DuplicateWarningDialog
           fromImport={hasPendingImport}
           boards={BOARDS}
-          editing={pendingDuplicate.editingId !== null}
+          editing={pendingDuplicate.kind === "details"}
           match={pendingDuplicate.match}
           onAddAnyway={() => void addDuplicateAnyway()}
           onDismiss={() => {
-            if (hasPendingImport) cancelImport();
+            if (pendingDuplicate.kind === "details") pendingDuplicate.resolve(false);
+            else if (hasPendingImport) cancelImport();
             setPendingDuplicate(null);
           }}
           onViewExisting={viewExistingDuplicate}
@@ -1110,9 +1077,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             busy={movingIds.has(detailApplication.id)}
             onArchive={() => { void moveApplication(detailApplication, detailApplication.status, true, undefined, !detailApplication.archived); }}
             onClose={() => setDetailId(null)}
-            onDelete={() => requestDelete(detailApplication, sidebarHeadingRef.current, false)}
-            onEdit={() => { setDetailId(null); startEdit(detailApplication); }}
+            onChangeStatus={(status) => { void moveApplication(detailApplication, status); }}
+            onDelete={() => requestDelete(detailApplication, sidebarHeadingRef.current)}
             onSave={(change) => saveApplicationChange(detailApplication, change)}
+            sourceSuggestions={sources}
             stale={staleById.get(detailApplication.id)}
             today={today}
           />

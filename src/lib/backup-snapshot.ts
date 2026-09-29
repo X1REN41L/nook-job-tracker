@@ -109,11 +109,14 @@ export const contactSnapshotSchema = z.object({
 export const applicationSnapshotSchema = z.object({
   id: applicationIdSchema, company: storedRequiredText(120), role: storedRequiredText(120),
   status: z.enum(Status), archived: z.boolean(), source: storedOptionalText(120), appliedDate: storedCalendarDateSchema,
-  interviewDatePromptDismissed: z.boolean(), followUpDate: storedCalendarDateSchema.nullable(),
+  interviewDatePromptDismissed: z.boolean(), followUpDate: storedCalendarDateSchema.nullable(), followUpNote: storedOptionalText(200),
   notes: storedOptionalText(5_000), jobUrl: storedJobUrlSchema,
   createdAt: timestamp, lastUpdated: timestamp, events: z.array(eventSnapshotSchema),
   interviews: z.array(interviewSnapshotSchema), contacts: z.array(contactSnapshotSchema),
 }).strict().superRefine((application, context) => {
+  if (application.followUpNote !== null && application.followUpDate === null) {
+    context.addIssue({ code: "custom", path: ["followUpNote"], message: "A follow-up note needs a follow-up date" });
+  }
   const statusEvents = application.events
     .map((event, index) => ({ event, index }))
     .filter(({ event }) => event.type === EventType.STATUS_CHANGE)
@@ -195,7 +198,7 @@ const storedContactSchema = z.object({
 export const applicationRestoreSnapshotSchema = z.object({
   id: z.string().min(1), company: z.string(), role: z.string(), status: z.enum(Status), archived: z.boolean(),
   revision: z.number().int().nonnegative(), source: z.string().nullable(), appliedDate: storedTimestamp,
-  interviewDatePromptDismissed: z.boolean(), followUpDate: storedTimestamp.nullable(),
+  interviewDatePromptDismissed: z.boolean(), followUpDate: storedTimestamp.nullable(), followUpNote: z.string().nullable(),
   notes: z.string().nullable(), jobUrl: z.string().nullable(), createdAt: storedTimestamp, lastUpdated: storedTimestamp,
   events: z.array(storedEventSchema), interviews: z.array(storedInterviewSchema), contacts: z.array(storedContactSchema),
 }).strict();

@@ -5,22 +5,21 @@ import { useId, useRef, useState, type KeyboardEvent, type RefObject } from "rea
 import { compareInterviews, formatInterviewTime, groupUpcomingInterviews, interviewDateKey, INTERVIEW_TYPE_LABELS, type InterviewListItem } from "@/lib/interviews";
 import { matchesApplicationSearch } from "@/lib/application-list";
 import { formatCalendarDate } from "@/lib/application-date";
-import { downloadCalendar, type CalendarInterview } from "@/lib/ics";
-
-const toCalendar = (interview: InterviewListItem): CalendarInterview => ({ ...interview, notes: interview.note });
+import { useTimeFormat } from "@/hooks/use-time-format";
 
 type InterviewTab = "upcoming" | "past";
 
 function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onOpen: (id: string) => void }) {
   const date = interviewDateKey(interview.date);
   const note = interview.note?.trim();
+  const timeFormat = useTimeFormat();
 
   return (
     <article className="border-b border-line/70 py-3 first:pt-0 last:border-b-0 last:pb-0">
-      <div className="relative grid grid-cols-1 gap-x-7 gap-y-1 rounded-nook-sm py-3 pl-2 pr-16 motion-interactive hover:bg-cream-2 md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0">
+      <div className="relative grid grid-cols-1 gap-x-7 gap-y-1 rounded-nook-sm px-2 py-3 motion-interactive hover:bg-cream-2 md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0">
         <p className="text-sm font-medium text-ink-soft">
           <time dateTime={date}>{formatCalendarDate(interview.date)}</time>
-          {interview.time && <span className="block text-xs font-normal">{formatInterviewTime(interview.time)}</span>}
+          {interview.time && <span className="block text-xs font-normal">{formatInterviewTime(interview.time, timeFormat)}</span>}
         </p>
         <div className="min-w-0">
           <h3 className="break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">
@@ -40,23 +39,13 @@ function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onO
           </p>
           {note && <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-ink-soft">{note}</p>}
         </div>
-        <button
-          aria-label={`Add the ${interview.company} interview on ${formatCalendarDate(interview.date)} to your calendar`}
-          className="absolute right-2 top-3 z-10 rounded-nook-sm px-2 py-1 text-xs font-medium text-forest motion-interactive hover:bg-forest-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
-          onClick={() => downloadCalendar(`interview-${date}.ics`, [toCalendar(interview)])}
-          title="Download an .ics calendar file"
-          type="button"
-        >
-          .ics
-        </button>
       </div>
     </article>
   );
 }
 
-export function InterviewsList({ interviews, upcomingCount, today, searchInputRef, onOpen }: {
+export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
   interviews: InterviewListItem[];
-  upcomingCount: number;
   today: string;
   searchInputRef: RefObject<HTMLInputElement | null>;
   onOpen: (applicationId: string) => void;
@@ -141,19 +130,10 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
       <div aria-labelledby={`${id}-${selectedTab}-tab`} className="pb-10 pt-7" id={panelId} role="tabpanel">
         {selectedTab === "upcoming" ? (
           <section aria-labelledby={`${id}-upcoming-heading`}>
-            <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
+            <div className="mb-7 flex min-h-9 flex-wrap items-center justify-between gap-4">
               <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-upcoming-heading`}>
-                Upcoming Interviews <span className="font-sans text-base font-medium text-ink-soft">({query ? upcoming.length : upcomingCount})</span>
+                Upcoming Interviews <span className="font-sans text-base font-medium text-ink-soft">({upcoming.length})</span>
               </h2>
-              {upcoming.length > 0 && (
-                <button
-                  className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook motion-interactive hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
-                  onClick={() => downloadCalendar(`nook-upcoming-interviews-${today}.ics`, [...upcoming].sort(compareInterviews).map(toCalendar))}
-                  type="button"
-                >
-                  Export {query ? "shown" : "all"} to calendar (.ics)
-                </button>
-              )}
             </div>
             {groups.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "All caught up — no interviews on the horizon."}</p>
@@ -174,16 +154,20 @@ export function InterviewsList({ interviews, upcomingCount, today, searchInputRe
           </section>
         ) : (
           <section aria-labelledby={`${id}-past-heading`}>
-            <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
-              <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-past-heading`}>Past Interviews</h2>
-              <button
-                aria-label={`Sort past interviews: ${pastSort === "recent" ? "most recent first" : "oldest first"}`}
-                className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook motion-interactive hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
-                onClick={() => setPastSort((current) => current === "recent" ? "oldest" : "recent")}
-                type="button"
-              >
-                {pastSort === "recent" ? "Most recent first" : "Oldest first"} <span aria-hidden="true">↕</span>
-              </button>
+            <div className="mb-7 flex min-h-9 flex-wrap items-center justify-between gap-4">
+              <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-past-heading`}>
+                Past Interviews <span className="font-sans text-base font-medium text-ink-soft">({past.length})</span>
+              </h2>
+              {past.length > 0 && (
+                <button
+                  aria-label={`Sort past interviews: ${pastSort === "recent" ? "most recent first" : "oldest first"}`}
+                  className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook motion-interactive hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+                  onClick={() => setPastSort((current) => current === "recent" ? "oldest" : "recent")}
+                  type="button"
+                >
+                  {pastSort === "recent" ? "Most recent first" : "Oldest first"} <span aria-hidden="true">↕</span>
+                </button>
+              )}
             </div>
             {past.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "None yet — patience, and a callback, will fix that."}</p>

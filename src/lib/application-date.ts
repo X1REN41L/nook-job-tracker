@@ -1,3 +1,5 @@
+import type { TimeFormat } from "@/lib/settings-values";
+
 export function currentLocalDate() {
   const date = new Date();
   const year = date.getFullYear();
@@ -30,13 +32,23 @@ export function calendarDaysSince(value: string, today: string) {
   return Math.round((Date.parse(`${today.slice(0, 10)}T00:00:00.000Z`) - Date.parse(`${value.slice(0, 10)}T00:00:00.000Z`)) / 86_400_000);
 }
 
-/** Compact age of a calendar date, such as "Today" or "12d ago". */
+/** Compact age of a calendar date, such as "Today", "Yesterday", or "12d ago". Counts calendar days, not hours. */
 export function formatDaysAgo(value: string, today: string) {
   const days = calendarDaysSince(value, today);
-  return days <= 0 ? "Today" : `${days}d ago`;
+  return days <= 0 ? "Today" : days === 1 ? "Yesterday" : `${days}d ago`;
+}
+
+/** A calendar-day count in words, such as "today", "yesterday", or "3 days ago". */
+export function daysAgoPhrase(days: number) {
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+}
+
+/** The Intl option for the chosen clock; "system" leaves it to the browser's locale. */
+export function hourCycleOption(timeFormat: TimeFormat): Intl.DateTimeFormatOptions {
+  return timeFormat === "12h" ? { hourCycle: "h12" } : timeFormat === "24h" ? { hourCycle: "h23" } : {};
 }
 
 // Timestamps (unlike calendar dates) are shown in the browser's own timezone.
-export function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+export function formatTimestamp(value: string, timeFormat: TimeFormat = "system") {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", ...hourCycleOption(timeFormat) }).format(new Date(value));
 }

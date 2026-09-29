@@ -1,6 +1,8 @@
 import type { InterviewType } from "@prisma/client";
 
+import { hourCycleOption } from "@/lib/application-date";
 import { addCalendarDays, startOfCalendarWeek } from "@/lib/calendar-date";
+import type { TimeFormat } from "@/lib/settings-values";
 import type { ApplicationRecord } from "@/types/application";
 
 export const INTERVIEW_TYPES = ["PHONE", "TECHNICAL", "ONSITE", "OTHER"] as const satisfies readonly InterviewType[];
@@ -48,9 +50,9 @@ export function hasUpcomingInterview(application: Pick<ApplicationRecord, "inter
 }
 
 /** Formats a stored "HH:MM" time in the browser's locale. */
-export function formatInterviewTime(time: string) {
+export function formatInterviewTime(time: string, timeFormat: TimeFormat = "system") {
   const [hours, minutes] = time.split(":").map(Number);
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
+  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZone: "UTC", ...hourCycleOption(timeFormat) }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
 }
 
 export function groupUpcomingInterviews(interviews: InterviewListItem[], today: string): InterviewGroup[] {

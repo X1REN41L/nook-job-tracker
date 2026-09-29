@@ -26,6 +26,7 @@ type DashboardApplication = {
   archived: boolean;
   appliedDate: Date;
   followUpDate: Date | null;
+  followUpNote: string | null;
   interviews: Array<{ id: string; date: Date; time: string | null; type: InterviewType }>;
   events: StatusHistoryEvent[];
 };
@@ -48,6 +49,7 @@ const baseSelection = {
   archived: true,
   appliedDate: true,
   followUpDate: true,
+  followUpNote: true,
   interviews: { select: { id: true, date: true, time: true, type: true } },
   events: { select: eventSelection },
 } as const;
@@ -237,6 +239,7 @@ export async function getDashboardOverview(today: string, timeZone: string, stal
       company: application.company,
       status: application.status,
       followUpDate: dateKey(application.followUpDate!),
+      followUpNote: application.followUpNote,
       daysOverdue: daysBetween(dateKey(application.followUpDate!), today),
     }))
     .sort((left, right) => left.followUpDate.localeCompare(right.followUpDate) || left.id.localeCompare(right.id));

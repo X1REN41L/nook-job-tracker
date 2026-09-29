@@ -57,7 +57,7 @@ The Table page lists every application in sortable columns. Filter by status, so
 
 The Interviews page lists every interview round, grouped by when it happens (this week, next week, later), with its type, time, who you're meeting, and your notes. Click an interview to open its application. When you move an application to Interview, Nook asks for the first round's date.
 
-**Add interviews to your calendar:** download an `.ics` file for a single round, or export all upcoming interviews at once, and open it with your calendar app. A **Past** tab keeps earlier interviews, and you can search by company or role.
+A **Past** tab keeps earlier interviews, and you can search by company or role.
 
 ![Interviews page](docs/screenshots/interviews.png)
 

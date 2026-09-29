@@ -1,16 +1,17 @@
 "use client";
 
 import type { EventType, InterviewType, Status } from "@prisma/client";
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 
-import { formatCalendarDate, formatTimestamp } from "@/lib/application-date";
+import { formatCalendarDate, formatDaysAgo, formatTimestamp } from "@/lib/application-date";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
-import { downloadCalendar } from "@/lib/ics";
 import { compareInterviews, formatInterviewTime, INTERVIEW_TYPE_LABELS, INTERVIEW_TYPES } from "@/lib/interviews";
-import type { ApplicationRecord, ContactRecord, InterviewRecord } from "@/types/application";
+import { useTimeFormat } from "@/hooks/use-time-format";
+import type { ApplicationDetails, ApplicationRecord, ContactRecord, InterviewRecord } from "@/types/application";
 
 export type ApplicationChange =
-  | { kind: "follow-up"; followUpDate: string | null }
+  | { kind: "details"; fields: ApplicationDetails }
+  | { kind: "follow-up"; followUpDate: string | null; followUpNote?: string }
   | { kind: "item"; collection: "interviews" | "contacts" | "notes" | "status-events"; method: "POST" | "PUT" | "DELETE"; itemId?: string; fields?: Record<string, unknown> };
 export type SaveChange = (change: ApplicationChange) => Promise<string | null>;
 export type HistoryEvent = { id: string; type: EventType; fromStatus: Status | null; toStatus: Status | null; detail: string | null; createdAt: string };
@@ -71,28 +72,149 @@ function FormActions({ saving, submitLabel, onCancel }: { saving: boolean; submi
   );
 }
 
+/** The editable fields of an application, as the details form holds them. */
+function detailsOf(application: ApplicationRecord): ApplicationDetails {
+  return {
+    company: application.company, role: application.role, source: application.source ?? "",
+    appliedDate: application.appliedDate.slice(0, 10), notes: application.notes ?? "", jobUrl: application.jobUrl ?? "",
+  };
+}
+
+function Detail({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <dt className="text-ink-soft">{label}</dt>
+      <dd className="min-w-0 break-words">{children}</dd>
+    </>
+  );
+}
+
+/** Applied date, source, and job link, or (while `editing`) a form for those plus company and role. */
+export function DetailsSection({ application, today, editing, sourceSuggestions, onDone, onSave }: {
+  application: ApplicationRecord;
+  today: string;
+  editing: boolean;
+  sourceSuggestions: string[];
+  onDone: () => void;
+  onSave: SaveChange;
+}) {
+  const postingUrl = safeLink(application.jobUrl);
+  if (editing) return <DetailsForm application={application} onDone={onDone} onSave={onSave} sourceSuggestions={sourceSuggestions} />;
+
+  return (
+    <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm">
+      <Detail label="Applied">{formatCalendarDate(application.appliedDate)} {today && <span className="text-ink-soft">· {formatDaysAgo(application.appliedDate, today)}</span>}</Detail>
+      <Detail label="Source">{application.source?.trim() || <span className="text-ink-soft">Not set</span>}</Detail>
+      <Detail label="Job link">
+        {postingUrl ? (
+          <a className={`break-all text-forest underline-offset-2 hover:underline ${focusRing}`} href={postingUrl} rel="noopener noreferrer" target="_blank">{postingUrl}</a>
+        ) : application.jobUrl?.trim() ? <span className="break-all">{application.jobUrl}</span> : <span className="text-ink-soft">Not set</span>}
+      </Detail>
+    </dl>
+  );
+}
+
+/** Mounted each time editing opens, so it starts from the saved details. */
+function DetailsForm({ application, sourceSuggestions, onDone, onSave }: {
+  application: ApplicationRecord;
+  sourceSuggestions: string[];
+  onDone: () => void;
+  onSave: SaveChange;
+}) {
+  const { saving, error, run } = useSave(onSave);
+  const [fields, setFields] = useState(() => detailsOf(application));
+  const companyRef = useRef<HTMLInputElement>(null);
+  const id = useId();
+  const set = <K extends keyof ApplicationDetails>(key: K, value: ApplicationDetails[K]) => setFields((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => { companyRef.current?.focus(); }, []);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    // The summary has its own editor; keep whatever is saved now.
+    if (await run({ kind: "details", fields: { ...fields, notes: application.notes ?? "" } })) onDone();
+  }
+
+  return (
+    <form aria-label="Edit details" className="grid gap-3 rounded-nook-sm border border-line bg-cream p-3" onSubmit={submit}>
+      <label className={fieldLabel} htmlFor={`${id}-company`}>Company<input ref={companyRef} className="input mt-1.5 text-sm" id={`${id}-company`} maxLength={120} onChange={(event) => set("company", event.target.value)} required value={fields.company} /></label>
+      <label className={fieldLabel} htmlFor={`${id}-role`}>Role<input className="input mt-1.5 text-sm" id={`${id}-role`} maxLength={120} onChange={(event) => set("role", event.target.value)} required value={fields.role} /></label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className={fieldLabel} htmlFor={`${id}-applied`}>Date applied<input className="input mt-1.5 text-sm" id={`${id}-applied`} onChange={(event) => set("appliedDate", event.target.value)} required type="date" value={fields.appliedDate} /></label>
+        <label className={fieldLabel} htmlFor={`${id}-source`}>Source <span className="font-normal">(optional)</span>
+          <input className="input mt-1.5 text-sm" id={`${id}-source`} list={`${id}-sources`} maxLength={120} onChange={(event) => set("source", event.target.value)} placeholder="LinkedIn, referral…" value={fields.source} />
+        </label>
+        <datalist id={`${id}-sources`}>{sourceSuggestions.map((source) => <option key={source} value={source} />)}</datalist>
+      </div>
+      <label className={fieldLabel} htmlFor={`${id}-url`}>Job link <span className="font-normal">(optional)</span><input className="input mt-1.5 text-sm" id={`${id}-url`} maxLength={2000} onChange={(event) => set("jobUrl", event.target.value)} placeholder="https://…" type="url" value={fields.jobUrl} /></label>
+      <ErrorText message={error} />
+      <FormActions onCancel={onDone} saving={saving} submitLabel="Save details" />
+    </form>
+  );
+}
+
+/** The application's summary, edited in place. */
+export function SummarySection({ application, onSave }: { application: ApplicationRecord; onSave: SaveChange }) {
+  const { saving, error, run } = useSave(onSave);
+  const [draft, setDraft] = useState<string | null>(null);
+  const id = useId();
+  const summary = application.notes?.trim();
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (draft !== null && await run({ kind: "details", fields: { ...detailsOf(application), notes: draft } })) setDraft(null);
+  }
+
+  return (
+    <section aria-labelledby={`${id}-heading`} className="mt-7">
+      <SectionHeading
+        id={`${id}-heading`}
+        title="Summary"
+        action={draft === null && <button className={linkButton} onClick={() => setDraft(application.notes ?? "")} type="button">{summary ? "Edit" : "Add summary"}</button>}
+      />
+      {draft !== null ? (
+        <form className="mt-2 grid gap-2" onSubmit={submit}>
+          <label className="sr-only" htmlFor={`${id}-text`}>Summary</label>
+          <textarea autoFocus className="scrollbar-styled input min-h-24 resize-y text-sm" id={`${id}-text`} maxLength={5_000} onChange={(event) => setDraft(event.target.value)} placeholder="Recruiter contact, salary range, next steps…" value={draft} />
+          <ErrorText message={error} />
+          <FormActions onCancel={() => setDraft(null)} saving={saving} submitLabel="Save summary" />
+        </form>
+      ) : summary
+        ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{summary}</p>
+        : <p className="mt-2 text-sm text-ink-soft">No summary yet.</p>}
+    </section>
+  );
+}
+
 export function FollowUpSection({ application, today, onSave }: { application: ApplicationRecord; today: string; onSave: SaveChange }) {
   const { saving, error, run } = useSave(onSave);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState({ date: "", note: "" });
   const inputId = useId();
   const date = application.followUpDate?.slice(0, 10) ?? null;
+  const note = application.followUpNote;
   const due = Boolean(date && today && date <= today);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (await run({ kind: "follow-up", followUpDate: draft || null })) setEditing(false);
+    if (await run({ kind: "follow-up", followUpDate: draft.date || null, followUpNote: draft.note })) setEditing(false);
   }
 
   return (
     <section aria-labelledby={`${inputId}-heading`} className="mt-7">
       <SectionHeading id={`${inputId}-heading`} title="Follow-up" />
       {editing ? (
-        <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={submit}>
-          <label className={fieldLabel} htmlFor={inputId}>
-            Follow up on
-            <input className="input mt-1.5 w-44 text-sm" id={inputId} onChange={(event) => setDraft(event.target.value)} required type="date" value={draft} />
-          </label>
+        <form className="mt-2 grid gap-3" onSubmit={submit}>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className={fieldLabel} htmlFor={inputId}>
+              Follow up on
+              <input className="input mt-1.5 w-44 text-sm" id={inputId} onChange={(event) => setDraft({ ...draft, date: event.target.value })} required type="date" value={draft.date} />
+            </label>
+            <label className={`${fieldLabel} min-w-48 flex-1`} htmlFor={`${inputId}-note`}>
+              Note <span className="font-normal">(optional)</span>
+              <input className="input mt-1.5 text-sm" id={`${inputId}-note`} maxLength={200} onChange={(event) => setDraft({ ...draft, note: event.target.value })} placeholder="What to follow up about" value={draft.note} />
+            </label>
+          </div>
           <FormActions onCancel={() => setEditing(false)} saving={saving} submitLabel="Save" />
         </form>
       ) : (
@@ -100,8 +222,9 @@ export function FollowUpSection({ application, today, onSave }: { application: A
           {date ? (
             <span className={due ? "font-medium text-clay" : ""}>{due ? "Due" : "Follow up on"} {formatCalendarDate(date)}</span>
           ) : <span className="text-ink-soft">No reminder set.</span>}
-          <button className={linkButton} disabled={saving} onClick={() => { setDraft(date ?? today); setEditing(true); }} type="button">{date ? "Change" : "Set reminder"}</button>
+          <button className={linkButton} disabled={saving} onClick={() => { setDraft({ date: date ?? today, note: note ?? "" }); setEditing(true); }} type="button">{date ? "Change" : "Set reminder"}</button>
           {date && <button className={linkButton} disabled={saving} onClick={() => void run({ kind: "follow-up", followUpDate: null })} type="button">Mark done</button>}
+          {date && note && <p className="basis-full break-words text-ink-soft">{note}</p>}
         </div>
       )}
       <ErrorText message={error} />
@@ -147,6 +270,7 @@ export function InterviewsSection({ application, today, onSave }: { application:
   const { saving, error, run } = useSave(onSave);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const headingId = useId();
+  const timeFormat = useTimeFormat();
   const rounds = [...application.interviews].sort(compareInterviews);
 
   async function save(fields: InterviewFields, itemId?: string) {
@@ -174,7 +298,7 @@ export function InterviewsSection({ application, today, onSave }: { application:
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 text-sm">
                   <p className="font-medium">
-                    {formatCalendarDate(interview.date)}{interview.time && `, ${formatInterviewTime(interview.time)}`}
+                    {formatCalendarDate(interview.date)}{interview.time && `, ${formatInterviewTime(interview.time, timeFormat)}`}
                     <span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[interview.type]}</span>
                     {today && interview.date.slice(0, 10) < today && <span className="font-normal text-ink-soft"> · Past</span>}
                   </p>
@@ -182,15 +306,6 @@ export function InterviewsSection({ application, today, onSave }: { application:
                   {interview.notes && <p className="mt-1 whitespace-pre-wrap break-words">{interview.notes}</p>}
                 </div>
                 <div className="flex shrink-0 flex-wrap justify-end gap-0.5">
-                  <button
-                    aria-label={`Add the ${formatCalendarDate(interview.date)} interview to your calendar`}
-                    className={linkButton}
-                    onClick={() => downloadCalendar(`interview-${interview.date.slice(0, 10)}.ics`, [{ ...interview, role: application.role, company: application.company }])}
-                    title="Download an .ics calendar file"
-                    type="button"
-                  >
-                    .ics
-                  </button>
                   <button className={linkButton} disabled={saving || editing !== null} onClick={() => setEditing(interview.id)} type="button">Edit</button>
                   <DeleteButton disabled={saving} label={`the ${formatCalendarDate(interview.date)} interview`} onDelete={() => void run({ kind: "item", collection: "interviews", method: "DELETE", itemId: interview.id })} />
                 </div>
@@ -318,6 +433,7 @@ export function TimelineSection({ boards, events, loadError, onSave }: {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const headingId = useId();
+  const timeFormat = useTimeFormat();
 
   async function addNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -362,7 +478,7 @@ export function TimelineSection({ boards, events, loadError, onSave }: {
                   <>
                     <p className="whitespace-pre-wrap break-words text-sm">{event.detail}</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-ink-soft">
-                      <span>Note · <time dateTime={event.createdAt}>{formatTimestamp(event.createdAt)}</time></span>
+                      <span>Note · <time dateTime={event.createdAt}>{formatTimestamp(event.createdAt, timeFormat)}</time></span>
                       <button className={linkButton} disabled={saving || editing !== null} onClick={() => setEditing({ id: event.id, text: event.detail ?? "" })} type="button">Edit</button>
                       <DeleteButton disabled={saving} label="this note" onDelete={() => void run({ kind: "item", collection: "notes", method: "DELETE", itemId: event.id })} />
                     </p>
@@ -372,7 +488,7 @@ export function TimelineSection({ boards, events, loadError, onSave }: {
                 <>
                   <p className="text-sm font-medium">{statusEventLabel(event, boards)}</p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-ink-soft">
-                    <time dateTime={event.createdAt}>{formatTimestamp(event.createdAt)}</time>
+                    <time dateTime={event.createdAt}>{formatTimestamp(event.createdAt, timeFormat)}</time>
                     <DeleteButton disabled={saving || editing !== null} label="this status change" onDelete={() => void run({ kind: "item", collection: "status-events", method: "DELETE", itemId: event.id })} />
                   </p>
                 </>

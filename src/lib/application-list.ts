@@ -100,13 +100,8 @@ function pad(value: number) {
 }
 
 /** First calendar date of a month (1–12). */
-export function monthStartKey(year: number, month: number) {
+function monthStartKey(year: number, month: number) {
   return `${year}-${pad(month)}-01`;
-}
-
-/** Last calendar date of a month (1–12). */
-export function monthEndKey(year: number, month: number) {
-  return `${year}-${pad(month)}-${pad(new Date(Date.UTC(year, month, 0)).getUTCDate())}`;
 }
 
 /**

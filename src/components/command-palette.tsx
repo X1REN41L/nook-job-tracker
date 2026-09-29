@@ -99,15 +99,15 @@ export function CommandPalette({ applications, boards, commands, onClose, onOpen
             )}
             <div
               aria-selected={index === active}
-              className={`flex cursor-pointer items-center gap-2.5 rounded-nook-sm px-3 py-2 text-sm ${index === active ? "bg-forest-tint text-ink" : "text-ink"}`}
+              className={`flex cursor-pointer items-center gap-2.5 rounded-nook-sm px-3 py-2 text-sm ${index === active ? "bg-forest text-cream" : "text-ink"}`}
               id={optionId(index)}
               onClick={() => choose(item)}
               onMouseMove={() => { if (index !== active) setActiveIndex(index); }}
               role="option"
             >
-              {item.dot && <span className={`status-dot shrink-0 ${item.dot}`} />}
+              {item.dot && <span className={`status-dot shrink-0 ${item.dot} ${index === active ? "ring-1 ring-cream" : ""}`} />}
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {item.detail && <span className="shrink-0 text-xs text-ink-soft">{item.detail}</span>}
+              {item.detail && <span className={`shrink-0 text-xs ${index === active ? "text-cream/80" : "text-ink-soft"}`}>{item.detail}</span>}
             </div>
           </li>
         ))}

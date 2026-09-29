@@ -48,7 +48,7 @@ export type DashboardOverviewData = {
     }>;
   };
   /** Follow-up reminders due today or earlier, oldest first. */
-  followUps: Array<{ id: string; role: string; company: string; status: Status; followUpDate: string; daysOverdue: number }>;
+  followUps: Array<{ id: string; role: string; company: string; status: Status; followUpDate: string; followUpNote: string | null; daysOverdue: number }>;
   interviewRate: RateMetric;
   offerRate: RateMetric;
   staleApplications: StaleApplication[];

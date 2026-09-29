@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { MOTION_MODES } from "@/lib/motion-mode";
-import { STALE_THRESHOLDS, STARTUP_PAGES } from "@/lib/settings-values";
+import { STALE_THRESHOLDS, STARTUP_PAGES, TIME_FORMATS } from "@/lib/settings-values";
 import { STATUS_VALUES } from "@/lib/status-values";
 
 export const settingsSchema = z.object({
@@ -10,6 +10,7 @@ export const settingsSchema = z.object({
   startupPage: z.enum(STARTUP_PAGES),
   staleApplicationThreshold: z.union(STALE_THRESHOLDS.map((days) => z.literal(days))),
   motion: z.enum(MOTION_MODES),
+  timeFormat: z.enum(TIME_FORMATS),
   sidebarCollapsed: z.boolean(),
   archivedExpanded: z.boolean(),
   allApplicationsExpanded: z.boolean(),

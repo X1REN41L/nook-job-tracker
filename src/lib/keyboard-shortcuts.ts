@@ -37,7 +37,6 @@ export const shortcutDefinitions = [
   { id: "go-job-board", action: "Job Board", bindings: [{ kind: "sequence", keys: ["g", "j"] }], section: "Page Navigation", destination: "/jobs" },
   { id: "go-table", action: "Applications Table", bindings: [{ kind: "sequence", keys: ["g", "t"] }], section: "Page Navigation", destination: "/table" },
   { id: "go-interviews", action: "Interviews", bindings: [{ kind: "sequence", keys: ["g", "i"] }], section: "Page Navigation", destination: "/interviews" },
-  { id: "go-overview", action: "Overview", bindings: [{ kind: "sequence", keys: ["g", "o"] }], section: "Dashboard", page: "dashboard", destination: "/dashboard" },
   { id: "go-analytics", action: "Analytics", bindings: [{ kind: "sequence", keys: ["g", "a"] }], section: "Dashboard", page: "dashboard", destination: "/dashboard/analytics" },
   { id: "new-job", action: "New Job", bindings: [{ kind: "combo", code: "KeyN", alt: true }], section: "Job Board", page: "job-board" },
   { id: "archive-focused", action: "Archive focused card", bindings: [{ kind: "combo", code: "KeyA", alt: true }], section: "Job Board", page: "job-board" },

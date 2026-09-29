@@ -13,6 +13,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { useStaleApplications } from "@/hooks/use-stale-applications";
 import { staleAgeLabel } from "@/lib/stale-label";
 import { formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
+import { useTimeFormat } from "@/hooks/use-time-format";
 
 type Rate = OverviewData["interviewRate"];
 
@@ -64,13 +65,14 @@ function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchi
   return (
     <li className="stale-application-row relative min-w-0">
       <button
-        className="block w-full min-w-0 rounded-nook-sm py-4 pl-2 pr-24 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
+        className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
         disabled={!application}
         onClick={() => { if (application) onOpen(application); }}
         type="button"
       >
         <span className={`block text-xs font-semibold tracking-wide ${severityClass[item.severity]}`}>{item.severity}</span>
-        <span className="mt-1 block break-words text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
+        {/* The title leaves room for Archive, which sits at the top right. */}
+        <span className="mt-1 block break-words pr-20 text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
         <span className="mt-1 flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm text-ink-soft">
           <span>{staleAgeLabel(item)}</span>
           <span>{boardLabel(BOARDS, item.status)}</span>
@@ -78,7 +80,7 @@ function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchi
       </button>
       {application && (
         <button
-          className="stale-row-archive btn-ghost absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+          className="stale-row-archive btn-ghost absolute right-2 top-2.5 px-3 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
           disabled={archiveDisabled}
           onClick={() => onArchive(application)}
           type="button"
@@ -108,8 +110,9 @@ function FollowUpRow({ item, application, busy, onOpen, onDone }: {
         <span className="block text-xs font-semibold tracking-wide text-clay">FOLLOW UP</span>
         <span className="mt-1 block break-words text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
         <span className="mt-1 block text-sm text-ink-soft">
-          {item.daysOverdue === 0 ? "Due today" : `Due ${formatCalendarDate(item.followUpDate)} · ${item.daysOverdue} ${item.daysOverdue === 1 ? "day" : "days"} overdue`}
+          {item.daysOverdue === 0 ? "Due today" : item.daysOverdue === 1 ? "Due yesterday" : `Due ${formatCalendarDate(item.followUpDate)} · ${item.daysOverdue} days overdue`}
         </span>
+        {item.followUpNote && <span className="mt-1 block break-words text-sm text-ink">{item.followUpNote}</span>}
       </button>
       {application && (
         <button
@@ -202,6 +205,7 @@ function NeedsAttention({ preview, followUps, loading, error, today, refreshKey,
 }
 
 function UpcomingInterviewsPreview({ items, loading, error }: { items: OverviewData["upcomingInterviews"]["items"]; loading: boolean; error: boolean }) {
+  const timeFormat = useTimeFormat();
   return (
     <section className="min-w-0" aria-labelledby="upcoming-preview-title">
       <PreviewHeading
@@ -219,7 +223,7 @@ function UpcomingInterviewsPreview({ items, loading, error }: { items: OverviewD
         <div className="divide-y divide-line/70">
           {items.slice(0, 3).map((item) => (
             <article key={item.id} className="min-w-0 py-4 first:pt-5">
-              <p className="text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time)}`}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></p>
+              <p className="text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time, timeFormat)}`}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></p>
               <h3 className="mt-1 break-words text-sm font-semibold leading-5">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></h3>
             </article>
           ))}

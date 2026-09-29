@@ -11,7 +11,7 @@ import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-mod
 import { BOARDS } from "@/lib/board-preferences";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
-import { STALE_THRESHOLDS, STARTUP_PAGES } from "@/lib/settings-values";
+import { STALE_THRESHOLDS, STARTUP_PAGES, TIME_FORMATS } from "@/lib/settings-values";
 import { MOTION_MODES } from "@/lib/motion-mode";
 
 type SettingsCategory = "general" | "shortcuts" | "backup";
@@ -43,6 +43,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
   const startupPage = settings.startupPage;
   const staleThreshold = settings.staleApplicationThreshold;
   const motion = settings.motion;
+  const timeFormat = settings.timeFormat;
   const [importError, setImportError] = useState("");
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -152,6 +153,17 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                     <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="stale-threshold" onChange={(event) => saveSettings({ staleApplicationThreshold: Number(event.target.value) as typeof staleThreshold })} value={staleThreshold}>
                       {STALE_THRESHOLDS.map((days) => <option key={days} value={days}>{days} days</option>)}
                     </select>
+                  </div>
+                  <div className="flex min-h-16 items-center justify-between gap-3 py-3">
+                    <div>
+                      <p className="text-sm font-semibold">Time Format</p>
+                      <p className="mt-0.5 text-xs text-ink-soft">Automatic follows your browser&apos;s language and region.</p>
+                    </div>
+                    <div aria-label="Time format" className="flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5" role="group">
+                      {TIME_FORMATS.map((format) => (
+                        <button key={format} aria-pressed={timeFormat === format} className={`rounded-[8px] px-2.5 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${timeFormat === format ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`} onClick={() => saveSettings({ timeFormat: format })} type="button">{format === "system" ? "Automatic" : format === "12h" ? "12-hour" : "24-hour"}</button>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex min-h-16 items-center justify-between gap-3 py-3">
                     <div>

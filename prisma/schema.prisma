@@ -19,6 +19,8 @@ model Application {
   // Set when the "add an interview" prompt is skipped; cleared when the application leaves Interview.
   interviewDatePromptDismissed Boolean @default(false)
   followUpDate DateTime?
+  // Why the follow-up was set; cleared with the follow-up date.
+  followUpNote String?
   lastUpdated DateTime           @updatedAt
   notes       String?
   jobUrl      String?

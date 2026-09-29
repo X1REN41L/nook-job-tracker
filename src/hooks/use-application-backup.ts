@@ -74,8 +74,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
         const group = next.groups.get(key) ?? new ImportDuplicateIndex<ApplicationRecord>();
         const candidate: JobFormState = {
           company: record.company, role: record.role, status: record.status, source: record.source ?? "",
-          appliedDate: record.appliedDate.slice(0, 10), followUpDate: record.followUpDate?.slice(0, 10) ?? "",
-          notes: record.notes ?? "", jobUrl: record.jobUrl ?? "",
+          appliedDate: record.appliedDate.slice(0, 10), notes: record.notes ?? "", jobUrl: record.jobUrl ?? "",
         };
         const match = next.ids.has(record.id) || allowCurrentDuplicate ? null : group.find(record.role);
         allowCurrentDuplicate = false;

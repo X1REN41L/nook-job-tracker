@@ -50,7 +50,6 @@ type ApplicationSidebarProps = {
 
 const navRowClass = "box-border flex h-9 w-full min-w-0 shrink-0 cursor-pointer items-center rounded-nook-sm text-left text-sm motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 const mainNavItemClass = `sidebar-nav-row ${navRowClass} p-0`;
-const dashboardSectionItemClass = `${navRowClass} border px-2`;
 
 function MainNavIcon({ Icon }: { Icon: LucideIcon }) {
   return (
@@ -371,8 +370,8 @@ export function ApplicationSidebar({
           )}
 
           {page === "dashboard" && (
-            <nav aria-label="Dashboard sections" className={`relative z-10 min-h-0 overflow-y-auto py-4 ${collapsed ? "px-[7px]" : "px-3"}`}>
-              {!collapsed && <h2 className="px-2 font-serif text-base font-semibold">Dashboard</h2>}
+            <nav aria-label="Dashboard sections" className="sidebar-main-nav relative z-10 min-h-0 overflow-y-auto py-4">
+              {!collapsed && <h2 className="px-[11px] font-serif text-base font-semibold">Dashboard</h2>}
               <div className={`${collapsed ? "" : "mt-2"} flex flex-col gap-1`}>
                 {([
                   { section: "overview", label: "Overview", href: "/dashboard", icon: PanelsTopLeft },
@@ -382,12 +381,12 @@ export function ApplicationSidebar({
                     key={section}
                     aria-current={dashboardSection === section ? "page" : undefined}
                     aria-label={label}
-                    className={`${collapsed ? mainNavItemClass : dashboardSectionItemClass} ${dashboardSection === section ? `${collapsed ? "" : "border-forest "}bg-forest font-semibold text-cream` : `${collapsed ? "" : "border-transparent "}text-ink-soft hover:bg-cream-2 hover:text-ink`}`}
+                    className={`${mainNavItemClass} ${dashboardSection === section ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
                     href={href}
                     title={collapsed ? label : undefined}
                   >
-                    <span className={collapsed ? "sidebar-nav-icon" : "-ml-1.5 flex h-5 w-5 shrink-0 items-center justify-center"}><MainNavIcon Icon={icon} /></span>
-                    {!collapsed && <span className="ml-5 whitespace-nowrap">{label}</span>}
+                    <span className="sidebar-nav-icon"><MainNavIcon Icon={icon} /></span>
+                    {!collapsed && <span className="ml-3 whitespace-nowrap">{label}</span>}
                   </Link>
                 ))}
               </div>

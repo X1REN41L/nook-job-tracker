@@ -119,14 +119,14 @@ export const applicationInputSchema = z.object({
   status: z.enum(Status),
   source: optionalText(120),
   appliedDate: appliedDateSchema,
-  followUpDate: optionalFollowUpDateSchema,
   notes: optionalText(5_000),
   jobUrl: optionalUrl,
 }).strict();
 
 const applicationRevisionSchema = z.number().int().nonnegative();
 
-export const applicationEditSchema = applicationInputSchema.extend({
+// Editing changes the details only; status and follow-up change through PATCH, which keeps status history.
+export const applicationEditSchema = applicationInputSchema.omit({ status: true }).extend({
   revision: applicationRevisionSchema,
 }).strict();
 
@@ -142,9 +142,11 @@ export const applicationArchiveSchema = z.object({
   archived: z.boolean(),
 }).strict();
 
+// Setting a follow-up replaces its note; clearing the date clears the note too.
 export const applicationFollowUpSchema = z.object({
   revision: applicationRevisionSchema,
   followUpDate: optionalFollowUpDateSchema,
+  followUpNote: optionalText(200),
 }).strict();
 
 export const applicationStatusUndoSchema = z.object({

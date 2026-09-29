@@ -13,6 +13,7 @@ import { formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
 import type { BoardConfiguration } from "@/lib/board-preferences";
 import { motionIsCurrentlyOff } from "@/lib/general-preferences";
 import { featuredInterview, formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
+import { useTimeFormat } from "@/hooks/use-time-format";
 import type { ApplicationRecord } from "@/types/application";
 
 type CardContext = {
@@ -116,6 +117,7 @@ function KanbanCard({ application, disabled, today, staleDays, onOpen }: {
     disabled,
   });
   const datesId = useId();
+  const timeFormat = useTimeFormat();
   const stale = staleDays.get(application.id);
   const interview = application.status === Status.INTERVIEW ? featuredInterview(application.interviews, today) : undefined;
   const followUpDue = Boolean(today && application.followUpDate && application.followUpDate.slice(0, 10) <= today);
@@ -191,7 +193,7 @@ function KanbanCard({ application, disabled, today, staleDays, onOpen }: {
               <line x1="8" y1="2" x2="8" y2="6" />
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
-            Interview {formatCalendarDate(interview.date)}{interview.time && `, ${formatInterviewTime(interview.time)}`} · {INTERVIEW_TYPE_LABELS[interview.type]}
+            Interview {formatCalendarDate(interview.date)}{interview.time && `, ${formatInterviewTime(interview.time, timeFormat)}`} · {INTERVIEW_TYPE_LABELS[interview.type]}
           </div>
         )}
         {application.followUpDate && (

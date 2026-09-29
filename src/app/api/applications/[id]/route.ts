@@ -33,7 +33,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
     if (!checked.ok) return checked.response;
     const { id } = await params;
     const { revision, ...input } = parseRequest(applicationEditSchema, parseMutationJson(checked.body));
-    const result = await updateApplication(id, revision, input, input.status);
+    const result = await updateApplication(id, revision, input);
     if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
     if (result.conflict) return revisionConflict(result.application);
     return NextResponse.json({ application: result.application });
@@ -49,7 +49,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const { id } = await params;
     const mutation = parseRequest(applicationMutationSchema, parseMutationJson(checked.body));
     if (!("status" in mutation)) {
-      const data = "archived" in mutation ? { archived: mutation.archived } : { followUpDate: mutation.followUpDate };
+      const data = "archived" in mutation
+        ? { archived: mutation.archived }
+        : { followUpDate: mutation.followUpDate, followUpNote: mutation.followUpDate ? mutation.followUpNote : null };
       const result = await updateApplication(id, mutation.revision, data);
       if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
       if (result.conflict) return revisionConflict(result.application);
