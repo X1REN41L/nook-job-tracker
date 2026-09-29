@@ -16,38 +16,40 @@ function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onO
   const note = interview.note?.trim();
 
   return (
-    <article className="relative border-b border-line/70 py-3 first:pt-0 last:border-b-0 last:pb-0">
-      <button
-        aria-label={`Open ${interview.role} at ${interview.company}`}
-        className="grid w-full grid-cols-1 gap-x-7 gap-y-1 rounded-nook-sm py-3 pl-2 pr-16 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0"
-        onClick={() => onOpen(interview.applicationId)}
-        type="button"
-      >
-        <span className="block text-sm font-medium text-ink-soft">
+    <article className="border-b border-line/70 py-3 first:pt-0 last:border-b-0 last:pb-0">
+      <div className="relative grid grid-cols-1 gap-x-7 gap-y-1 rounded-nook-sm py-3 pl-2 pr-16 motion-interactive hover:bg-cream-2 md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0">
+        <p className="text-sm font-medium text-ink-soft">
           <time dateTime={date}>{formatCalendarDate(interview.date)}</time>
           {interview.time && <span className="block text-xs font-normal">{formatInterviewTime(interview.time)}</span>}
-        </span>
-        <span className="block min-w-0">
-          <span className="block break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">
-            <span>{interview.role}</span>
-            <span aria-hidden="true" className="mx-1.5 text-ink-soft">—</span>
-            <span className="font-medium text-ink-soft">{interview.company}</span>
-          </span>
-          <span className="mt-0.5 block text-sm text-ink-soft">
+        </p>
+        <div className="min-w-0">
+          <h3 className="break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">
+            {/* The button's click area stretches over the whole row. */}
+            <button
+              className="text-left after:absolute after:inset-0 after:rounded-nook-sm focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-forest"
+              onClick={() => onOpen(interview.applicationId)}
+              type="button"
+            >
+              <span>{interview.role}</span>
+              <span aria-hidden="true" className="mx-1.5 text-ink-soft">—</span>
+              <span className="font-medium text-ink-soft">{interview.company}</span>
+            </button>
+          </h3>
+          <p className="mt-0.5 text-sm text-ink-soft">
             {INTERVIEW_TYPE_LABELS[interview.type]}{interview.interviewers && ` · With ${interview.interviewers}`}
-          </span>
-          {note && <span className="mt-1 block whitespace-pre-wrap break-words text-sm leading-6 text-ink-soft">{note}</span>}
-        </span>
-      </button>
-      <button
-        aria-label={`Add the ${interview.company} interview on ${formatCalendarDate(interview.date)} to your calendar`}
-        className="absolute right-2 top-5 rounded-nook-sm px-2 py-1 text-xs font-medium text-forest motion-interactive hover:bg-forest-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
-        onClick={() => downloadCalendar(`interview-${date}.ics`, [toCalendar(interview)])}
-        title="Download an .ics calendar file"
-        type="button"
-      >
-        .ics
-      </button>
+          </p>
+          {note && <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-ink-soft">{note}</p>}
+        </div>
+        <button
+          aria-label={`Add the ${interview.company} interview on ${formatCalendarDate(interview.date)} to your calendar`}
+          className="absolute right-2 top-3 z-10 rounded-nook-sm px-2 py-1 text-xs font-medium text-forest motion-interactive hover:bg-forest-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+          onClick={() => downloadCalendar(`interview-${date}.ics`, [toCalendar(interview)])}
+          title="Download an .ics calendar file"
+          type="button"
+        >
+          .ics
+        </button>
+      </div>
     </article>
   );
 }
