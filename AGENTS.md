@@ -2,7 +2,15 @@
 
 Nook is a local-only job tracker built with Next.js, React, TypeScript, Tailwind CSS, Prisma, and SQLite. Keep solutions local and simple; add hosting, cloud services, authentication, or deployment infrastructure only when requested.
 
-Nook is a desktop (PC) app. Design, test, and review for desktop browser windows only; do not add mobile or touch-specific layouts, and do not report mobile or narrow-viewport issues, unless asked. When checking a UI change in the browser, check it with the sidebar both expanded and collapsed, and leave the sidebar in the state you found it.
+Nook is a desktop (PC) app. Design, test, and review for desktop browser windows only; do not add mobile or touch-specific layouts, and do not report mobile or narrow-viewport issues, unless asked.
+
+## Browser checks
+
+- Check a change in the browser (the user's app on port 3000) only when it affects layout, visuals, motion, or interaction; copy, logic, and test-only changes rely on typecheck, lint, and the relevant tests.
+- For layout changes, check with the sidebar both expanded and collapsed, and leave the sidebar in the state you found it. Other UI changes need only the current sidebar state.
+- To check several window sizes or states, load the page in a same-origin iframe of the target size and measure with one JavaScript call instead of taking a screenshot per size.
+- Don't change the user's data or settings to test a change (for example deleting records or toggling saved settings); use Playwright or the API test runners, which use isolated databases.
+- Close any browser tab you opened when done.
 
 ## Implementation
 
@@ -35,6 +43,7 @@ Nook is a desktop (PC) app. Design, test, and review for desktop browser windows
 - Typecheck, lint, build, focused/unit tests, API tests, and smoke tests are allowed. Use the scripts in `package.json` for the relevant check: `npm run typecheck`, `npm run lint`, `npm run build`.
 - Unit tests (`test:unit`, `test:shortcuts`, `test:duplicates`, `test:import-scale`) load TypeScript through `scripts/unit-loader-register.mjs`, which needs the Node version in `package.json` `engines`.
 - `npm run test:smoke`, `test:backup`, `test:dashboard`, and `test:contention` use `scripts/run-backup-api-test.sh`, which creates an isolated SQLite database and test server. Use this runner for API checks instead of targeting the user's running app.
+- The full Playwright suite takes about 15 minutes. While fixing failures, rerun only the affected spec files (`npm run test:e2e -- tests/e2e/<file>.spec.ts`); run the full suite once, before committing.
 - Playwright and browser tests require an explicit user request, including `npm run test:e2e` (alias `test:keyboard`) and tests in `tests/e2e/`. `scripts/run-playwright.sh` uses an isolated SQLite database and removes its `.next-playwright/` and `tsconfig.playwright.json` artifacts on exit. The user handles manual UI/browser testing; do not ask them to test the UI.
 
 <!-- BEGIN:nextjs-agent-rules -->
