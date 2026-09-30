@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
-import type { DashboardOverviewData as OverviewData, StaleApplication } from "@/types/dashboard";
+import type { DashboardOverviewData as OverviewData, StaleApplication, StaleApplicationsData } from "@/types/dashboard";
 import type { ApplicationRecord } from "@/types/application";
 import { currentBrowserTimeZone, formatCalendarDate } from "@/lib/application-date";
 import { applicationTableHref } from "@/lib/application-list";
+import { revealDelay } from "@/lib/motion-mode";
 import { BOARDS, boardLabel } from "@/lib/board-preferences";
 import { useSettings } from "@/hooks/use-settings";
-import { useStaleApplications } from "@/hooks/use-stale-applications";
 import { staleAgeLabel } from "@/lib/stale-label";
 import { formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
 import { useTimeFormat } from "@/hooks/use-time-format";
@@ -18,10 +18,12 @@ import { useTimeFormat } from "@/hooks/use-time-format";
 type Rate = OverviewData["interviewRate"];
 
 function OverviewMetrics({ data }: { data: OverviewData | null }) {
-  const rateCard = (label: string, rate: Rate | undefined) => (
+  const rateCard = (label: string, rate: Rate | undefined, order: number) => (
     <DashboardMetricCard
       label={label}
-      value={rate ? formatDashboardPercentage(rate.percentage) : "—"}
+      order={order}
+      value={rate ? rate.percentage : "—"}
+      format={formatDashboardPercentage}
       detail={rate ? `${rate.numerator} of ${rate.denominator}` : " "}
       coverage={rate?.historyCoverage}
       explanation="Percentage of applications that reached this exact status. Each status is counted independently."
@@ -30,11 +32,11 @@ function OverviewMetrics({ data }: { data: OverviewData | null }) {
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-label="Overview metrics">
-      <DashboardMetricCard label="Total Applications" value={data?.totalApplications ?? "—"} detail="All time" href={applicationTableHref({ archived: "all" })} />
-      <DashboardMetricCard label="Active Pipeline" value={data?.activePipeline ?? "—"} detail="Currently active" href={applicationTableHref({ status: "active" })} />
-      <DashboardMetricCard label="Active upcoming interviews" value={data?.upcomingInterviews.count ?? "—"} detail="Upcoming" href="/interviews" />
-      {rateCard("Interview Rate", data?.interviewRate)}
-      {rateCard("Offer Rate", data?.offerRate)}
+      <DashboardMetricCard label="Total applications" order={0} value={data?.totalApplications ?? "—"} detail="All time" href={applicationTableHref({ archived: "all" })} />
+      <DashboardMetricCard label="Active pipeline" order={1} value={data?.activePipeline ?? "—"} detail="Currently active" href={applicationTableHref({ status: "active" })} />
+      <DashboardMetricCard label="Upcoming interviews" order={2} value={data?.upcomingInterviews.count ?? "—"} href="/interviews" />
+      {rateCard("Interview rate", data?.interviewRate, 3)}
+      {rateCard("Offer rate", data?.offerRate, 4)}
     </div>
   );
 }
@@ -49,21 +51,26 @@ const severityClass = {
 function PreviewHeading({ id, title, action }: { id: string; title: string; action: ReactNode }) {
   return (
     <div className="flex min-w-0 items-center justify-between gap-3 border-b border-line pb-3">
-      <h2 className="min-w-0 font-serif text-xl font-semibold leading-tight" id={id}>{title}</h2>
+      {/* As tall as the View all link, so both sections' dividers line up with or without it. */}
+      <h2 className="flex min-h-7 min-w-0 items-center font-serif text-xl font-semibold leading-tight" id={id}>{title}</h2>
       {action}
     </div>
   );
 }
 
-function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchive }: {
+/** List rows start rising this long after the page opens, just behind the metric cards. */
+const ROW_REVEAL_START_MS = 180;
+
+function NeedsAttentionRow({ item, application, reveal, archiveDisabled, onOpen, onArchive }: {
   item: StaleApplication;
+  reveal: CSSProperties;
   application: ApplicationRecord | undefined;
   archiveDisabled: boolean;
   onOpen: (application: ApplicationRecord) => void;
   onArchive: (application: ApplicationRecord) => void;
 }) {
   return (
-    <li className="attention-row relative min-w-0">
+    <li className="attention-row motion-reveal relative min-w-0" style={reveal}>
       <button
         className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
         disabled={!application}
@@ -92,15 +99,16 @@ function NeedsAttentionRow({ item, application, archiveDisabled, onOpen, onArchi
   );
 }
 
-function FollowUpRow({ item, application, busy, onOpen, onDone }: {
+function FollowUpRow({ item, application, reveal, busy, onOpen, onDone }: {
   item: OverviewData["followUps"][number];
+  reveal: CSSProperties;
   application: ApplicationRecord | undefined;
   busy: boolean;
   onOpen: (application: ApplicationRecord) => void;
   onDone: (application: ApplicationRecord) => void;
 }) {
   return (
-    <li className="attention-row relative min-w-0">
+    <li className="attention-row motion-reveal relative min-w-0" style={reveal}>
       <button
         className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
         disabled={!application}
@@ -131,14 +139,17 @@ function FollowUpRow({ item, application, busy, onOpen, onDone }: {
   );
 }
 
-function NeedsAttention({ preview, followUps, loading, error, today, refreshKey, initiallyExpanded, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
+function NeedsAttention({ preview, followUps, full, rowRevealBase, loading, error, today, initiallyExpanded, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
   preview: OverviewData["staleApplications"];
   followUps: OverviewData["followUps"];
+  /** Delay before the first row rises; see `ROW_REVEAL_START_MS`. */
+  rowRevealBase: number;
   onFollowUpDone: (application: ApplicationRecord) => void;
   loading: boolean;
   error: boolean;
   today: string;
-  refreshKey: unknown;
+  /** The full stale list the app already loads, shown by View all. */
+  full: { data: StaleApplicationsData | null; error: boolean };
   initiallyExpanded: boolean;
   applications: ApplicationRecord[];
   movingIds: ReadonlySet<string>;
@@ -146,7 +157,6 @@ function NeedsAttention({ preview, followUps, loading, error, today, refreshKey,
   onArchive: (application: ApplicationRecord) => void;
 }) {
   const [expanded, setExpanded] = useState(initiallyExpanded);
-  const full = useStaleApplications(today, refreshKey, expanded);
   const applicationById = new Map(applications.map((application) => [application.id, application]));
   const fullItems = full.data
     ? [...full.data.applicationsBySeverity.CRITICAL, ...full.data.applicationsBySeverity.HIGH, ...full.data.applicationsBySeverity.MEDIUM]
@@ -173,32 +183,32 @@ function NeedsAttention({ preview, followUps, loading, error, today, refreshKey,
     <section className="min-w-0" aria-labelledby="needs-attention-title">
       <PreviewHeading
         id="needs-attention-title"
-        title="Needs Attention"
+        title="Needs attention"
         action={(expanded || preview.length >= 3) && (
           <button aria-expanded={expanded} className={linkClass} onClick={toggle} type="button">
             {expanded ? "Show fewer" : <>View all <span aria-hidden="true">→</span></>}
           </button>
         )}
       />
-      {expanded && <p className="mt-3 text-sm text-ink-soft">Active applications with no recent status movement, longest waiting first.</p>}
+      {expanded && <p className="mt-3 text-sm text-ink-soft">Active applications with no recent status change or interview, longest waiting first.</p>}
       {excluded > 0 && (
         <p className="mt-2 text-sm text-ink-soft">
           {excluded} active {excluded === 1 ? "application is" : "applications are"} not shown because reliable status timing is unavailable.
         </p>
       )}
       {listLoading ? (
-        <p className="py-6 text-sm text-ink-soft" role={expanded ? "status" : undefined}>Loading applications…</p>
+        <p className="motion-reveal py-6 text-sm text-ink-soft" role={expanded ? "status" : undefined}>Loading applications…</p>
       ) : listError ? (
-        <p className="py-6 text-sm text-ink-soft">{expanded ? "Needs Attention could not be loaded. Please try again later." : "Preview unavailable."}</p>
+        <p className="motion-reveal py-6 text-sm text-ink-soft">{expanded ? "Needs attention could not be loaded. Please try again later." : "Preview unavailable."}</p>
       ) : items.length === 0 && dueFollowUps.length === 0 ? (
-        <p className="py-6 text-sm text-ink-soft">{expanded ? "Nothing's gone quiet yet — good sign." : "No applications need attention right now."}</p>
+        <p className="motion-reveal py-6 text-sm text-ink-soft">{expanded ? "Nothing's gone quiet yet — good sign." : "No applications need attention right now."}</p>
       ) : (
         <ul className="divide-y divide-line/70">
-          {dueFollowUps.map((item) => (
-            <FollowUpRow application={applicationById.get(item.id)} busy={movingIds.has(item.id)} item={item} key={`follow-up-${item.id}`} onDone={onFollowUpDone} onOpen={onOpen} />
+          {dueFollowUps.map((item, index) => (
+            <FollowUpRow application={applicationById.get(item.id)} busy={movingIds.has(item.id)} item={item} key={`follow-up-${item.id}`} onDone={onFollowUpDone} onOpen={onOpen} reveal={revealDelay(index, { base: rowRevealBase })} />
           ))}
-          {items.map((item) => (
-            <NeedsAttentionRow application={applicationById.get(item.id)} archiveDisabled={movingIds.has(item.id)} item={item} key={item.id} onArchive={onArchive} onOpen={onOpen} />
+          {items.map((item, index) => (
+            <NeedsAttentionRow application={applicationById.get(item.id)} archiveDisabled={movingIds.has(item.id)} item={item} key={item.id} onArchive={onArchive} onOpen={onOpen} reveal={revealDelay(dueFollowUps.length + index, { base: expanded ? 0 : rowRevealBase })} />
           ))}
         </ul>
       )}
@@ -206,38 +216,58 @@ function NeedsAttention({ preview, followUps, loading, error, today, refreshKey,
   );
 }
 
-function UpcomingInterviewsPreview({ items, loading, error }: { items: OverviewData["upcomingInterviews"]["items"]; loading: boolean; error: boolean }) {
+function UpcomingInterviewsPreview({ items, rowRevealBase, loading, error, applications, onOpen }: {
+  items: OverviewData["upcomingInterviews"]["items"];
+  rowRevealBase: number;
+  loading: boolean;
+  error: boolean;
+  applications: ApplicationRecord[];
+  onOpen: (application: ApplicationRecord) => void;
+}) {
   const timeFormat = useTimeFormat();
+  const applicationById = new Map(applications.map((application) => [application.id, application]));
   return (
     <section className="min-w-0" aria-labelledby="upcoming-preview-title">
       <PreviewHeading
         id="upcoming-preview-title"
-        title="Upcoming Interviews"
+        title="Upcoming interviews"
         action={<Link className={linkClass} href="/interviews">View all <span aria-hidden="true">→</span></Link>}
       />
       {loading ? (
-        <p className="py-6 text-sm text-ink-soft">Loading interviews…</p>
+        <p className="motion-reveal py-6 text-sm text-ink-soft">Loading interviews…</p>
       ) : error ? (
-        <p className="py-6 text-sm text-ink-soft">Preview unavailable.</p>
+        <p className="motion-reveal py-6 text-sm text-ink-soft">Preview unavailable.</p>
       ) : items.length === 0 ? (
-        <p className="py-6 text-sm text-ink-soft">All caught up — no interviews on the horizon.</p>
+        <p className="motion-reveal py-6 text-sm text-ink-soft">All caught up — no interviews on the horizon.</p>
       ) : (
-        <div className="divide-y divide-line/70">
-          {items.slice(0, 3).map((item) => (
-            <article key={item.id} className="min-w-0 py-4 first:pt-5">
-              <p className="text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time, timeFormat)}`}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></p>
-              <h3 className="mt-1 break-words text-sm font-semibold leading-5">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></h3>
-            </article>
-          ))}
-        </div>
+        <ul className="divide-y divide-line/70">
+          {items.slice(0, 3).map((item, index) => {
+            const application = applicationById.get(item.applicationId);
+            // Rows match Needs attention: the same inset and hover, and they open the application.
+            return (
+              <li key={item.id} className="motion-reveal min-w-0" style={revealDelay(index, { base: rowRevealBase })}>
+                <button
+                  className="block w-full min-w-0 rounded-nook-sm px-2 py-4 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest disabled:hover:bg-transparent"
+                  disabled={!application}
+                  onClick={() => { if (application) onOpen(application); }}
+                  type="button"
+                >
+                  <span className="block text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time, timeFormat)}`}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></span>
+                  <span className="mt-1 block break-words font-serif text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </section>
   );
 }
 
-export function DashboardOverview({ today, refreshKey, expandAttention, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
+export function DashboardOverview({ today, refreshKey, stale, expandAttention, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
   today: string;
   refreshKey: unknown;
+  stale: { data: StaleApplicationsData | null; error: boolean };
   expandAttention: boolean;
   applications: ApplicationRecord[];
   movingIds: ReadonlySet<string>;
@@ -246,8 +276,11 @@ export function DashboardOverview({ today, refreshKey, expandAttention, applicat
   onFollowUpDone: (application: ApplicationRecord) => void;
 }) {
   const staleApplicationThreshold = useSettings().staleApplicationThreshold;
-  const [result, setResult] = useState<{ today: string; threshold: number; data: OverviewData } | null>(null);
+  const [result, setResult] = useState<{ today: string; threshold: number; data: OverviewData; rowRevealBase: number } | null>(null);
   const [error, setError] = useState(false);
+  const openedAt = useRef(0);
+
+  useEffect(() => { openedAt.current = performance.now(); }, []);
 
   useEffect(() => {
     if (!today) return;
@@ -259,7 +292,9 @@ export function DashboardOverview({ today, refreshKey, expandAttention, applicat
         return response.json() as Promise<OverviewData>;
       })
       .then((overview) => {
-        setResult({ today, threshold: staleApplicationThreshold, data: overview });
+        // Rows keep their place just behind the cards however long loading takes; late data doesn't wait again.
+        const rowRevealBase = Math.max(0, Math.round(ROW_REVEAL_START_MS - (performance.now() - openedAt.current)));
+        setResult({ today, threshold: staleApplicationThreshold, data: overview, rowRevealBase });
         setError(false);
       })
       .catch((reason: unknown) => {
@@ -294,10 +329,11 @@ export function DashboardOverview({ today, refreshKey, expandAttention, applicat
           onFollowUpDone={onFollowUpDone}
           onOpen={onOpen}
           preview={data?.staleApplications ?? []}
-          refreshKey={refreshKey}
+          rowRevealBase={result?.rowRevealBase ?? 0}
+          full={stale}
           today={today}
         />
-        <UpcomingInterviewsPreview items={data?.upcomingInterviews.items ?? []} loading={loading} error={error} />
+        <UpcomingInterviewsPreview applications={applications} rowRevealBase={result?.rowRevealBase ?? 0} error={error} items={data?.upcomingInterviews.items ?? []} loading={loading} onOpen={onOpen} />
       </div>
     </section>
   );

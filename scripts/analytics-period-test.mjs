@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { analyticsCohortLabel, analyticsPeriodRange, dateFromParts, monthEnd, shiftMonth } from "../src/lib/analytics-period.ts";
+import { analyticsBucketRange, analyticsCohortLabel, analyticsPeriodRange, dateFromParts, monthEnd, shiftMonth } from "../src/lib/analytics-period.ts";
 
 test("current periods use the supplied calendar day", () => {
   const today = "2026-01-15";
@@ -23,4 +23,14 @@ test("year 9999 ranges end on their final valid calendar day", () => {
   assert.equal(monthEnd(9999, 12), "9999-12-31");
   assert.equal(analyticsCohortLabel({ startDate: "9999-12-01", endDate: "9999-12-31" }, "CUSTOM_MONTH", "9999"), "December");
   assert.equal(dateFromParts(42, 0, 1).toISOString(), "0042-01-01T00:00:00.000Z");
+});
+
+test("trend bars link to their own week or month within the period", () => {
+  const currentMonth = { startDate: "2026-09-01", endDate: "2026-09-30" };
+  assert.deepEqual(analyticsBucketRange({ startDate: "2026-09-14", endDate: "2026-09-20" }, currentMonth), { startDate: "2026-09-14", endDate: "2026-09-20" });
+  const partialMonth = { startDate: "2026-09-01", endDate: "2026-09-16" };
+  assert.deepEqual(analyticsBucketRange({ startDate: "2026-09-14", endDate: "2026-09-20" }, partialMonth), { startDate: "2026-09-14", endDate: "2026-09-16" }, "The current week stops at today");
+  const currentYear = { startDate: "2026-01-01", endDate: "2026-09-16" };
+  assert.deepEqual(analyticsBucketRange({ startDate: "2026-02-01", endDate: "2026-02-28" }, currentYear), { startDate: "2026-02-01", endDate: "2026-02-28" });
+  assert.deepEqual(analyticsBucketRange({ startDate: "2026-09-01", endDate: "2026-09-30" }, currentYear), { startDate: "2026-09-01", endDate: "2026-09-16" }, "The current month stops at today");
 });

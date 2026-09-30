@@ -10,7 +10,7 @@ const mutationHeaders = { Origin: origin, "Content-Type": "application/json" };
 const prisma = new PrismaClient();
 const post = (path, body) => fetch(`${base}${path}`, { method: "POST", headers: mutationHeaders, body: JSON.stringify(body) });
 const input = (role) => ({ company: "Backup API test", role, status: "APPLIED", appliedDate: "2026-09-24" });
-const settings = { theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15, motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true };
+const settings = { theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15, motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false };
 const backup = (applications) => ({ version: 1, applications, settings });
 const record = (role) => ({ id: randomUUID(), company: "Backup API test", role, status: "APPLIED", source: null,
   appliedDate: "2026-09-24T00:00:00.000Z", followUpDate: null, followUpNote: null, interviewDatePromptDismissed: true, interviews: [], contacts: [],
@@ -134,7 +134,7 @@ try {
   assert.equal((await changedForUndo.json()).application.revision, 1);
   await assertValidationIssues(await post("/api/applications/import", { ...backup([]), version: 2 }), ["version"]);
   await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, startupPage: undefined } }), ["settings.startupPage"]);
-  await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, allApplicationsExpanded: undefined } }), ["settings.allApplicationsExpanded"]);
+  await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, archivedExpanded: undefined } }), ["settings.archivedExpanded"]);
   await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, motion: "reduced" } }), ["settings.motion"]);
   await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, timeFormat: undefined } }), ["settings.timeFormat"]);
   await assertValidationIssues(await post("/api/applications/import", { ...backup([]), settings: { ...settings, timeFormat: "36h" } }), ["settings.timeFormat"]);
@@ -147,6 +147,8 @@ try {
   await assertValidationIssues(await post("/api/applications/import", backup([{ ...record("missing transition"), events: [{ ...record("event").events[0], fromStatus: undefined }] }])), ["applications[0].events[0].fromStatus"]);
   assert.equal(await prisma.application.count(), 1, "Outdated backups must not create records");
   assert.equal((await post("/api/applications/import", { version: 1, applications: [], settings: { ...settings, startupPage: "interviews", staleApplicationThreshold: 30 } })).status, 201);
+  assert.equal((await post("/api/applications/import", { ...backup([]), settings: { ...settings, startupPage: "table" } })).status, 201);
+  assert.equal((await post("/api/applications/import", { ...backup([]), settings: { ...settings, startupPage: "analytics" } })).status, 400);
   assert.equal((await post("/api/applications/import", { ...backup([]), settings: { ...settings, motion: "on" } })).status, 201);
   assert.equal((await post("/api/applications/import", { ...backup([]), settings: { ...settings, motion: "off" } })).status, 201);
   assert.equal((await post("/api/applications/import", { version: 1, applications: [], settings: { ...settings, staleApplicationThreshold: 14 } })).status, 400);
@@ -154,12 +156,13 @@ try {
   assert.equal((await post("/api/applications/import", [])).status, 400);
   assert.equal((await post("/api/applications/import", backup([]))).status, 201);
   assert.equal((await post("/api/applications/import", backup([{ ...complete, id: randomUUID(), events: [{ ...initial, id: randomUUID(), toStatus: null, detail: null }] }]))).status, 201, "Incomplete legacy history remains importable");
-  // A save from before board colors were removed and before the time format setting existed.
+  // A save from before board colors and the sidebar application list were removed, and before the time format setting existed.
   const { timeFormat: _timeFormat, ...olderSettings } = settings;
-  await prisma.settings.update({ where: { id: 1 }, data: { value: JSON.stringify({ ...olderSettings, theme: "dark", boards: [{ status: "APPLIED", color: "rose" }] }) } });
+  await prisma.settings.update({ where: { id: 1 }, data: { value: JSON.stringify({ ...olderSettings, theme: "dark", boards: [{ status: "APPLIED", color: "rose" }], allApplicationsExpanded: false }) } });
   const legacySettings = await (await fetch(`${base}/api/settings`)).json();
   assert.equal(legacySettings.settings.theme, "dark", "Saved settings keep their values when they still carry board colors");
   assert.equal("boards" in legacySettings.settings, false);
+  assert.equal("allApplicationsExpanded" in legacySettings.settings, false);
   assert.equal(legacySettings.settings.timeFormat, "system", "Saves from before the time format setting follow the browser's clock");
   const beforeSettings = await (await fetch(`${base}/api/settings`)).json();
   const changedSettingsResponse = await fetch(`${base}/api/settings`, { method: "PATCH", headers: mutationHeaders, body: JSON.stringify({ revision: beforeSettings.revision, changes: { theme: "dark", staleApplicationThreshold: 30 } }) });
@@ -213,6 +216,39 @@ try {
   assert.equal((await fetch(`${base}/dashboard`)).status, 200, "Rendering a page must work with expired snapshots");
   assert.equal(await prisma.undoSnapshot.count({ where: { token: secondToken } }), 1, "Reads must not clean up expired snapshots");
   assert.equal((await post(`/api/applications/${seedId}/restore`, { token: secondToken })).status, 404);
+
+  // Bulk delete removes the whole selection in one transaction, and one restore brings all of it back.
+  const bulkCreated = [];
+  for (const name of ["bulk one", "bulk two", "bulk kept"]) {
+    const response = await post("/api/applications", input(name));
+    assert.equal(response.status, 201);
+    bulkCreated.push((await response.json()).application);
+  }
+  const [bulkOne, bulkTwo, bulkKept] = bulkCreated;
+  assert.equal((await post("/api/applications/bulk-delete", { ids: [] })).status, 400);
+  assert.equal((await post("/api/applications/bulk-delete", { ids: [bulkOne.id, bulkOne.id] })).status, 400, "Bulk delete IDs must be unique");
+  const bulkDeleted = await post("/api/applications/bulk-delete", { ids: [bulkOne.id, bulkTwo.id, "already-gone"] });
+  assert.equal(bulkDeleted.status, 200);
+  const bulkDelete = await bulkDeleted.json();
+  assert.deepEqual([...bulkDelete.deletedIds].sort(), [bulkOne.id, bulkTwo.id].sort(), "IDs already gone count as done and are not reported as deleted");
+  assert.equal(await prisma.application.count({ where: { id: { in: [bulkOne.id, bulkTwo.id] } } }), 0);
+  assert.equal(await prisma.application.count({ where: { id: bulkKept.id } }), 1, "Bulk delete leaves unselected applications alone");
+  assert.equal((await post(`/api/applications/${bulkOne.id}/restore`, { token: bulkDelete.token })).status, 404, "A single restore cannot take one application out of a bulk delete");
+  const bulkRestored = await post("/api/applications/bulk-restore", { token: bulkDelete.token, ids: bulkDelete.deletedIds });
+  assert.equal(bulkRestored.status, 201);
+  assert.deepEqual((await bulkRestored.json()).applications.map(({ id }) => id).sort(), [bulkOne.id, bulkTwo.id].sort());
+  assert.equal((await prisma.applicationEvent.count({ where: { applicationId: bulkOne.id } })) > 0, true, "Bulk restore keeps status history");
+  assert.equal((await post("/api/applications/bulk-restore", { token: bulkDelete.token, ids: bulkDelete.deletedIds })).status, 404, "A bulk restore can be used once");
+
+  const expiringDelete = await (await post("/api/applications/bulk-delete", { ids: [bulkOne.id, bulkTwo.id] })).json();
+  await prisma.undoSnapshot.updateMany({ where: { token: `${expiringDelete.token}:${bulkTwo.id}` }, data: { expiresAt: new Date(0) } });
+  assert.equal((await post("/api/applications/bulk-restore", { token: expiringDelete.token, ids: expiringDelete.deletedIds })).status, 404, "An expired snapshot fails the whole restore");
+  assert.equal(await prisma.application.count({ where: { id: { in: [bulkOne.id, bulkTwo.id] } } }), 0, "A failed bulk restore restores nothing");
+
+  const collidingDelete = await (await post("/api/applications/bulk-delete", { ids: [bulkKept.id] })).json();
+  await prisma.application.create({ data: { id: bulkKept.id, company: "Collision", role: "Collision", appliedDate: new Date() } });
+  assert.equal((await post("/api/applications/bulk-restore", { token: collidingDelete.token, ids: collidingDelete.deletedIds })).status, 409);
+  await prisma.application.delete({ where: { id: bulkKept.id } });
 
   const restoreCleanupCreated = await post("/api/applications", input("expired restore cleanup"));
   assert.equal(restoreCleanupCreated.status, 201);

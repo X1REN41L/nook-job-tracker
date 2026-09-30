@@ -92,7 +92,7 @@ test("archives a focused application and restores it from Archive", async ({ pag
   const archivedResponse = page.waitForResponse((response) =>
     response.request().method() === "PATCH" && response.url().endsWith(`/api/applications/${application.id}`),
   );
-  await page.keyboard.press("Alt+a");
+  await page.keyboard.press("e");
   const archived = await archivedResponse;
   expect(archived.status()).toBe(200);
   expect((await archived.json()).application.archived).toBe(true);
@@ -111,20 +111,20 @@ test("archives a focused application and restores it from Archive", async ({ pag
   await expect(page.getByLabel(`Open or move ${application.role} at ${application.company}`, { exact: true })).toBeVisible();
 });
 
-test("the slash shortcut does nothing on the board and leaves a collapsed sidebar collapsed", async ({ page, request }) => {
+test("the slash shortcut focuses board search and leaves a collapsed sidebar collapsed", async ({ page, request }) => {
   await resetSettings(request, { sidebarCollapsed: true });
   await gotoReady(page, "/jobs");
   await expect(page.getByRole("button", { name: "Expand sidebar", exact: true })).toBeVisible();
 
   await page.keyboard.press("/");
 
-  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("INPUT");
+  await expect(page.getByRole("searchbox", { name: "Search company or role", exact: true })).toBeFocused();
   await expect(page.getByRole("button", { name: "Expand sidebar", exact: true })).toBeVisible();
   expect((await readSettings(request)).sidebarCollapsed).toBe(true);
 });
 
 test("server settings appear in the first sidebar and board DOM", async ({ page, request }) => {
-  await resetSettings(request, { sidebarCollapsed: true, allApplicationsExpanded: false, motion: "off", theme: "dark" });
+  await resetSettings(request, { sidebarCollapsed: true, motion: "off", theme: "dark" });
   await page.addInitScript(() => {
     const observer = new MutationObserver(() => {
       const workspace = document.querySelector(".app-workspace");
@@ -146,7 +146,9 @@ test("server settings appear in the first sidebar and board DOM", async ({ page,
 test("rapid sidebar toggles preserve the final setting and collapse restores focus", async ({ page, request }) => {
   const application = await createApplication(request);
   await page.goto("/jobs");
-  await page.getByRole("button", { name: `Open ${application.role} at ${application.company}` }).focus();
+  await expect(page.getByRole("button", { name: `Open or move ${application.role} at ${application.company}` })).toBeVisible();
+  // Focus inside the open sidebar moves to Expand sidebar when the sidebar collapses under it.
+  await page.getByRole("separator", { name: "Resize sidebar" }).focus();
   await page.keyboard.press("ControlOrMeta+Shift+s");
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeFocused();
   await page.keyboard.press("ControlOrMeta+Shift+s");

@@ -116,6 +116,35 @@ test("the table filters from the address, changes status in bulk, and undoes the
   await expect(page.getByRole("dialog", { name: first.role, exact: true })).toBeVisible();
 });
 
+test("the table deletes selected applications after confirming, and one Undo restores them all", async ({ page, request }) => {
+  const first = await createApplication(request);
+  const second = await createApplication(request);
+  const kept = await createApplication(request, "REJECTED");
+  await gotoReady(page, "/table?status=APPLIED");
+
+  await page.getByRole("checkbox", { name: "Select all shown applications" }).check();
+  const bulk = page.getByRole("group", { name: "Bulk actions" });
+  await bulk.getByRole("button", { name: "Delete", exact: true }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Delete 2 applications?" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(bulk.getByRole("button", { name: "Delete", exact: true })).toBeFocused();
+  for (const { id } of [first, second]) expect((await request.get(`/api/applications/${id}`)).status()).toBe(200);
+
+  await bulk.getByRole("button", { name: "Delete", exact: true }).click();
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  const toast = page.locator(".nook-toast-wrap.nook-toast-show");
+  await expect(toast).toContainText("Deleted 2 applications");
+  for (const { id } of [first, second]) expect((await request.get(`/api/applications/${id}`)).status()).toBe(404);
+  expect((await readApplication(request, kept.id)).status).toBe("REJECTED");
+  await expect(page.getByRole("button", { name: first.role, exact: true })).toHaveCount(0);
+
+  await toast.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator(".nook-toast-wrap.nook-toast-show")).toContainText("Restored 2 applications");
+  for (const { id } of [first, second]) expect((await readApplication(request, id)).status).toBe("APPLIED");
+});
+
 test("the command palette opens applications and pages", async ({ page, request }) => {
   const application = await createApplication(request);
   await gotoReady(page, "/dashboard");
@@ -128,16 +157,24 @@ test("the command palette opens applications and pages", async ({ page, request 
   await search.fill(application.role);
   await page.keyboard.press("Enter");
   await expect(palette).toHaveCount(0);
-  await expect(page.getByRole("dialog", { name: application.role, exact: true })).toBeVisible();
+  const panel = page.getByRole("dialog", { name: application.role, exact: true });
+  await expect(panel).toBeVisible();
+  await page.keyboard.press("e");
+  await expect(panel.getByRole("form", { name: "Edit details" })).toBeVisible();
+  await expect(panel.getByLabel("Company", { exact: true })).toBeFocused();
+  await expect(panel.getByLabel("Company", { exact: true })).toHaveValue(application.company);
   await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
 
   await page.keyboard.press(`${modifier}+k`);
-  await search.fill("applications table");
+  await search.fill("job board");
+  await expect(palette.getByRole("option", { name: /Job Board/ })).toContainText("G then J");
+  await search.fill("table");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/table$/);
 });
 
-test("the old Stale Applications address opens the full Needs Attention list", async ({ page }) => {
+test("the old Stale Applications address opens the full Needs attention list", async ({ page }) => {
   await page.goto("/dashboard/stale");
   await expect(page).toHaveURL(/\/dashboard\?attention=all$/);
   await expect(page.getByRole("button", { name: "Show fewer", exact: true })).toBeVisible();

@@ -2,9 +2,8 @@
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { Status } from "@prisma/client";
 import Link from "next/link";
-import { Archive, CalendarClock, ChartNoAxesCombined, Columns3, LayoutDashboard, PanelsTopLeft, Settings, Table2, type LucideIcon } from "lucide-react";
+import { Archive, CalendarClock, ChartNoAxesCombined, Columns3, LayoutDashboard, PanelLeftClose, PanelLeftOpen, PanelsTopLeft, Settings, Table2, type LucideIcon } from "lucide-react";
 import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
@@ -15,9 +14,7 @@ import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
 type ApplicationSidebarProps = {
   boards: BoardConfiguration[];
-  sidebarItems: ApplicationRecord[];
   archivedItems: ApplicationRecord[];
-  totalApplications: number;
   upcomingInterviewCount: number;
   collapsed: boolean;
   width: number;
@@ -26,23 +23,17 @@ type ApplicationSidebarProps = {
   page: ApplicationPageName;
   dashboardSection?: DashboardSection;
   archivedExpanded: boolean;
-  allApplicationsExpanded: boolean;
   movingIds: ReadonlySet<string>;
-  searchTerm: string;
-  activeFilter: "all" | Status;
-  headingRef: RefObject<HTMLHeadingElement | null>;
-  searchInputRef: RefObject<HTMLInputElement | null>;
+  /** Days since activity for stale applications, archived ones included. */
+  staleDays: ReadonlyMap<string, number>;
   settingsTriggerRef: RefObject<HTMLButtonElement | null>;
   focusExpandOnCollapseRef: RefObject<boolean>;
-  onSearchTermChange: (value: string) => void;
-  onFilterChange: (filter: "all" | Status) => void;
   onToggleSidebar: () => void;
   onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onResizeKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   onOpenArchive: () => void;
   onOpenSettings: () => void;
   onToggleArchived: () => void;
-  onToggleAllApplications: () => void;
   onOpen: (application: ApplicationRecord) => void;
   onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
   onRestore: (application: ApplicationRecord) => Promise<void>;
@@ -50,20 +41,30 @@ type ApplicationSidebarProps = {
 
 const navRowClass = "box-border flex h-9 w-full min-w-0 shrink-0 cursor-pointer items-center rounded-nook-sm text-left text-sm motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 const mainNavItemClass = `sidebar-nav-row ${navRowClass} p-0`;
+/** Every sidebar glyph shares one size and stroke so the rail reads as a single set. */
+const NAV_ICON_SIZE = 18;
+const NAV_ICON_STROKE = 1.75;
+
+function navItemStateClass(active: boolean) {
+  return active ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink";
+}
+
+/** Section links under a page (Overview, Analytics) mark their selection with an outline, so the page tile stays the only solid one. */
+function subNavItemStateClass(active: boolean) {
+  return active ? "font-semibold text-forest ring-1 ring-inset ring-forest" : "text-ink-soft hover:bg-cream-2 hover:text-ink";
+}
 
 function MainNavIcon({ Icon }: { Icon: LucideIcon }) {
   return (
     <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center">
-      <Icon className="h-4 w-4 shrink-0" size={16} strokeWidth={1.8} />
+      <Icon className="shrink-0" size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} />
     </span>
   );
 }
 
 export function ApplicationSidebar({
   boards,
-  sidebarItems,
   archivedItems,
-  totalApplications,
   upcomingInterviewCount,
   collapsed,
   width,
@@ -72,23 +73,16 @@ export function ApplicationSidebar({
   page,
   dashboardSection = "overview",
   archivedExpanded,
-  allApplicationsExpanded,
   movingIds,
-  searchTerm,
-  activeFilter,
-  headingRef,
-  searchInputRef,
+  staleDays,
   settingsTriggerRef,
   focusExpandOnCollapseRef,
-  onSearchTermChange,
-  onFilterChange,
   onToggleSidebar,
   onResizePointerDown,
   onResizeKeyDown,
   onOpenArchive,
   onOpenSettings,
   onToggleArchived,
-  onToggleAllApplications,
   onOpen,
   onRequestDelete,
   onRestore,
@@ -96,11 +90,7 @@ export function ApplicationSidebar({
   const collapseButtonRef = useRef<HTMLButtonElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   const pendingToggleFocusRef = useRef<boolean | null>(null);
-  const allApplicationsContentId = useId();
-  const allApplicationsHeadingId = useId();
-  const activeApplicationsCount = totalApplications - archivedItems.length;
-  const allApplicationsSectionClassName = `sidebar-flex-section sidebar-all-section ${allApplicationsExpanded ? "is-expanded" : "mt-auto"}`;
-  const archivedSectionClassName = `sidebar-flex-section sidebar-archive-section ${archivedExpanded ? "is-expanded" : ""}`;
+  const archivedSectionClassName = `sidebar-flex-section sidebar-archive-section mt-auto ${archivedExpanded ? "is-expanded" : ""}`;
 
   useLayoutEffect(() => {
     if (collapsed && focusExpandOnCollapseRef.current) {
@@ -166,29 +156,32 @@ export function ApplicationSidebar({
               title="Expand sidebar"
               type="button"
             >
-              <PanelChevron direction="right" />
+              <PanelLeftOpen aria-hidden="true" size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} />
             </button>
             <span aria-hidden="true" className="sidebar-brand-logo flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-forest to-forest-deep font-serif text-lg leading-none text-cream">
               <span className="sidebar-brand-initial">N</span>
             </span>
-            <p className="sidebar-reveal ml-3 whitespace-nowrap font-serif text-base font-semibold leading-tight tracking-tight">Nook</p>
+            <div className="sidebar-reveal sidebar-brand-text ml-3 flex min-w-0 flex-1 items-baseline gap-2.5">
+              <p className="shrink-0 whitespace-nowrap font-serif text-base font-semibold leading-tight tracking-tight">Nook</p>
+              <p className="min-w-0 truncate text-xs text-ink-soft">your job search, kept tidy</p>
+            </div>
             <button
               ref={collapseButtonRef}
               aria-label="Collapse sidebar"
-              className="sidebar-header-toggle icon-btn absolute right-[14px] h-8 w-8"
+              className="sidebar-header-toggle icon-btn absolute h-8 w-8"
               onClick={handleToggleSidebar}
               type="button"
             >
-              <PanelChevron direction="left" />
+              <PanelLeftClose aria-hidden="true" size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} />
             </button>
           </div>
 
-          <nav aria-label="Main navigation" className="sidebar-main-nav relative z-10 shrink-0 border-b border-line py-3">
+          <nav aria-label="Main navigation" className="sidebar-main-nav sidebar-nav-divider relative z-10 shrink-0 py-3">
             <div className="flex flex-col gap-1">
               <Link
                 aria-current={page === "dashboard" ? "page" : undefined}
                 aria-label="Dashboard"
-                className={`${mainNavItemClass} ${page === "dashboard" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                className={`${mainNavItemClass} ${navItemStateClass(page === "dashboard")}`}
                 href="/dashboard"
                 title={collapsed ? "Dashboard" : undefined}
               >
@@ -198,7 +191,7 @@ export function ApplicationSidebar({
               <Link
                 aria-current={page === "job-board" ? "page" : undefined}
                 aria-label="Job Board"
-                className={`${mainNavItemClass} ${page === "job-board" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                className={`${mainNavItemClass} ${navItemStateClass(page === "job-board")}`}
                 href="/jobs"
                 title={collapsed ? "Job Board" : undefined}
               >
@@ -207,10 +200,10 @@ export function ApplicationSidebar({
               </Link>
               <Link
                 aria-current={page === "table" ? "page" : undefined}
-                aria-label="Applications Table"
-                className={`${mainNavItemClass} ${page === "table" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                aria-label="Table"
+                className={`${mainNavItemClass} ${navItemStateClass(page === "table")}`}
                 href="/table"
-                title={collapsed ? "Applications Table" : undefined}
+                title={collapsed ? "Table" : undefined}
               >
                 <span className="sidebar-nav-icon"><MainNavIcon Icon={Table2} /></span>
                 <span className="sidebar-reveal ml-3 whitespace-nowrap">Table</span>
@@ -218,7 +211,7 @@ export function ApplicationSidebar({
               <Link
                 aria-current={page === "interviews" ? "page" : undefined}
                 aria-label={`Interviews, ${upcomingInterviewCount} upcoming`}
-                className={`${mainNavItemClass} ${page === "interviews" ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                className={`${mainNavItemClass} ${navItemStateClass(page === "interviews")}`}
                 href="/interviews"
                 title={collapsed ? "Interviews" : undefined}
               >
@@ -235,7 +228,7 @@ export function ApplicationSidebar({
               <button
                 ref={settingsTriggerRef}
                 aria-label="Settings"
-                className={`${mainNavItemClass} text-ink-soft hover:bg-cream-2 hover:text-ink`}
+                className={`${mainNavItemClass} ${navItemStateClass(false)}`}
                 onClick={onOpenSettings}
                 title={collapsed ? "Settings" : undefined}
                 type="button"
@@ -248,130 +241,24 @@ export function ApplicationSidebar({
 
           <div className={`sidebar-content flex min-h-0 flex-1 flex-col ${page === "dashboard" ? "sidebar-dashboard-content" : ""}`} inert={collapsed && page !== "dashboard"}>
 
-          {page === "job-board" && (
-            <>
-              <div className={allApplicationsSectionClassName}>
-                <div className={`shrink-0 border-b px-4.5 py-3 ${allApplicationsExpanded ? "border-transparent" : "border-line"}`}>
-                  <h2 className="font-serif text-base font-semibold outline-none" id={allApplicationsHeadingId} ref={headingRef} tabIndex={-1}>
-                    <button
-                      aria-controls={allApplicationsContentId}
-                      aria-expanded={allApplicationsExpanded}
-                      className="flex w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
-                      onClick={onToggleAllApplications}
-                      type="button"
-                    >
-                      <span>All applications</span>
-                      <span className="rounded-full border border-line bg-cream px-2 py-0.5 font-sans text-xs font-medium text-ink-soft">
-                        {activeApplicationsCount}
-                      </span>
-                      <svg
-                        aria-hidden="true"
-                        className={`ml-auto text-ink-soft motion-chevron ${allApplicationsExpanded ? "rotate-180" : ""}`}
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  </h2>
-                </div>
-
-                <section
-                  aria-labelledby={allApplicationsHeadingId}
-                  aria-hidden={!allApplicationsExpanded}
-                  className="sidebar-expandable-body min-h-0 flex flex-1 flex-col"
-                  id={allApplicationsContentId}
-                  inert={!allApplicationsExpanded}
-                >
-                  <div className="shrink-0 border-b border-line px-4.5 pb-4 pt-2.5">
-                    <div className="relative">
-                      <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                        <circle cx="11" cy="11" r="7" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                      </svg>
-                      <input
-                        ref={searchInputRef}
-                        aria-label="Search company or role"
-                        className="input pl-9 text-sm"
-                        onChange={(e) => onSearchTermChange(e.target.value)}
-                        placeholder="Search company or role…"
-                        type="text"
-                        value={searchTerm}
-                      />
-                    </div>
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      <button
-                        aria-pressed={activeFilter === "all"}
-                        className={`shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === "all" ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
-                        onClick={() => onFilterChange("all")}
-                        tabIndex={0}
-                        type="button"
-                      >
-                        All
-                      </button>
-                      {boards.map((board) => (
-                        <button
-                          key={board.status}
-                          aria-pressed={activeFilter === board.status}
-                          className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper ${activeFilter === board.status ? "border-forest bg-forest text-cream" : "border-line bg-cream text-ink-soft hover:bg-cream-2"}`}
-                          onClick={() => onFilterChange(board.status)}
-                          tabIndex={0}
-                          type="button"
-                        >
-                          <span className={`status-dot ${boardDot(boards, board.status)} ${activeFilter === board.status ? "ring-1 ring-cream" : ""}`} />{board.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="scrollbar-styled min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
-                    {sidebarItems.length === 0 ? (
-                      <p className="px-3 py-10 text-center text-sm leading-6 text-ink-soft">
-                        {totalApplications === 0 ? "No applications yet. Add your first job to see it here." : "No applications match your search."}
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-1">
-                        {sidebarItems.map((application) => (
-                          <SidebarApplicationRow
-                            key={application.id}
-                            application={application}
-                            boards={boards}
-                            disabled={movingIds.has(application.id)}
-                            onOpen={onOpen}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </section>
-              </div>
-
-              {!collapsed && (
-                <ArchivedSection
-                  boards={boards}
-                  applications={archivedItems}
-                  className={archivedSectionClassName}
-                  expanded={archivedExpanded}
-                  movingIds={movingIds}
-                  onOpen={onOpen}
-                  onRequestDelete={onRequestDelete}
-                  onRestore={onRestore}
-                  onToggle={onToggleArchived}
-                />
-              )}
-
-            </>
+          {page === "job-board" && !collapsed && (
+            <ArchivedSection
+              boards={boards}
+              applications={archivedItems}
+              className={archivedSectionClassName}
+              expanded={archivedExpanded}
+              movingIds={movingIds}
+              staleDays={staleDays}
+              onOpen={onOpen}
+              onRequestDelete={onRequestDelete}
+              onRestore={onRestore}
+              onToggle={onToggleArchived}
+            />
           )}
 
           {page === "dashboard" && (
             <nav aria-label="Dashboard sections" className="sidebar-main-nav relative z-10 min-h-0 overflow-y-auto py-4">
-              {!collapsed && <h2 className="px-[11px] font-serif text-base font-semibold">Dashboard</h2>}
+              {!collapsed && <h2 className="px-[9px] font-serif text-base font-semibold">Dashboard</h2>}
               <div className={`${collapsed ? "" : "mt-2"} flex flex-col gap-1`}>
                 {([
                   { section: "overview", label: "Overview", href: "/dashboard", icon: PanelsTopLeft },
@@ -381,7 +268,7 @@ export function ApplicationSidebar({
                     key={section}
                     aria-current={dashboardSection === section ? "page" : undefined}
                     aria-label={label}
-                    className={`${mainNavItemClass} ${dashboardSection === section ? "bg-forest font-semibold text-cream" : "text-ink-soft hover:bg-cream-2 hover:text-ink"}`}
+                    className={`${mainNavItemClass} ${subNavItemStateClass(dashboardSection === section)}`}
                     href={href}
                     title={collapsed ? label : undefined}
                   >
@@ -397,49 +284,13 @@ export function ApplicationSidebar({
   );
 }
 
-function SidebarApplicationRow({ application, boards, disabled, draggable = true, onOpen }: {
-  application: ApplicationRecord;
-  boards: BoardConfiguration[];
-  disabled: boolean;
-  draggable?: boolean;
-  onOpen: (application: ApplicationRecord) => void;
-}) {
-  const { listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `sidebar:${application.id}`,
-    data: { applicationId: application.id, label: `${application.role} at ${application.company}`, source: "sidebar" },
-    disabled: disabled || !draggable,
-  });
-
-  return (
-    <button
-      ref={setNodeRef}
-      data-application-id={application.id}
-      style={{ transform: CSS.Translate.toString(transform) }}
-      className={`flex w-full items-center gap-2.5 rounded-nook-sm px-2.5 py-2 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest ${draggable ? "touch-none cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "opacity-0 transition-none" : ""}`}
-      onClick={() => { if (!disabled && !isDragging) onOpen(application); }}
-      type="button"
-      {...(draggable ? listeners : {})}
-      aria-label={`Open ${application.role} at ${application.company}`}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" && !disabled && !isDragging) { event.preventDefault(); onOpen(application); }
-      }}
-    >
-      <span className={`status-dot ${boardDot(boards, application.status)}`} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{application.role}</span>
-        <span className="block truncate text-xs text-ink-soft">{application.company}</span>
-      </span>
-      <span className="shrink-0 text-xs text-ink-soft">{formatCalendarDate(application.appliedDate)}</span>
-    </button>
-  );
-}
-
-function ArchivedSection({ applications, boards, className, expanded, movingIds, onOpen, onRequestDelete, onRestore, onToggle }: {
+function ArchivedSection({ applications, boards, className, expanded, movingIds, staleDays, onOpen, onRequestDelete, onRestore, onToggle }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
   className: string;
   expanded: boolean;
   movingIds: ReadonlySet<string>;
+  staleDays: ReadonlyMap<string, number>;
   onOpen: (application: ApplicationRecord) => void;
   onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
   onRestore: (application: ApplicationRecord) => Promise<void>;
@@ -457,7 +308,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingIds,
         <button
           aria-controls={contentId}
           aria-expanded={expanded}
-          className="flex w-full items-center gap-2 px-4.5 py-3 text-left motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
+          className="flex w-full items-center gap-2 px-4.5 py-3 text-left motion-interactive hover:bg-cream-2 md:w-[calc(100%-0.375rem)] md:pr-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
           onClick={onToggle}
           type="button"
         >
@@ -482,7 +333,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingIds,
         </button>
       </div>
 
-      <div aria-hidden={!expanded} className="sidebar-expandable-body scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2" id={contentId} inert={!expanded}>
+      <div aria-hidden={!expanded} className="sidebar-expandable-body scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 md:mr-1.5 md:pr-1.5" id={contentId} inert={!expanded}>
           {applications.length === 0 ? (
             <p className="px-3 py-4 text-center text-xs leading-5 text-ink-soft">No archived applications.</p>
           ) : (
@@ -493,6 +344,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingIds,
                   key={application.id}
                   application={application}
                   disabled={movingIds.has(application.id)}
+                  staleDays={staleDays.get(application.id)}
                   onOpen={onOpen}
                   onRequestDelete={onRequestDelete}
                   onRestore={onRestore}
@@ -505,10 +357,11 @@ function ArchivedSection({ applications, boards, className, expanded, movingIds,
   );
 }
 
-function ArchivedRow({ application, boards, disabled, onOpen, onRequestDelete, onRestore }: {
+function ArchivedRow({ application, boards, disabled, staleDays, onOpen, onRequestDelete, onRestore }: {
   application: ApplicationRecord;
   boards: BoardConfiguration[];
   disabled: boolean;
+  staleDays: number | undefined;
   onOpen: (application: ApplicationRecord) => void;
   onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
   onRestore: (application: ApplicationRecord) => Promise<void>;
@@ -519,15 +372,16 @@ function ArchivedRow({ application, boards, disabled, onOpen, onRequestDelete, o
     disabled,
   });
 
+  // One line per row: Restore and Delete take the date's place on hover or keyboard focus.
   return (
     <div
       ref={setNodeRef}
       data-application-id={application.id}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className={`rounded-nook-sm motion-interactive hover:bg-cream-2 ${isDragging ? "opacity-0 transition-none" : ""}`}
+      className={`group/archived relative rounded-nook-sm motion-interactive hover:bg-cream-2 focus-within:bg-cream-2 ${isDragging ? "opacity-0 transition-none" : ""}`}
     >
       <button
-        className="flex w-full touch-none cursor-grab items-center gap-2.5 px-2.5 py-1 text-left active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
+        className="flex w-full touch-none cursor-grab items-center gap-2.5 rounded-nook-sm px-2.5 py-2 text-left active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
         onClick={() => { if (!disabled && !isDragging) onOpen(application); }}
         type="button"
         {...listeners}
@@ -541,9 +395,12 @@ function ArchivedRow({ application, boards, disabled, onOpen, onRequestDelete, o
           <span className="block truncate text-sm font-semibold">{application.role}</span>
           <span className="block truncate text-xs text-ink-soft">{application.company}</span>
         </span>
-        <span className="shrink-0 text-xs text-ink-soft">{formatCalendarDate(application.appliedDate)}</span>
+        <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-ink-soft transition-opacity duration-150 group-focus-within/archived:opacity-0 group-hover/archived:opacity-0">
+          {formatCalendarDate(application.appliedDate)}
+          {staleDays !== undefined && <span className="rounded-full bg-clay-tint px-1.5 text-[10.5px] font-medium leading-4 text-ink" title="No status update for a while">Stale · {staleDays}d</span>}
+        </span>
       </button>
-      <div className="flex justify-end gap-2 px-2.5 pb-1">
+      <div className="absolute inset-y-1 right-1.5 flex items-center gap-1 rounded-nook-sm bg-cream-2 pl-2 opacity-0 transition-opacity duration-150 group-focus-within/archived:opacity-100 group-hover/archived:opacity-100">
         <button
           className="rounded px-1.5 py-0.5 text-[11px] font-medium text-forest motion-interactive hover:text-forest-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-50"
           disabled={disabled}
@@ -584,7 +441,7 @@ function SidebarEdgeRail({
   return (
     <div
       ref={setNodeRef}
-      className={`sidebar-edge-rail absolute inset-y-0 left-0 w-[var(--sidebar-rail-width)] motion-interactive ${isOver ? "bg-forest-tint ring-2 ring-inset ring-forest" : ""}`}
+      className={`sidebar-edge-rail absolute inset-y-0 left-0 motion-interactive ${isOver ? "bg-forest-tint ring-2 ring-inset ring-forest" : ""}`}
       inert={!collapsed}
       onPointerDown={(event) => {
         if (collapsed && event.target === event.currentTarget) onRailPointerDown(event);
@@ -613,20 +470,10 @@ function SidebarArchiveRailButton({ archivedCount, isOver, onOpenArchive }: { ar
       title={`Archive (${archivedCount})`}
       type="button"
     >
-      <Archive aria-hidden="true" size={19} strokeWidth={1.8} />
+      <Archive aria-hidden="true" size={NAV_ICON_SIZE} strokeWidth={NAV_ICON_STROKE} />
       <span aria-hidden="true" className="absolute -right-1 -top-1 min-w-4 rounded-full border border-line bg-paper px-1 text-center text-[9px] leading-4 text-ink">
         {archivedCount}
       </span>
     </button>
-  );
-}
-
-function PanelChevron({ direction, size = 17 }: { direction: "left" | "right"; size?: number }) {
-  return (
-    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <line x1="15" y1="4" x2="15" y2="20" />
-      <polyline points={direction === "right" ? "9 9 12 12 9 15" : "11 9 8 12 11 15"} />
-    </svg>
   );
 }

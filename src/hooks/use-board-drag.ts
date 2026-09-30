@@ -25,7 +25,7 @@ export const SIDEBAR_EDGE_DROP_ID = "sidebar-edge";
 // Touch drags wait briefly so scrolling the board and sidebar still works.
 export const TOUCH_ACTIVATION_CONSTRAINT = { delay: 200, tolerance: 6 };
 const SIDEBAR_EDGE_DWELL_MS = 450;
-type DragSource = "board" | "sidebar" | "archived";
+type DragSource = "board" | "archived";
 
 const kanbanKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
   const activeData = args.context.active?.data.current;
@@ -57,9 +57,6 @@ const kanbanKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
 
 const collisionDetectionStrategy: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
-  if (args.active.data.current?.source === "sidebar") {
-    return pointerCollisions.filter(({ id }) => id === ARCHIVED_DROP_ID);
-  }
   const edgeCollision = pointerCollisions.find(({ id }) => id === SIDEBAR_EDGE_DROP_ID);
   return edgeCollision ? [edgeCollision] : closestCorners(args);
 };
@@ -69,7 +66,6 @@ export function useBoardDrag({ sidebarCollapsed, onDrop }: {
   onDrop: (event: DragEndEvent) => Promise<void>;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [activeDragSource, setActiveDragSource] = useState<DragSource | null>(null);
   const [isPointerNearRail, setIsPointerNearRail] = useState(false);
   const [temporarilyExpanded, setTemporarilyExpanded] = useState(false);
   const sidebarEdgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -141,14 +137,13 @@ export function useBoardDrag({ sidebarCollapsed, onDrop }: {
     const data = event.active.data.current;
     setActiveId(String(data?.applicationId ?? event.active.id));
     const source = (data?.source as DragSource | undefined) ?? "board";
-    setActiveDragSource(source);
-    applicationDrag.current = source === "board" || source === "sidebar" || source === "archived";
+    applicationDrag.current = source === "board" || source === "archived";
     document.body.classList.add("nook-dragging");
     dragStartedCollapsed.current = sidebarCollapsed;
     autoExpandedSidebar.current = false;
     setPointerNearRail(false);
     dragStartBoardScrollLeft.current = sidebarCollapsed
-      ? document.querySelector<HTMLElement>(".board-scroll")?.scrollLeft ?? null
+      ? document.querySelector<HTMLElement>(".board-lane")?.scrollLeft ?? null
       : null;
     const activatorEvent = event.activatorEvent as PointerEvent | TouchEvent;
     if ("clientX" in activatorEvent && typeof activatorEvent.clientX === "number" && typeof activatorEvent.clientY === "number") {
@@ -178,7 +173,7 @@ export function useBoardDrag({ sidebarCollapsed, onDrop }: {
       const nearRail = Boolean(railRect && pointerPosition.x >= railRect.left - 16 && pointerPosition.x <= railRect.right + 16 && pointerPosition.y >= railRect.top && pointerPosition.y <= railRect.bottom);
       setPointerNearRail(nearRail);
       if (nearRail && dragStartBoardScrollLeft.current !== null) {
-        const boardScroll = document.querySelector<HTMLElement>(".board-scroll");
+        const boardScroll = document.querySelector<HTMLElement>(".board-lane");
         if (boardScroll) boardScroll.scrollLeft = dragStartBoardScrollLeft.current;
       }
       return;
@@ -197,7 +192,7 @@ export function useBoardDrag({ sidebarCollapsed, onDrop }: {
     const nearRail = pointerPosition.x >= railRect.left - 16 && pointerPosition.x <= railRect.right + 16 && pointerPosition.y >= railRect.top && pointerPosition.y <= railRect.bottom;
     setPointerNearRail(nearRail);
     if (nearRail && dragStartBoardScrollLeft.current !== null) {
-      const boardScroll = document.querySelector<HTMLElement>(".board-scroll");
+      const boardScroll = document.querySelector<HTMLElement>(".board-lane");
       if (boardScroll) boardScroll.scrollLeft = dragStartBoardScrollLeft.current;
     }
     if (!nearRail) {
@@ -218,7 +213,6 @@ export function useBoardDrag({ sidebarCollapsed, onDrop }: {
   function finishDrag() {
     clearSidebarEdgeTimer();
     setActiveId(null);
-    setActiveDragSource(null);
     applicationDrag.current = false;
     document.body.classList.remove("nook-dragging");
     lastPointerPosition.current = null;
@@ -239,7 +233,6 @@ export function useBoardDrag({ sidebarCollapsed, onDrop }: {
   return {
     activeId,
     temporarilyExpanded,
-    activeDragSource,
     sensors,
     collisionDetection,
     autoScroll: !isPointerNearRail,

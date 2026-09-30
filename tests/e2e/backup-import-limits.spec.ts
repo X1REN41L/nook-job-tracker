@@ -6,7 +6,7 @@ import { expect, test, sameOriginMutationHeaders } from "./api-helpers";
 const maxFileBytes = 10 * 1024 * 1024;
 const settings = {
   theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15,
-  motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true,
+  motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false,
 };
 
 test("backup import enforces limits, reviews duplicates, and accepts a near-limit file", async ({ page, request }) => {
@@ -33,7 +33,7 @@ test("backup import enforces limits, reviews duplicates, and accepts a near-limi
     await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
     await page.getByRole("button", { name: "Settings" }).click();
     const dialog = page.getByRole("dialog", { name: "Settings" });
-    await dialog.getByRole("button", { name: "Backup & Restore" }).click();
+    await dialog.getByRole("button", { name: "Backup & restore" }).click();
     const input = dialog.locator('input[type="file"]');
 
     await input.setInputFiles({ name: "oversized.json", mimeType: "application/json", buffer: Buffer.alloc(maxFileBytes + 1, 0x20) });

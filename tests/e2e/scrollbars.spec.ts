@@ -79,18 +79,17 @@ test("keeps board scrollbars compact and stable across themes", async ({ page })
   await createApplications();
   await page.goto("/jobs");
 
-  const applicationList = page.locator(".sidebar-content .scrollbar-styled.overflow-y-auto").nth(0);
   const archiveToggle = page.getByRole("button", { name: "Archived 16", exact: true });
   await archiveToggle.click();
-  const archiveList = page.locator(".sidebar-content .scrollbar-styled.overflow-y-auto").nth(1);
+  // The Archived list is the sidebar's only scrolling list.
+  const archiveList = page.locator(".sidebar-content .scrollbar-styled.overflow-y-auto").first();
   const boardColumnList = page.locator(".board-columns > section > .scrollbar-styled").first();
-  const boardScroll = page.locator(".board-scroll");
+  const boardScroll = page.locator(".board-lane");
 
-  await expect(applicationList).toBeVisible();
   await expect(archiveList).toBeVisible();
   await expect(boardColumnList).toBeVisible();
 
-  const scrollMetrics = async (locator: typeof applicationList) => locator.evaluate((element) => {
+  const scrollMetrics = async (locator: typeof archiveList) => locator.evaluate((element) => {
     const styles = getComputedStyle(element);
     const scrollbar = getComputedStyle(element, "::-webkit-scrollbar");
     return {
@@ -119,11 +118,14 @@ test("keeps board scrollbars compact and stable across themes", async ({ page })
     expect(style.width).toBe("6px");
     expect(style.height).toBe("6px");
     expect(style.gutter).toBe("auto");
-    expect(style.thumb).toBe("rgba(0, 0, 0, 0)");
+    // The hidden thumb is fully transparent but keeps the hover hue, so fading in never passes through black.
+    expect(style.thumb).toMatch(/(?:,\s*0\)|\/\s*0\))$/);
+    expect(style.thumb).not.toBe("rgba(0, 0, 0, 0)");
+    expect(style.color.startsWith("rgba(0, 0, 0, 0)")).toBe(false);
     expect(style.track).toBe("rgba(0, 0, 0, 0)");
   }
 
-  for (const locator of [boardColumnList, applicationList, archiveList]) {
+  for (const locator of [boardColumnList, archiveList]) {
     const before = await locator.evaluate((element) => ({ height: element.clientHeight, scrollHeight: element.scrollHeight }));
     expect(before.scrollHeight).toBeGreaterThan(before.height);
     await locator.evaluate((element) => { element.scrollTop = element.scrollHeight; });
@@ -188,7 +190,7 @@ test("keeps board scrollbars compact and stable across themes", async ({ page })
   expect(darkColumnHoverStyle.color).not.toBe(columnHoverStyle.color);
   expect(await layoutSnapshot(page)).toEqual(darkLayout);
 
-  for (const locator of [boardColumnList, applicationList, archiveList]) {
+  for (const locator of [boardColumnList, archiveList]) {
     expect(await locator.evaluate((element) => element.scrollHeight)).toBeGreaterThan(await locator.evaluate((element) => element.clientHeight));
     await locator.evaluate((element) => { element.scrollTop = element.scrollHeight; });
     expect(await locator.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);

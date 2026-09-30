@@ -1,6 +1,6 @@
 // Adds sample applications that exercise every feature to the running app, keeping its current settings.
 // Dates are relative to today on this machine, in its time zone. Each run adds another copy; to start over,
-// use Delete All Data in Settings first.
+// use Delete all data in Settings first.
 //
 //   node scripts/sample-data.mjs            import into http://127.0.0.1:3000
 //   node scripts/sample-data.mjs --dry-run  print the backup JSON instead
@@ -108,7 +108,7 @@ const applications = [
     notes: [[8, "They asked for an extra coding assessment before the final round."]] }),
   // Same company, two roles (duplicate detection: try adding "Stripe / Software Engineer" again)
   application({ company: "Stripe", role: "Frontend Engineer, Dashboard", source: "Company site", steps: [[5, "APPLIED"]] }),
-  // Last year, for Custom Year analytics
+  // Last year, for Custom year analytics
   application({ company: "Twilio", role: "Software Engineer", source: "LinkedIn", steps: [[300, "APPLIED"], [290, "INTERVIEW"], [280, "REJECTED"]] }),
   application({ company: "Asana", role: "Product Engineer", source: "Referral", steps: [[330, "APPLIED"], [320, "ONLINE_ASSESSMENT"], [305, "OFFER"]] }),
   // Archived

@@ -10,9 +10,12 @@ export async function readSettings() {
 
 export function parseStoredSettings(value: string) {
   try {
-    // Board colors are no longer a setting; drop the key older saves still carry so the rest of the settings survive.
+    // Board colors and the sidebar application list are gone; drop the keys older saves still carry so the rest of the settings survive.
     const stored: unknown = JSON.parse(value);
-    if (stored && typeof stored === "object") delete (stored as { boards?: unknown }).boards;
+    if (stored && typeof stored === "object") {
+      delete (stored as { boards?: unknown }).boards;
+      delete (stored as { allApplicationsExpanded?: unknown }).allApplicationsExpanded;
+    }
     // Saves from before the time format setting keep their other settings and follow the browser's clock.
     return settingsSchema.parse({ timeFormat: "system", ...(stored as object) });
   } catch (error) {

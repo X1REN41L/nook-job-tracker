@@ -44,7 +44,7 @@ async function openDashboard(page: Page) {
 }
 
 async function openDetailsPanel(page: Page, application: { company: string; role: string }) {
-  await page.getByRole("button", { name: `Open ${application.role} at ${application.company}`, exact: true }).click();
+  await page.getByRole("button", { name: `Open or move ${application.role} at ${application.company}`, exact: true }).click();
   const panel = page.getByRole("dialog", { name: application.role, exact: true });
   await expect(panel).toBeVisible();
   return panel;
@@ -160,13 +160,13 @@ test("traps focus in Settings sections in both directions", async ({ page }) => 
     settingsDialog.getByRole("button", { name: "Close settings" }),
     settingsDialog.getByRole("button", { name: "General", exact: true }),
     settingsDialog.getByRole("button", { name: "Shortcuts", exact: true }),
-    settingsDialog.getByRole("button", { name: "Backup & Restore", exact: true }),
+    settingsDialog.getByRole("button", { name: "Backup & restore", exact: true }),
     settingsDialog.getByRole("button", { name: "Use system theme" }),
     settingsDialog.getByRole("button", { name: "Use light theme" }),
     settingsDialog.getByRole("button", { name: "Use dark theme" }),
-    settingsDialog.getByRole("combobox", { name: "New Applications Default Board" }),
-    settingsDialog.getByRole("combobox", { name: "Startup Page" }),
-    settingsDialog.getByRole("combobox", { name: "Stale Application Threshold" }),
+    settingsDialog.getByRole("combobox", { name: "Default board for new applications" }),
+    settingsDialog.getByRole("combobox", { name: "Startup page" }),
+    settingsDialog.getByRole("combobox", { name: "Stale application threshold" }),
     ...["Automatic", "12-hour", "24-hour"].map((name) => settingsDialog.getByRole("group", { name: "Time format" }).getByRole("button", { name, exact: true })),
     settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "System" }),
     settingsDialog.getByRole("group", { name: "Motion" }).getByRole("button", { name: "On", exact: true }),
@@ -182,7 +182,7 @@ test("traps focus in Settings sections in both directions", async ({ page }) => 
     settingsControls[3],
     settingsDialog.getByRole("button", { name: "Import", exact: true }),
     settingsDialog.getByRole("button", { name: "Export", exact: true }),
-    settingsDialog.getByRole("button", { name: "Delete All Data", exact: true }),
+    settingsDialog.getByRole("button", { name: "Delete all data", exact: true }),
   ];
   await assertFocusCycle(page, settingsDialog, backupControls, 3);
   await page.getByRole("button", { name: "Add job" }).evaluate((button: HTMLButtonElement) => button.focus());
@@ -257,11 +257,11 @@ test("opens Settings only with Cmd/Ctrl+Shift+, and suppresses it in editable fi
   await page.keyboard.press(`${modifier}+Shift+,`);
   await expect(settingsDialog).toBeVisible();
   await settingsDialog.getByRole("button", { name: "Shortcuts", exact: true }).click();
-  await expect(settingsDialog.getByText(modifier === "Meta" ? "⌘ ⇧ ," : "Ctrl + Shift + ,", { exact: true })).toBeVisible();
+  await expect(settingsDialog.locator("li", { hasText: "Settings" }).locator("kbd .sr-only")).toHaveText(modifier === "Meta" ? "⌘⇧," : "Ctrl+Shift+,");
   await settingsDialog.getByRole("button", { name: "Close settings" }).click();
   await expect(settingsDialog).toBeHidden();
 
-  const search = page.getByRole("textbox", { name: "Search company or role" });
+  const search = page.getByRole("searchbox", { name: "Search company or role" });
   await search.fill("search stays intact");
   await search.focus();
   await page.keyboard.press(`${modifier}+Shift+,`);
@@ -329,18 +329,15 @@ test("tabs through every dashboard, Kanban, sidebar, and archived control in vis
     page.getByRole("button", { name: "Collapse sidebar", exact: true }),
     page.getByRole("link", { name: "Dashboard", exact: true }),
     page.getByRole("link", { name: "Job Board", exact: true }),
-    page.getByRole("link", { name: "Applications Table", exact: true }),
+    page.getByRole("link", { name: "Table", exact: true }),
     page.getByRole("link", { name: /^Interviews, \d+ upcoming$/ }),
     page.getByRole("button", { name: "Settings", exact: true }),
-    page.getByRole("textbox", { name: "Search company or role", exact: true }),
-    ...["All", "Applied", "Online assessment", "Interview", "Offer", "Rejected"].map((name) =>
-      page.getByRole("button", { name, exact: true }),
-    ),
-    page.getByRole("button", { name: `Open ${active.role} at ${active.company}`, exact: true }),
     page.getByRole("button", { name: /^Archived\s+\d+$/ }),
     archivedRow.getByRole("button", { name: `Open archived ${archived.role} at ${archived.company}`, exact: true }),
     archivedRow.getByRole("button", { name: "Restore", exact: true }),
     archivedRow.getByRole("button", { name: `Delete ${archived.role} at ${archived.company}`, exact: true }),
+    page.getByRole("searchbox", { name: "Search company or role", exact: true }),
+    page.getByRole("combobox", { name: "Filter by status", exact: true }),
     page.getByRole("button", { name: `Open or move ${active.role} at ${active.company}`, exact: true }),
   ];
   const indexes = await Promise.all(orderedControls.map(focusIndex));

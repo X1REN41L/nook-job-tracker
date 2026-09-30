@@ -22,7 +22,7 @@ test("duplicate import gives the warning dialog focus while Settings stays open"
     await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
     await page.getByRole("button", { name: "Settings" }).click();
     const settings = page.getByRole("dialog", { name: "Settings" });
-    await settings.getByRole("button", { name: "Backup & Restore" }).click();
+    await settings.getByRole("button", { name: "Backup & restore" }).click();
     const exported = await (await request.get("/api/applications/export")).json();
     await settings.locator('input[type="file"]').setInputFiles({
       name: "duplicate-backup.json",

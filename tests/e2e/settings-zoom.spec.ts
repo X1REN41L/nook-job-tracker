@@ -8,7 +8,7 @@ test("compact Settings text stays on one line through browser zoom scaling", asy
   await page.evaluate(() => document.fonts.ready);
 
   const dialog = page.getByRole("dialog", { name: "Settings" });
-  const categories = ["General", "Shortcuts", "Backup & Restore"];
+  const categories = ["General", "Shortcuts", "Backup & restore"];
   const wrapped: string[] = [];
 
   for (const zoom of zoomLevels) {

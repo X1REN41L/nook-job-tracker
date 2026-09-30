@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as calendar from "../src/lib/calendar-date.ts";
-import { groupUpcomingInterviews } from "../src/lib/interviews.ts";
+import { getInterviewListItems, getUpcomingInterviewCount, groupUpcomingInterviews } from "../src/lib/interviews.ts";
 
 function item(id, date) {
   return { id, date: `${date}T00:00:00.000Z`, role: id, company: "Company", note: null };
@@ -23,25 +23,25 @@ test("Wednesday boundaries, chronological sections, and stable same-date order",
   assert.deepEqual(groupsFor("2026-09-30", entries), [
     ["Today", ["a", "b", "today"]],
     ["Tomorrow", ["tomorrow"]],
-    ["Later This Week", ["this-week-start", "this-week-end"]],
-    ["Next Week", ["next-week-start", "next-week-end"]],
+    ["Later this week", ["this-week-start", "this-week-end"]],
+    ["Next week", ["next-week-start", "next-week-end"]],
     ["Later", ["later"]],
   ]);
 });
 
-test("Saturday omits an empty Later This Week section", () => {
+test("Saturday omits an empty Later this week section", () => {
   assert.deepEqual(groupsFor("2026-10-03", [
     ["next", "2026-10-05"], ["tomorrow", "2026-10-04"], ["today", "2026-10-03"],
   ]), [
-    ["Today", ["today"]], ["Tomorrow", ["tomorrow"]], ["Next Week", ["next"]],
+    ["Today", ["today"]], ["Tomorrow", ["tomorrow"]], ["Next week", ["next"]],
   ]);
 });
 
-test("Sunday gives Tomorrow precedence over Next Week", () => {
+test("Sunday gives Tomorrow precedence over Next week", () => {
   assert.deepEqual(groupsFor("2026-10-04", [
     ["next", "2026-10-06"], ["tomorrow", "2026-10-05"], ["today", "2026-10-04"],
   ]), [
-    ["Today", ["today"]], ["Tomorrow", ["tomorrow"]], ["Next Week", ["next"]],
+    ["Today", ["today"]], ["Tomorrow", ["tomorrow"]], ["Next week", ["next"]],
   ]);
 });
 
@@ -51,8 +51,8 @@ test("Monday starts a new current week", () => {
     ["tomorrow", "2026-10-06"], ["past", "2026-10-04"],
   ]), [
     ["Tomorrow", ["tomorrow"]],
-    ["Later This Week", ["this-week"]],
-    ["Next Week", ["next-week"]],
+    ["Later this week", ["this-week"]],
+    ["Next week", ["next-week"]],
   ]);
 });
 
@@ -62,7 +62,7 @@ test("calendar arithmetic crosses leap days without timezone shifts", () => {
   assert.equal(calendar.startOfCalendarWeek("2028-03-05"), "2028-02-28");
   assert.deepEqual(groupsFor("2028-02-28", [
     ["tomorrow", "2028-02-29"], ["this-week", "2028-03-01"],
-  ]), [["Tomorrow", ["tomorrow"]], ["Later This Week", ["this-week"]]]);
+  ]), [["Tomorrow", ["tomorrow"]], ["Later this week", ["this-week"]]]);
 });
 
 test("the featured round is the next one on or after today, else the latest", async () => {
@@ -75,4 +75,25 @@ test("the featured round is the next one on or after today, else the latest", as
   assert.equal(featuredInterview([], "2026-10-10"), undefined);
   assert.deepEqual([...rounds].sort(compareInterviews).map(({ id }) => id), ["past", "next-all-day", "next-timed", "late"]);
   assert.match(formatInterviewTime("09:30"), /9:30/);
+});
+
+test("upcoming interviews count only applications still in progress", () => {
+  const today = "2026-09-30";
+  const application = (id, status, archived, dates) => ({
+    id, status, archived, role: id, company: "Company",
+    interviews: dates.map((date, index) => ({ id: `${id}-${index}`, date: `${date}T00:00:00.000Z`, time: null, type: "OTHER", interviewers: null, notes: null })),
+  });
+  const applications = [
+    application("two-rounds", "INTERVIEW", false, ["2026-09-30", "2026-10-07"]),
+    application("applied", "APPLIED", false, ["2026-10-02"]),
+    application("archived", "INTERVIEW", true, ["2026-10-05"]),
+    application("offer", "OFFER", false, ["2026-10-01"]),
+    application("rejected", "REJECTED", false, ["2026-10-03"]),
+    application("past-only", "INTERVIEW", false, ["2026-09-29"]),
+  ];
+  assert.equal(getUpcomingInterviewCount(applications, today), 3);
+  const items = getInterviewListItems(applications);
+  assert.deepEqual(items.filter(({ inProgress }) => inProgress).map(({ applicationId }) => applicationId),
+    ["two-rounds", "two-rounds", "applied", "past-only"]);
+  assert.equal(items.length, 7, "Closed and archived rounds stay in the list for the Past tab");
 });

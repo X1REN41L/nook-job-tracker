@@ -55,10 +55,18 @@
 
 :root.dark { color-scheme: dark; }
 
+/* The dropdown chevron, drawn in --color-ink-soft; the dark theme redefines it. */
+:root {
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6255' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
+}
+
 :root {
   --motion-fast: 130ms;
   --motion-standard: 190ms;
   --motion-structural: 240ms;
+  --motion-chart: 560ms;
+  --motion-page: 320ms;
+  --motion-roll: 900ms;
   --motion-exit: 160ms;
   --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -67,6 +75,7 @@
    (bg-cream, text-ink, border-line, bg-gold-tint, shadow-nook, ...) pick
    these up automatically wherever `.dark` is an ancestor. */
 .dark {
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B2A793' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
   --color-cream: #1E1B17;
   --color-cream-2: #171412;
   --color-paper: #26221D;
@@ -162,15 +171,25 @@ body {
   background: transparent;
 }
 
+/* Horizontal-only scrollers reserve no vertical gutter, which would otherwise
+   leave an empty strip beside full-width content such as the table header. */
+.scrollbar-styled.scrollbar-x {
+  scrollbar-gutter: auto;
+}
+
 /* Board scrollbars keep a fixed, narrow track while the thumb fades in on use.
-   A transparent thumb preserves the same scrollbar geometry at every state. */
+   A transparent thumb preserves the same scrollbar geometry at every state.
+   The hidden thumb is the hover color at zero alpha rather than `transparent`
+   (transparent black): scrollbar-color interpolates without premultiplying,
+   so fading from transparent black flashes a dark thumb before the real color. */
 .board-scroll.scrollbar-styled,
+.board-lane.scrollbar-styled,
 .kanban-column-scroll.scrollbar-styled {
   --scrollbar-width: 6px;
   --scrollbar-height: 6px;
   --scrollbar-track: transparent;
-  --scrollbar-thumb: transparent;
-  scrollbar-color: transparent transparent;
+  --scrollbar-thumb: rgb(from var(--scrollbar-thumb-hover) r g b / 0);
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   scrollbar-gutter: auto;
   transition: scrollbar-color var(--motion-fast) var(--motion-ease);
 }
@@ -179,14 +198,23 @@ body {
   margin-inline-end: -6px;
 }
 
+/* The page scroller always reserves its scrollbar's space, so centred content
+   sits in the same place whether or not the page is long enough to scroll. */
+.board-scroll.scrollbar-styled {
+  scrollbar-gutter: stable;
+}
+
 .board-scroll.scrollbar-styled,
+.board-lane.scrollbar-styled,
 .kanban-column-scroll.scrollbar-styled {
   --scrollbar-thumb-hover: color-mix(in srgb, var(--color-ink-soft) 72%, transparent);
   --scrollbar-thumb-active: color-mix(in srgb, var(--color-ink-soft) 84%, transparent);
 }
 
 .board-scroll.scrollbar-styled:hover,
+.board-lane.scrollbar-styled:hover,
 .board-scroll.scrollbar-styled.is-scrolling,
+.board-lane.scrollbar-styled.is-scrolling,
 .kanban-column:hover .kanban-column-scroll.scrollbar-styled,
 .kanban-column:focus-within .kanban-column-scroll.scrollbar-styled,
 .kanban-column-scroll.scrollbar-styled.is-scrolling {
@@ -194,23 +222,28 @@ body {
 }
 
 .board-scroll.scrollbar-styled:active,
+.board-lane.scrollbar-styled:active,
 .kanban-column:active .kanban-column-scroll.scrollbar-styled {
   scrollbar-color: var(--scrollbar-thumb-active) transparent;
 }
 
 .board-scroll.scrollbar-styled::-webkit-scrollbar-track,
+.board-lane.scrollbar-styled::-webkit-scrollbar-track,
 .kanban-column-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .board-scroll.scrollbar-styled::-webkit-scrollbar-thumb,
+.board-lane.scrollbar-styled::-webkit-scrollbar-thumb,
 .kanban-column-scroll.scrollbar-styled::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: var(--scrollbar-thumb);
   transition: background-color var(--motion-fast) var(--motion-ease);
 }
 
 .board-scroll.scrollbar-styled:hover::-webkit-scrollbar-thumb,
+.board-lane.scrollbar-styled:hover::-webkit-scrollbar-thumb,
 .board-scroll.scrollbar-styled.is-scrolling::-webkit-scrollbar-thumb,
+.board-lane.scrollbar-styled.is-scrolling::-webkit-scrollbar-thumb,
 .kanban-column:hover .kanban-column-scroll::-webkit-scrollbar-thumb,
 .kanban-column:focus-within .kanban-column-scroll::-webkit-scrollbar-thumb,
 .kanban-column-scroll.is-scrolling::-webkit-scrollbar-thumb {
@@ -219,6 +252,7 @@ body {
 }
 
 .board-scroll.scrollbar-styled:active::-webkit-scrollbar-thumb,
+.board-lane.scrollbar-styled:active::-webkit-scrollbar-thumb,
 .kanban-column:active .kanban-column-scroll::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb-active);
   background-clip: padding-box;
@@ -262,8 +296,13 @@ body.nook-dragging * {
   /* Matches DEFAULT_SIDEBAR_WIDTH in application-dashboard.tsx. */
   --sidebar-default-width: 320px;
   --sidebar-width: var(--sidebar-default-width);
-  --sidebar-rail-width: 50px;
-  --sidebar-nav-inset: 14px;
+  /* Every sidebar control sits on one 36px tile with the same gutter on both
+     sides, so the rail centers its icons exactly; the extra 1px is the
+     panel's right border, which would otherwise shave a pixel off each tile. */
+  --sidebar-tile: 36px;
+  --sidebar-gutter: 8px;
+  --sidebar-rail-width: calc(var(--sidebar-tile) + 2 * var(--sidebar-gutter) + 1px);
+  --kanban-column-max: 22.5rem;
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -316,10 +355,8 @@ body.nook-dragging * {
   overflow: hidden;
   transition: flex-grow var(--motion-structural) var(--motion-ease);
 }
-.sidebar-all-section { min-height: 49px; }
 .sidebar-archive-section { min-height: 45px; }
 .sidebar-flex-section.is-expanded { flex-shrink: 1; }
-.sidebar-all-section.is-expanded { flex-grow: 65; }
 .sidebar-archive-section.is-expanded { flex-grow: 35; }
 .sidebar-flex-section:not(.is-expanded) .sidebar-expandable-body {
   visibility: hidden;
@@ -334,20 +371,52 @@ body.nook-dragging * {
   transition: opacity var(--motion-standard) var(--motion-ease), visibility 0s;
 }
 
+/* As wide as the open sidebar, including mid-drag, so the collapse toggle
+   follows the edge; a fixed width keeps the row from reflowing as it collapses. */
 .sidebar-brand-row {
-  width: var(--sidebar-width);
-  padding-inline: calc((var(--sidebar-rail-width) - 36px) / 2);
+  width: var(--sidebar-drag-width, var(--sidebar-width));
+  padding-inline: var(--sidebar-gutter);
+}
+
+/* The motto stops short of the collapse toggle, which mirrors the logo tile
+   on the right edge. */
+.sidebar-brand-text {
+  padding-right: calc(var(--sidebar-tile) + 6px);
+}
+
+.sidebar-header-toggle {
+  right: calc(var(--sidebar-gutter) + 2px);
 }
 
 .sidebar-main-nav {
-  padding-inline: calc((var(--sidebar-rail-width) - 36px) / 2);
+  padding-inline: var(--sidebar-gutter);
+}
+
+/* Spans the rail inside the border, so rail controls share the tiles' center. */
+.sidebar-edge-rail {
+  width: calc(var(--sidebar-rail-width) - 1px);
+}
+
+/* Draws the divider under the main navigation; it insets to the tile width
+   in the rail so it reads as a separator rather than a cut across the rail. */
+.sidebar-nav-divider::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  border-bottom: 1px solid var(--color-line);
+  transition: inset-inline var(--motion-structural) var(--motion-ease);
+}
+
+.sidebar-collapsed .sidebar-nav-divider::after {
+  inset-inline: calc(var(--sidebar-gutter) + 6px);
 }
 
 .sidebar-nav-icon {
   display: flex;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: var(--sidebar-tile);
+  height: var(--sidebar-tile);
+  flex: 0 0 var(--sidebar-tile);
   align-items: center;
   justify-content: center;
 }
@@ -376,7 +445,7 @@ body.nook-dragging * {
 }
 
 .sidebar-logo-button {
-  left: calc((var(--sidebar-rail-width) - 36px) / 2);
+  left: var(--sidebar-gutter);
   visibility: hidden;
   pointer-events: none;
 }
@@ -401,10 +470,21 @@ body.nook-dragging * {
   padding-inline: var(--board-side-padding);
 }
 
+/* Only the columns scroll sideways, so the toolbar above stays put. The lane
+   bleeds into the workspace padding to keep the columns and scrollbar where
+   the page scroller used to place them. */
+.board-lane {
+  height: calc(100% + 1.5rem);
+  margin: 0 calc(-1 * var(--board-side-padding)) -1.5rem;
+  padding: 0 var(--board-side-padding) 1.5rem;
+}
+
+/* Every page shares the Job Board's widest layout (all five columns at their
+   maximum width), so the page title stays in place when switching pages. */
 .page-shell {
   width: 100%;
   min-width: 0;
-  max-width: 100rem;
+  max-width: calc(5 * var(--kanban-column-max) + 4 * 1rem);
   margin-inline: auto;
 }
 
@@ -417,14 +497,18 @@ body.nook-dragging * {
   margin-left: -1rem;
 }
 
+/* The board extends into the lane's end padding, so the spacer above sits in
+   that padding: the last column ends on the content edge when everything fits
+   and the spacer only shows as end clearance when the board scrolls. */
 .board-columns {
   justify-content: safe center;
+  margin-inline-end: calc(-1 * var(--board-side-padding));
 }
 
 .kanban-column {
-  flex: 1 1 clamp(17.5rem, 20vw, 22.5rem);
-  min-width: 15.5rem;
-  max-width: 22.5rem;
+  flex: 1 1 clamp(17.5rem, 20vw, var(--kanban-column-max));
+  min-width: 13.75rem;
+  max-width: var(--kanban-column-max);
 }
 
 @media (min-width: 768px) {
@@ -561,6 +645,26 @@ body.sidebar-resizing-active * {
 
 }
 
+/* Every dropdown shares one quiet chevron in place of the browser's arrow, with
+   room kept for it, and its border warms on hover like the other controls. The
+   status badge in the details panel draws its own. */
+select:not(.badge) {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 2.25rem;
+  background-image: var(--select-chevron);
+  background-position: right 0.7rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+select:not(.badge):hover:not(:disabled):not(:focus-visible) {
+  border-color: color-mix(in srgb, var(--color-ink-soft) 40%, var(--color-line));
+}
+select:not(.badge):disabled {
+  cursor: default;
+}
+
 /* Property lists keep focus rings and theme changes immediate. */
 .motion-interactive,
 .btn-primary,
@@ -603,8 +707,79 @@ body.sidebar-resizing-active * {
 }
 
 .motion-chevron { transition: transform var(--motion-standard) var(--motion-ease); }
-.board-reorder-neighbor { transition: transform var(--motion-standard) var(--motion-ease); }
 .motion-small-reveal { animation: nook-small-reveal var(--motion-standard) var(--motion-ease) both; }
+
+/* Chart bars grow from zero when a chart appears, one after another through an
+   inline animation-delay, and ease to their new size when the numbers change. */
+.motion-bar-grow-y {
+  animation: nook-bar-grow-y var(--motion-chart) var(--motion-ease) backwards;
+  transition: height var(--motion-chart) var(--motion-ease);
+}
+.motion-bar-grow-x {
+  animation: nook-bar-grow-x var(--motion-chart) var(--motion-ease) backwards;
+  transition: width var(--motion-chart) var(--motion-ease);
+}
+@keyframes nook-bar-grow-y { from { height: 0; } }
+@keyframes nook-bar-grow-x { from { width: 0; } }
+
+/* Dashboard numbers roll into place like an odometer. Each digit column is as
+   wide as its final digit and shows one row of a 0–9–0–9 strip, which rolls
+   through a full turn to its stop in the second half; inline animation-delays
+   settle digits left to right and cards in order. Columns clip only top and
+   bottom so wider passing digits aren't cut, and the row's edges fade so
+   passing digits blur in and out. */
+.odometer {
+  --odometer-row: 1.25em;
+  display: inline-flex;
+  align-items: flex-start;
+  height: var(--odometer-row);
+  line-height: var(--odometer-row);
+  padding-inline: 0.15em;
+  margin-inline: -0.15em;
+  /* Digit glyphs sit between 20% and 80% of the row, so a settled digit is fully
+     opaque while the slivers of passing digits fade out above and below it. */
+  mask-image: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.12) 9%, #000 20%, #000 80%, rgb(0 0 0 / 0.12) 91%, transparent);
+}
+.odometer-digit {
+  position: relative;
+  display: block;
+  height: var(--odometer-row);
+  clip-path: inset(0 -0.5em);
+}
+.odometer-sizer {
+  visibility: hidden;
+}
+.odometer-strip {
+  position: absolute;
+  inset: 0 -0.5em auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(calc(var(--odometer-stop) * -1 * var(--odometer-row)));
+  animation: nook-odometer-roll var(--motion-roll) var(--motion-ease) backwards;
+  transition: transform var(--motion-roll) var(--motion-ease);
+}
+.odometer-strip > span {
+  height: var(--odometer-row);
+}
+.odometer-static {
+  animation: nook-odometer-fade var(--motion-roll) var(--motion-ease) backwards;
+}
+@keyframes nook-odometer-roll { from { transform: translateY(0); } }
+@keyframes nook-odometer-fade { from { opacity: 0; transform: translateY(0.25em); } }
+/* Each page settles in when you arrive on it: a short fade and rise, quicker
+   than the content animations inside it so the page never feels slow. */
+.motion-page-enter {
+  animation: nook-page-enter var(--motion-page) var(--motion-ease) backwards;
+}
+@keyframes nook-page-enter { from { opacity: 0; transform: translateY(6px); } }
+
+/* Page elements (cards, columns, rows, sections) rise and fade in one after
+   another when a page opens, ordered through an inline animation-delay. */
+.motion-reveal {
+  animation: nook-reveal var(--motion-chart) var(--motion-ease) backwards;
+}
+@keyframes nook-reveal { from { opacity: 0; transform: translateY(8px); } }
 @keyframes nook-small-reveal { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
 .motion-dialog-backdrop { animation: nook-backdrop-in var(--motion-standard) var(--motion-ease) both; }
@@ -660,12 +835,12 @@ body.sidebar-resizing-active * {
   font-weight: 700;
 }
 @media (prefers-reduced-motion: reduce) {
-  :root:not([data-motion="on"]):not([data-motion="off"]) *, :root:not([data-motion="on"]):not([data-motion="off"]) *::before, :root:not([data-motion="on"]):not([data-motion="off"]) *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
+  :root:not([data-motion="on"]):not([data-motion="off"]) *, :root:not([data-motion="on"]):not([data-motion="off"]) *::before, :root:not([data-motion="on"]):not([data-motion="off"]) *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; animation-delay: 0ms !important; }
   :root:not([data-motion="on"]):not([data-motion="off"]) .motion-dialog-panel { transform: none !important; }
   :root:not([data-motion="on"]):not([data-motion="off"]) .sidebar-reveal, :root:not([data-motion="on"]):not([data-motion="off"]) .sidebar-header-toggle, :root:not([data-motion="on"]):not([data-motion="off"]) .nook-toast-wrap { transition: opacity var(--motion-fast) var(--motion-ease) !important; }
   :root:not([data-motion="on"]):not([data-motion="off"]) { scroll-behavior: auto !important; }
 }
-:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; }
+:root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; transition-delay: 0ms !important; animation-delay: 0ms !important; }
 :root[data-motion="off"] .motion-dialog-panel { transform: none !important; }
 :root[data-motion="off"] .sidebar-reveal, :root[data-motion="off"] .sidebar-header-toggle, :root[data-motion="off"] .nook-toast-wrap { transition: opacity var(--motion-fast) var(--motion-ease) !important; }
 :root[data-motion="off"] { scroll-behavior: auto !important; }

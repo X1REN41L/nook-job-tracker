@@ -7,7 +7,7 @@ assert.ok(base, "SMOKE_BASE_URL is required");
 const prisma = new PrismaClient();
 const headers = { Origin: new URL(base).origin, "Content-Type": "application/json" };
 const settings = { theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15,
-  motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true };
+  motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false };
 const date = "2026-09-24T00:00:00.000Z";
 const records = Array.from({ length: 2_000 }, (_, index) => ({
   id: randomUUID(), company: "Contention test", role: `Role ${index}`, status: "APPLIED", source: null,

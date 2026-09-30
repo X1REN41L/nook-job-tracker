@@ -136,7 +136,8 @@ try {
   assert.equal(emptyAnalytics.interviewRate.percentage, 0);
   assertRateValues(emptyAnalytics, ["interviewRate", "offerRate", "rejectionRate"]);
 
-  const undoTarget = await createApplication({ role: "Undo status move", interviewDate: shiftDate(today, 1) });
+  // A past round keeps the interview check below without a booked interview clearing staleness.
+  const undoTarget = await createApplication({ role: "Undo status move", appliedDate: shiftDate(today, -70), interviewDate: shiftDate(today, -65) });
   await setStatusEventAge(undoTarget.id, 60);
   const beforeUndoEvents = await prisma.applicationEvent.findMany({ where: { applicationId: undoTarget.id }, orderBy: { createdAt: "asc" } });
   const beforeUndoOverview = await json(dashboardPath("overview"));
@@ -311,7 +312,7 @@ try {
   const createdAt = new Date().toISOString();
   const backup = {
     version: 1,
-    settings: { theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15, motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true },
+    settings: { theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15, motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false },
     applications: [{
       id: incompleteId,
       company: "Dashboard API test",
@@ -420,13 +421,17 @@ try {
   assert.equal(stale.applicationsBySeverity.CRITICAL[0].id, stale60.id);
   assert.deepEqual(stale.applicationsBySeverity.HIGH.map(({ id }) => id), [stale59.id, stale30.id]);
   assert.deepEqual(stale.applicationsBySeverity.MEDIUM.map(({ id }) => id), [stale29.id, stale21.id, stale20.id]);
-  assert.deepEqual(Object.keys(stale).sort(), ["applicationsBySeverity", "counts", "timingCoverage"]);
+  assert.deepEqual(Object.keys(stale).sort(), ["applicationsBySeverity", "archived", "counts", "timingCoverage"]);
   assert.deepEqual(staleItems(stale).map(({ id, staleDays, severity }) => [id, staleDays, severity]), [
     [stale60.id, 60, "CRITICAL"], [stale59.id, 59, "HIGH"], [stale30.id, 30, "HIGH"],
     [stale29.id, 29, "MEDIUM"], [stale21.id, 21, "MEDIUM"], [stale20.id, 20, "MEDIUM"],
   ]);
   assert.deepEqual(staleItems(stale).slice(0, 3), overview.staleApplications, "Overview and stale endpoint share the exact stale result");
   assert.equal(staleItems(stale).some(({ id }) => id === archivedStale.id || id === staleOffer.id || id === missingTiming.id), false);
+  const archivedStaleItem = stale.archived.find(({ id }) => id === archivedStale.id);
+  assert.ok(archivedStaleItem, "Archived applications keep their stale age for their tag");
+  assert.equal(archivedStaleItem.staleDays >= 60, true);
+  assert.equal(stale.archived.some(({ id }) => id === staleOffer.id), false, "Offers are never stale, archived or not");
   const oldShapeBytes = Buffer.byteLength(JSON.stringify({ ...stale, applications: staleItems(stale), top: staleItems(stale).slice(0, 3) }));
   const newShapeBytes = Buffer.byteLength(JSON.stringify(stale));
   assert.ok(newShapeBytes < oldShapeBytes, "Stale response omits duplicate item lists");
@@ -598,6 +603,11 @@ try {
   assert.deepEqual(decemberCustomMonth.range, { startDate: "2025-12-01", endDate: "2025-12-31" });
   assert.equal(decemberCustomMonth.applications, (await applicationsFor("2025-12-01", "2025-12-31")).length);
   const decemberWeeks = decemberCustomMonth.applicationsTrend.buckets;
+  assert.deepEqual(decemberWeeks.map(({ startDate, endDate }) => [startDate, endDate]), [
+    ["2025-12-01", "2025-12-07"], ["2025-12-08", "2025-12-14"], ["2025-12-15", "2025-12-21"], ["2025-12-22", "2025-12-28"], ["2025-12-29", "2025-12-31"],
+  ], "Weeks are seven-day blocks from the 1st, whatever weekday the month starts on");
+  const februaryWeeks = (await json("/api/dashboard/analytics?period=CUSTOM_MONTH&month=2026-02")).applicationsTrend.buckets;
+  assert.deepEqual(februaryWeeks.map(({ startDate }) => startDate), ["2026-02-01", "2026-02-08", "2026-02-15", "2026-02-22"], "A 28-day month has exactly four full weeks");
   assert.equal(decemberWeeks[0].startDate, "2025-12-01");
   assert.equal(decemberWeeks.at(-1).endDate, "2025-12-31");
   for (let index = 1; index < decemberWeeks.length; index += 1) {
@@ -697,6 +707,18 @@ try {
   assert.equal(appliedDateStale.some(({ id }) => id === movedLater.id), false, "A later status change resets staleness");
   const utcSameDateItem = staleItems(utcStale).find((item) => item.id === utcSameDate.id);
   assert.equal(utcSameDateItem?.staleSince, "STATUS_CHANGE", "An initial event older than the applied date is used as is");
+
+  const bookedInterview = await createApplication({ role: "Waiting with an interview booked", appliedDate: shiftDate(today, -40), interviewDate: shiftDate(today, 2) });
+  const bookedToday = await createApplication({ role: "Interview today", appliedDate: shiftDate(today, -40), interviewDate: today });
+  const pastInterview = await createApplication({ role: "Waiting since the last interview", appliedDate: shiftDate(today, -40), interviewDate: shiftDate(today, -18) });
+  const recentInterview = await createApplication({ role: "Interviewed recently", appliedDate: shiftDate(today, -40), interviewDate: shiftDate(today, -5) });
+  const interviewStale = staleItems(await json(dashboardPath("stale")));
+  assert.equal(interviewStale.some(({ id }) => id === bookedInterview.id || id === bookedToday.id), false,
+    "An upcoming interview, including one today, means the application is not stale");
+  const pastInterviewItem = interviewStale.find(({ id }) => id === pastInterview.id);
+  assert.deepEqual([pastInterviewItem?.staleDays, pastInterviewItem?.severity, pastInterviewItem?.staleSince], [18, "MEDIUM", "INTERVIEW"],
+    "A past interview restarts the wait from its date");
+  assert.equal(interviewStale.some(({ id }) => id === recentInterview.id), false, "A recent interview keeps the application under the threshold");
 
   console.log("Passed: Dashboard API states, history, rates, stale boundaries and timezone conversion, Overview consistency, calendar dates, and analytics cohorts.");
 } finally {

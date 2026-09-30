@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MOTION_MODES, motionIsOff } from "../src/lib/motion-mode.ts";
+import { MOTION_MODES, cssTimeToMs, motionIsOff } from "../src/lib/motion-mode.ts";
 import { getMotionMode, motionIsCurrentlyOff } from "../src/lib/general-preferences.ts";
 import { defaultSettings } from "../src/lib/settings-defaults.ts";
 import { getSettingsState, setSettingsState } from "../src/lib/settings-store.ts";
@@ -40,4 +40,12 @@ test("stored Motion choice drives effective motion with the OS preference", () =
     if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
     else delete globalThis.window;
   }
+});
+
+test("CSS motion times convert to milliseconds in either unit", () => {
+  assert.equal(cssTimeToMs("560ms", 1), 560);
+  assert.equal(cssTimeToMs(" .56s", 1), 560, "Built stylesheets may shorten 560ms to .56s");
+  assert.equal(cssTimeToMs("0.16s", 1), 160);
+  assert.equal(cssTimeToMs("", 190), 190);
+  assert.equal(cssTimeToMs("fast", 190), 190);
 });

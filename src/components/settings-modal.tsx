@@ -11,7 +11,7 @@ import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-mod
 import { BOARDS } from "@/lib/board-preferences";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
-import { STALE_THRESHOLDS, STARTUP_PAGES, TIME_FORMATS } from "@/lib/settings-values";
+import { STALE_THRESHOLDS, STARTUP_PAGE_LABELS, STARTUP_PAGES, TIME_FORMATS } from "@/lib/settings-values";
 import { MOTION_MODES } from "@/lib/motion-mode";
 
 type SettingsCategory = "general" | "shortcuts" | "backup";
@@ -19,8 +19,10 @@ type SettingsCategory = "general" | "shortcuts" | "backup";
 const SETTINGS_CATEGORIES = [
   { id: "general", label: "General", Icon: SlidersHorizontal },
   { id: "shortcuts", label: "Shortcuts", Icon: Keyboard },
-  { id: "backup", label: "Backup & Restore", Icon: DatabaseBackup },
+  { id: "backup", label: "Backup & restore", Icon: DatabaseBackup },
 ] satisfies Array<{ id: SettingsCategory; label: string; Icon: typeof SlidersHorizontal }>;
+// One fixed width, wide enough for the longest option, keeps the dropdowns' edges in line.
+const settingsSelectClass = "w-44 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 const subscribeToMount = () => () => {};
 
 export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll, deleteDisabled, importProgress, returnFocusRef, showToast }: {
@@ -131,32 +133,32 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                     </div>
                   </div>
                   <div className="flex min-h-16 items-center justify-between gap-3 py-3">
-                    <label className="text-sm font-semibold" htmlFor="default-board">New Applications Default Board</label>
-                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="default-board" onChange={(event) => saveSettings({ defaultBoard: event.target.value as typeof defaultBoard })} value={defaultBoard}>
+                    <label className="text-sm font-semibold" htmlFor="default-board">Default board for new applications</label>
+                    <select className={settingsSelectClass} id="default-board" onChange={(event) => saveSettings({ defaultBoard: event.target.value as typeof defaultBoard })} value={defaultBoard}>
                       {BOARDS.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
                     </select>
                   </div>
                   <div className="flex min-h-16 items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
-                      <label className="text-sm font-semibold" htmlFor="startup-page">Startup Page</label>
+                      <label className="text-sm font-semibold" htmlFor="startup-page">Startup page</label>
                       <p className="mt-0.5 text-xs text-ink-soft">Choose where Nook opens.</p>
                     </div>
-                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="startup-page" onChange={(event) => saveSettings({ startupPage: event.target.value as typeof startupPage })} value={startupPage}>
-                      {STARTUP_PAGES.map((page) => <option key={page} value={page}>{page === "job-board" ? "Job Board" : page === "dashboard" ? "Dashboard" : "Interviews"}</option>)}
+                    <select className={settingsSelectClass} id="startup-page" onChange={(event) => saveSettings({ startupPage: event.target.value as typeof startupPage })} value={startupPage}>
+                      {STARTUP_PAGES.map((page) => <option key={page} value={page}>{STARTUP_PAGE_LABELS[page]}</option>)}
                     </select>
                   </div>
                   <div className="flex min-h-16 items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
-                      <label className="text-sm font-semibold" htmlFor="stale-threshold">Stale Application Threshold</label>
+                      <label className="text-sm font-semibold" htmlFor="stale-threshold">Stale application threshold</label>
                       <p className="mt-0.5 text-xs text-ink-soft">Mark applications as stale after no activity for:</p>
                     </div>
-                    <select className="min-w-32 max-w-40 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" id="stale-threshold" onChange={(event) => saveSettings({ staleApplicationThreshold: Number(event.target.value) as typeof staleThreshold })} value={staleThreshold}>
+                    <select className={settingsSelectClass} id="stale-threshold" onChange={(event) => saveSettings({ staleApplicationThreshold: Number(event.target.value) as typeof staleThreshold })} value={staleThreshold}>
                       {STALE_THRESHOLDS.map((days) => <option key={days} value={days}>{days} days</option>)}
                     </select>
                   </div>
                   <div className="flex min-h-16 items-center justify-between gap-3 py-3">
                     <div>
-                      <p className="text-sm font-semibold">Time Format</p>
+                      <p className="text-sm font-semibold">Time format</p>
                       <p className="mt-0.5 text-xs text-ink-soft">Automatic follows your browser&apos;s language and region.</p>
                     </div>
                     <div aria-label="Time format" className="flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5" role="group">
@@ -182,14 +184,14 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
 
             {category === "shortcuts" && (
               <div>
-                <h3 className="font-serif text-lg font-semibold">Keyboard Shortcuts</h3>
+                <h3 className="font-serif text-lg font-semibold">Keyboard shortcuts</h3>
                 <ShortcutList className="mt-4" isMac={isMac} />
               </div>
             )}
 
             {category === "backup" && (
               <div>
-                <h3 className="font-serif text-lg font-semibold">Backup &amp; Restore</h3>
+                <h3 className="font-serif text-lg font-semibold">Backup &amp; restore</h3>
                 <div className="mt-5 divide-y divide-line border-y border-line">
                   <BackupAction description="Restore applications and settings from a Nook backup." disabled={importProgress !== null} label="Import" onClick={() => importInputRef.current?.click()} title="Import data" />
                   <BackupAction description="Download a backup of your applications and settings." label="Export" onClick={onExport} title="Export data" />
@@ -198,7 +200,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                   <h4 className="font-serif text-base font-semibold text-rose">Delete all data</h4>
                   <div className="mt-2 flex items-center justify-between gap-3">
                     <p className="text-xs text-ink-soft">Permanently remove all applications and their history. Your settings will be kept.</p>
-                    <button ref={deleteTriggerRef} className="btn-danger shrink-0 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose disabled:cursor-not-allowed" disabled={deleteDisabled || importProgress !== null || deletingAll} onClick={openDeleteConfirmation} type="button">Delete All Data</button>
+                    <button ref={deleteTriggerRef} className="btn-danger shrink-0 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose disabled:cursor-not-allowed" disabled={deleteDisabled || importProgress !== null || deletingAll} onClick={openDeleteConfirmation} type="button">Delete all data</button>
                   </div>
                 </div>
                 <input ref={importInputRef} accept="application/json,.json" className="sr-only" onChange={(event) => { void handleImport(event.target.files?.[0]); event.target.value = ""; }} tabIndex={-1} type="file" />

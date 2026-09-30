@@ -12,6 +12,7 @@ import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
 import type { BoardConfiguration } from "@/lib/board-preferences";
 import { motionIsCurrentlyOff } from "@/lib/general-preferences";
+import { cssTimeToMs, revealDelay } from "@/lib/motion-mode";
 import { featuredInterview, formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
 import { useTimeFormat } from "@/hooks/use-time-format";
 import type { ApplicationRecord } from "@/types/application";
@@ -22,14 +23,14 @@ type CardContext = {
   onOpen: (application: ApplicationRecord) => void;
 };
 
-export function KanbanBoard({ applications, boards, dropDisabled = false, movingIds, emptyText, today, staleDays, onOpen }: {
+export function KanbanBoard({ applications, boards, movingIds, emptyText, today, staleDays, onOpen }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
-  dropDisabled?: boolean;
   movingIds: ReadonlySet<string>;
   /** Replaces each column's empty-state text, e.g. while filters hide every card. */
   emptyText?: string;
 } & CardContext) {
+  const laneRef = useScrollbarActivity<HTMLDivElement>();
   const boardRef = useRef<HTMLDivElement>(null);
   const beforeUpdate = useRef(new Map<string, { top: number; column: string }>());
 
@@ -40,7 +41,7 @@ export function KanbanBoard({ applications, boards, dropDisabled = false, moving
     const reduced = motionIsCurrentlyOff();
     if (!reduced) {
       const motion = getComputedStyle(document.documentElement);
-      const duration = Number.parseFloat(motion.getPropertyValue("--motion-standard")) || 190;
+      const duration = cssTimeToMs(motion.getPropertyValue("--motion-standard"), 190);
       const easing = motion.getPropertyValue("--motion-ease").trim();
       cards.forEach((card) => {
         const before = beforeUpdate.current.get(card.dataset.applicationId ?? "");
@@ -66,32 +67,34 @@ export function KanbanBoard({ applications, boards, dropDisabled = false, moving
   }, [applications, boards]);
 
   return (
-    <div ref={boardRef} className="board-columns flex h-full min-h-0 w-full items-stretch gap-4" aria-label="Application status board">
-      {boards.map((board) => {
-        const items = applications.filter((application) => !application.archived && application.status === board.status);
-        return <KanbanColumn key={board.status} board={board} applications={items} dropDisabled={dropDisabled} movingIds={movingIds} emptyText={emptyText ?? board.emptyText} card={{ today, staleDays, onOpen }} />;
-      })}
+    <div ref={laneRef} className="board-lane scrollbar-styled overflow-x-auto overflow-y-hidden">
+      <div ref={boardRef} className="board-columns flex h-full min-h-0 items-stretch gap-4" aria-label="Application status board">
+        {boards.map((board, index) => {
+          const items = applications.filter((application) => !application.archived && application.status === board.status);
+          return <KanbanColumn key={board.status} order={index} board={board} applications={items} movingIds={movingIds} emptyText={emptyText ?? board.emptyText} card={{ today, staleDays, onOpen }} />;
+        })}
+      </div>
     </div>
   );
 }
 
-function KanbanColumn({ board, applications, dropDisabled, movingIds, emptyText, card }: {
+function KanbanColumn({ board, order, applications, movingIds, emptyText, card }: {
   board: BoardConfiguration;
+  order: number;
   applications: ApplicationRecord[];
-  dropDisabled: boolean;
   movingIds: ReadonlySet<string>;
   emptyText: string;
   card: CardContext;
 }) {
   const scrollRef = useScrollbarActivity<HTMLDivElement>();
-  const { isOver, setNodeRef } = useDroppable({ id: board.status, disabled: dropDisabled });
+  const { isOver, setNodeRef } = useDroppable({ id: board.status });
   return (
-    <section ref={setNodeRef} data-board-status={board.status} className={`motion-surface kanban-column flex h-full min-h-0 flex-col rounded-nook-lg border p-3 ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
+    <section ref={setNodeRef} data-board-status={board.status} style={revealDelay(order, { base: 40, step: 50 })} className={`motion-surface motion-reveal kanban-column flex h-full min-h-0 flex-col rounded-nook-lg border p-3 ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
       <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1.5 pt-1">
         <h3 className="flex items-center gap-2 text-sm font-semibold"><span className={`status-dot ${board.dot}`} />{board.label}</h3>
         <span className="rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-medium text-ink-soft">{applications.length}</span>
       </div>
-      <div ref={scrollRef} className="kanban-column-scroll scrollbar-styled min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
+      <div ref={scrollRef} className="kanban-column-scroll scrollbar-styled min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain pr-2">
         <div className="flex flex-col gap-2.5">
         {applications.map((application) => (
           <KanbanCard key={application.id} application={application} disabled={movingIds.has(application.id)} {...card} />
@@ -151,7 +154,7 @@ function KanbanCard({ application, disabled, today, staleDays, onOpen }: {
           else listeners?.onKeyDown?.(event);
         }}
       />
-      <h4 className="truncate font-serif text-[15px] font-semibold">{application.role}</h4>
+      <h4 className="line-clamp-2 break-words font-serif text-[15px] font-semibold">{application.role}</h4>
       <p className={`mb-2 mt-0.5 text-[13px] text-ink-soft ${postingUrl ? "flex items-center gap-1" : "truncate"}`}>
         {postingUrl ? <span className="min-w-0 truncate">{application.company}</span> : application.company}
         {postingUrl && (

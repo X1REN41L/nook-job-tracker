@@ -1,12 +1,12 @@
 import { addInterviewRound, expect, gotoReady, sameOriginMutationHeaders, test } from "./api-helpers";
 
-test("Overview names its active interview count and explains independent milestone rates", async ({ page }) => {
+test("Overview names its upcoming interview count and explains independent milestone rates", async ({ page }) => {
   await gotoReady(page, "/dashboard");
   const metrics = page.locator('[aria-label="Overview metrics"]');
-  await expect(metrics.getByText("Active upcoming interviews", { exact: true })).toBeVisible();
-  await expect(metrics.getByText("Interview Rate", { exact: true })).toHaveAttribute("title", /reached this exact status.*independently/);
+  await expect(metrics.getByText("Upcoming interviews", { exact: true })).toBeVisible();
+  await expect(metrics.getByText("Interview rate", { exact: true })).toHaveAttribute("title", /reached this exact status.*independently/);
   await gotoReady(page, "/dashboard/analytics");
-  await expect(page.getByText("Offer Rate", { exact: true })).toHaveAttribute("title", /reached this exact status.*independently/);
+  await expect(page.getByText("Offer rate", { exact: true })).toHaveAttribute("title", /reached this exact status.*independently/);
 });
 
 test("Interviews heading follows a trimmed search across company and role", async ({ page, request }) => {
@@ -21,10 +21,10 @@ test("Interviews heading follows a trimmed search across company and role", asyn
   expect(created.status()).toBe(201);
   await addInterviewRound(request, (await created.json()).application, today);
   await gotoReady(page, "/interviews");
-  const search = page.getByRole("searchbox", { name: "Search by company or role" });
-  await expect(page.getByRole("heading", { name: "Upcoming Interviews (1)" })).toBeVisible();
+  const search = page.getByRole("searchbox", { name: "Search company or role" });
+  await expect(page.getByRole("heading", { name: "Upcoming interviews (1)" })).toBeVisible();
   await search.fill(" Corp Engineer ");
-  await expect(page.getByRole("heading", { name: "Upcoming Interviews (1)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming interviews (1)" })).toBeVisible();
   await search.fill("missing");
-  await expect(page.getByRole("heading", { name: "Upcoming Interviews (0)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming interviews (0)" })).toBeVisible();
 });

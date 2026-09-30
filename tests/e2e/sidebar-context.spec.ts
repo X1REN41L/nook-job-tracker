@@ -87,20 +87,19 @@ test("keeps Job Board filters, search, and archive controls on its route", async
   await page.reload();
 
   await expect(page).toHaveURL(/\/jobs$/);
-  await expect(page.getByRole("heading", { name: "All applications 2", exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Search company or role" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "All applications 2" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^All applications\b/ })).toHaveCount(0);
 
-  const offerFilter = page.getByRole("button", { name: "Offer", exact: true });
-  await offerFilter.click();
-  await expect(page.getByRole("button", { name: "Open Older role at Recent South" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Newest role at Recent North" })).toHaveCount(0);
+  const search = page.getByRole("searchbox", { name: "Search company or role" });
+  await search.fill("south");
+  await expect(page.getByRole("button", { name: "Open or move Older role at Recent South" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open or move Newest role at Recent North" })).toHaveCount(0);
+  await expect(page.getByText("Showing 1 of 2 applications", { exact: true })).toBeVisible();
 
-  const search = page.getByRole("textbox", { name: "Search company or role" });
   await search.fill("No matching company");
-  await expect(page.getByText("No applications match your search.", { exact: true })).toBeVisible();
+  await expect(page.getByText("No matching applications.", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clear filters", exact: true })).toHaveCount(0);
   await search.fill("");
-  await page.getByRole("button", { name: "All", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Open or move Newest role at Recent North" })).toBeVisible();
 
   const archiveToggle = page.getByRole("button", { name: "Archived 1", exact: true });
   await archiveToggle.click();
@@ -115,7 +114,7 @@ test("keeps Job Board filters, search, and archive controls on its route", async
   await expect(page.getByRole("button", { name: "Open archived Archived role at Archived West" })).toBeVisible();
 });
 
-test("counts dated upcoming applications across stages and archive on Interviews", async ({ page, request }) => {
+test("counts upcoming interviews only for applications still in progress", async ({ page, request }) => {
   await page.goto("/interviews");
   const today = await localDate(page);
   await createApplication(request, {
@@ -161,9 +160,10 @@ test("counts dated upcoming applications across stages and archive on Interviews
   });
   await page.reload();
 
-  await expect(page.getByTestId("upcoming-interview-count")).toHaveText("4");
+  // Today, Future, and the Applied one count; the archived round does not.
+  await expect(page.getByTestId("upcoming-interview-count")).toHaveText("3");
   await expect(page.getByRole("heading", { name: /^All applications\b/ })).toHaveCount(0);
-  await expect(page.getByRole("searchbox", { name: "Search by company or role" })).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search company or role" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Archived\s+\d+$/ })).toHaveCount(0);
 });
 
@@ -173,12 +173,11 @@ test("shows empty application and archive states and a zero interview count", as
   await expect(page.getByRole("heading", { name: /^All applications\b/ })).toHaveCount(0);
 
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: "Needs Attention" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Needs attention" })).toBeVisible();
   await expect(page.getByText("No applications need attention right now.", { exact: true })).toBeVisible();
 
   await page.goto("/jobs");
-  await expect(page.getByText("No applications yet. Add your first job to see it here.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "All applications 0" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^All applications\b/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Archived 0", exact: true }).click();
   await expect(page.getByText("No archived applications.", { exact: true })).toBeVisible();
 });

@@ -27,8 +27,8 @@ async function openJobBoard(page: Page) {
   await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
 }
 
-function sidebarRow(page: Page, application: { company: string; role: string }) {
-  return page.getByRole("button", { name: `Open ${application.role} at ${application.company}`, exact: true });
+function boardCard(page: Page, application: { company: string; role: string }) {
+  return page.getByRole("button", { name: `Open or move ${application.role} at ${application.company}`, exact: true });
 }
 
 async function assertFocusCycle(page: Page, dialog: Locator, controls: Locator[], initialIndex: number) {
@@ -62,7 +62,7 @@ test("REACT-003: the interview-date prompt opened from a board card's status dro
 test("REACT-003: the prompt opened from the status dropdown traps focus and returns it there on Escape", async ({ page, request }) => {
   const application = await createApplication(request, "prompt");
   await openJobBoard(page);
-  await sidebarRow(page, application).click();
+  await boardCard(page, application).click();
   const status = page.getByRole("dialog", { name: application.role, exact: true }).getByLabel("Status", { exact: true });
   // A person reaches the dropdown by clicking or tabbing to it, so it has focus when it changes.
   await status.focus();
@@ -94,7 +94,7 @@ test("UI-001: the details panel opened while the cancelled Add dialog is still e
   const addDialog = page.getByRole("dialog", { name: "Add a job" });
   await expect(addDialog.getByLabel("Company")).toBeFocused();
   const cancel = await addDialog.getByRole("button", { name: "Cancel" }).elementHandle();
-  const row = await sidebarRow(page, application).elementHandle();
+  const row = await boardCard(page, application).elementHandle();
 
   // Cancel, then focus and open Edit two frames later: inside the Add dialog's exit animation.
   await page.evaluate(async ([cancelButton, rowButton]) => {
@@ -109,7 +109,7 @@ test("UI-001: the details panel opened while the cancelled Add dialog is still e
   await expect(detailsDialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(detailsDialog).toHaveCount(0);
-  await expect(sidebarRow(page, application)).toBeFocused();
+  await expect(boardCard(page, application)).toBeFocused();
 });
 
 test("keyboard:233: a closing Settings dialog does not reclaim focus from the search field", async ({ page }) => {
@@ -122,7 +122,7 @@ test("keyboard:233: a closing Settings dialog does not reclaim focus from the se
   await settingsDialog.getByRole("button", { name: "Close settings" }).click();
 
   // No wait for the exit animation: the search field is used while Settings is still closing.
-  const search = page.getByRole("textbox", { name: "Search company or role" });
+  const search = page.getByRole("searchbox", { name: "Search company or role" });
   await search.focus();
   await expect(search).toBeFocused();
   await page.keyboard.type("closing");
@@ -137,14 +137,14 @@ test("nested Delete All confirmation owns the trap and Escape, then returns focu
   const settingsButton = page.getByRole("button", { name: "Settings" });
   await settingsButton.click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
-  await settingsDialog.getByRole("button", { name: "Backup & Restore", exact: true }).click();
-  const deleteAll = settingsDialog.getByRole("button", { name: "Delete All Data", exact: true });
+  await settingsDialog.getByRole("button", { name: "Backup & restore", exact: true }).click();
+  const deleteAll = settingsDialog.getByRole("button", { name: "Delete all data", exact: true });
   await deleteAll.click();
 
   const confirmation = page.getByRole("alertdialog", { name: "Delete all data?" });
   const confirmationControls = [
     confirmation.getByRole("button", { name: "Cancel", exact: true }),
-    confirmation.getByRole("button", { name: "Delete All Data", exact: true }),
+    confirmation.getByRole("button", { name: "Delete all data", exact: true }),
   ];
   await assertFocusCycle(page, confirmation, confirmationControls, 0);
   await settingsDialog.getByRole("button", { name: "General", exact: true }).evaluate((button: HTMLButtonElement) => button.focus());
@@ -167,7 +167,7 @@ test("nested Delete All confirmation owns the trap and Escape, then returns focu
 test("REACT-006: a failed delete keeps the application view with its unsaved edits and shows the error there", async ({ page, request }) => {
   const application = await createApplication(request, "failed-delete");
   await openJobBoard(page);
-  await sidebarRow(page, application).click();
+  await boardCard(page, application).click();
   const panel = page.getByRole("dialog", { name: application.role, exact: true });
   const editor = await openDetailsEditor(page);
   await editor.getByLabel("Role").fill("Unsaved role edit");

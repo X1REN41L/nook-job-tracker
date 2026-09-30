@@ -44,7 +44,7 @@ try {
   assert.deepEqual(Object.values(Status), ["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW", "OFFER", "REJECTED"]);
   // `/` is a server redirect to the saved startup page, not a page of its own.
   const { settings } = await (await request("/api/settings")).json();
-  const startupPath = { dashboard: "/dashboard", "job-board": "/jobs", interviews: "/interviews" }[settings.startupPage];
+  const startupPath = { dashboard: "/dashboard", "job-board": "/jobs", table: "/table", interviews: "/interviews" }[settings.startupPage];
   assert.ok(startupPath, `Unknown startup page ${settings.startupPage}`);
   const root = await request("/");
   assert.equal(root.status, 307, "`/` must redirect to the startup page");

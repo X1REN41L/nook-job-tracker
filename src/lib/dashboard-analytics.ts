@@ -7,13 +7,13 @@ import {
   type AnalyticsSelection,
 } from "@/lib/analytics-period";
 import { analyzeStatusHistory, type StatusHistoryEvent } from "@/lib/status-history";
+import { isInProgressApplication } from "@/lib/status-values";
 import type {
   DashboardAnalyticsData, DashboardOverviewData, HistoryCoverage, RateMetric, StaleApplication, StaleApplicationsData,
   StaleTimingCoverage,
 } from "@/types/dashboard";
 
 const ACTIVE_STATUSES = [Status.APPLIED, Status.ONLINE_ASSESSMENT, Status.INTERVIEW] as const;
-const TERMINAL_INTERVIEW_STATUSES = [Status.OFFER, Status.REJECTED] as const;
 const STALE_SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM"] as const;
 const STALE_CRITICAL_DAYS = 60;
 const STALE_HIGH_DAYS = 30;
@@ -111,17 +111,16 @@ function daysBetween(start: string, end: string) {
 function makeTrendBuckets(selection: AnalyticsSelection, startDate: string, endDate: string) {
   const buckets: Array<{ startDate: string; endDate: string; count: number }> = [];
   if (selection.period === "CURRENT_MONTH" || selection.period === "CUSTOM_MONTH") {
+    // Seven-day blocks from the 1st (1–7, 8–14, 15–21, 22–28, then the rest), so every month
+    // splits the same way whatever weekday it starts on; only the last block can be short.
     const { year, month } = monthParts(startDate);
     const lastDay = monthEnd(year, month);
-    let start = monthStart(year, month);
-    while (start <= lastDay) {
-      const weekday = dateFromKey(start).getUTCDay();
-      const daysUntilSunday = (7 - weekday) % 7;
-      const weekEnd = new Date(dateFromKey(start).getTime() + daysUntilSunday * 86_400_000);
-      const end = weekEnd > dateFromKey(lastDay) ? lastDay : dateKey(weekEnd);
+    // Stops at the month's last day without stepping past it, which for December 9999 would leave the calendar.
+    for (let start = monthStart(year, month); ; start = addDays(start, 7)) {
+      const dayOfMonth = Number(start.slice(8, 10));
+      const end = dayOfMonth + 6 < Number(lastDay.slice(8, 10)) ? addDays(start, 6) : lastDay;
       buckets.push({ startDate: start, endDate: end, count: 0 });
       if (end === lastDay) break;
-      start = addDays(end, 1);
     }
     return { granularity: "WEEK" as const, buckets };
   }
@@ -151,18 +150,27 @@ async function loadApplications(where?: Prisma.ApplicationWhereInput): Promise<A
   }));
 }
 
-function staleApplications(applications: AnalyzedApplication[], today: string, timeZone: string, threshold: number): StaleApplication[] {
+/** Stale applications still on the board, or with `archived`, the archived ones that went stale the same way. */
+function staleApplications(applications: AnalyzedApplication[], today: string, timeZone: string, threshold: number, archived = false): StaleApplication[] {
   const result: StaleApplication[] = [];
   for (const application of applications) {
-    if (application.archived || !ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number])) continue;
+    if (application.archived !== archived || !ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number])) continue;
     const lastStatusEvent = application.history.latestStatusEvent;
     if (!lastStatusEvent) continue;
+
+    // A booked interview means the application is moving, so it is not waiting on anything.
+    const interviewDates = application.interviews.map((interview) => dateKey(interview.date));
+    if (interviewDates.some((date) => date >= today)) continue;
 
     const statusChangedOn = calendarDateInTimeZone(new Date(lastStatusEvent.createdAt), timeZone);
     // An application that never changed status has waited since it was applied, even when it was entered later.
     const appliedOn = dateKey(application.appliedDate);
-    const staleSince = lastStatusEvent.fromStatus === null && appliedOn < statusChangedOn ? "APPLIED_DATE" : "STATUS_CHANGE";
-    const staleDays = Math.max(0, daysBetween(staleSince === "APPLIED_DATE" ? appliedOn : statusChangedOn, today));
+    const statusSince = lastStatusEvent.fromStatus === null && appliedOn < statusChangedOn ? "APPLIED_DATE" : "STATUS_CHANGE";
+    const statusSinceOn = statusSince === "APPLIED_DATE" ? appliedOn : statusChangedOn;
+    // A past interview is activity too, so the wait restarts from the latest one.
+    const lastInterviewOn = interviewDates.reduce((latest, date) => (date > latest ? date : latest), "");
+    const staleSince = lastInterviewOn > statusSinceOn ? "INTERVIEW" : statusSince;
+    const staleDays = Math.max(0, daysBetween(staleSince === "INTERVIEW" ? lastInterviewOn : statusSinceOn, today));
     if (staleDays < threshold) continue;
     const severity = staleDays >= STALE_CRITICAL_DAYS ? "CRITICAL" : staleDays >= STALE_HIGH_DAYS ? "HIGH" : "MEDIUM";
     result.push({
@@ -221,10 +229,7 @@ export async function getDashboardOverview(today: string, timeZone: string, stal
   const historyCoverage = coverageFor(applications);
   // Each interview round counts separately, for applications still in progress.
   const upcoming = applications
-    .filter((application) =>
-      !application.archived &&
-      !TERMINAL_INTERVIEW_STATUSES.includes(application.status as typeof TERMINAL_INTERVIEW_STATUSES[number]),
-    )
+    .filter(isInProgressApplication)
     .flatMap((application) => application.interviews
       .filter((interview) => dateKey(interview.date) >= today)
       .map((interview) => ({ application, interview, date: dateKey(interview.date) })))
@@ -273,11 +278,11 @@ export async function getDashboardOverview(today: string, timeZone: string, stal
 
 export async function getStaleApplications(today: string, timeZone: string, staleApplicationThreshold = 15): Promise<StaleApplicationsData> {
   const applications = await loadApplications({
-    archived: false,
     status: { in: [...ACTIVE_STATUSES] },
   });
   return {
     ...staleGroups(staleApplications(applications, today, timeZone, staleApplicationThreshold)),
+    archived: staleApplications(applications, today, timeZone, staleApplicationThreshold, true),
     timingCoverage: staleTimingCoverage(applications),
   };
 }

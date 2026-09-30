@@ -8,9 +8,11 @@ test("keeps the expanded sidebar and collapsed rail on the left at desktop and m
   const sidebar = page.locator(".sidebar-panel");
   const board = page.locator(".board-scroll");
   const branding = sidebar.getByText("Nook", { exact: true });
+  const motto = sidebar.getByText("your job search, kept tidy", { exact: true });
 
   await expect(board).toBeVisible();
   await expect(branding).toBeVisible();
+  await expect(motto).toBeVisible();
   await expect(page.locator("header").getByText("Nook", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add job" })).toBeVisible();
 
@@ -23,11 +25,12 @@ test("keeps the expanded sidebar and collapsed rail on the left at desktop and m
 
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(branding).toBeHidden();
+  await expect(motto).toBeHidden();
   const desktopCollapsed = await page.evaluate(() => ({
     sidebarWidth: Math.round(document.querySelector(".sidebar-panel")!.getBoundingClientRect().width),
     boardLeft: Math.round(document.querySelector(".board-scroll")!.getBoundingClientRect().left),
   }));
-  expect(desktopCollapsed).toEqual({ sidebarWidth: 50, boardLeft: 50 });
+  expect(desktopCollapsed).toEqual({ sidebarWidth: 53, boardLeft: 53 });
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
 
   await page.getByRole("button", { name: "Expand sidebar" }).click();
@@ -49,7 +52,7 @@ test("keeps the expanded sidebar and collapsed rail on the left at desktop and m
     sidebarRight: Math.round(document.querySelector(".sidebar-panel")!.getBoundingClientRect().right),
     boardLeft: Math.round(document.querySelector(".board-scroll")!.getBoundingClientRect().left),
   }));
-  expect(mobileCollapsed).toEqual({ sidebarLeft: 0, sidebarRight: 50, boardLeft: 50 });
+  expect(mobileCollapsed).toEqual({ sidebarLeft: 0, sidebarRight: 53, boardLeft: 53 });
   await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add job" })).toBeVisible();
 });
@@ -68,6 +71,7 @@ test("keeps navigation and brand icons the same size and height when the sidebar
     const dimensions = (element: Element) => ({ width: rect(element).width, height: rect(element).height });
     const center = (element: Element) => ({ x: rect(element).x + rect(element).width / 2, y: rect(element).y + rect(element).height / 2 });
     return {
+      railCenter: navigation.getBoundingClientRect().x + navigation.clientWidth / 2,
       items: items.map((item) => {
         const icon = item.querySelector("svg")!;
         const container = icon.parentElement!;
@@ -88,7 +92,7 @@ test("keeps navigation and brand icons the same size and height when the sidebar
   for (let index = 0; index < 5; index++) {
     const before = expanded.items[index];
     const after = collapsed.items[index];
-    expect(before.icon).toEqual({ width: 16, height: 16 });
+    expect(before.icon).toEqual({ width: 18, height: 18 });
     expect(after.icon).toEqual(before.icon);
     expect(before.container).toEqual({ width: 20, height: 20 });
     expect(after.container).toEqual(before.container);
@@ -96,8 +100,8 @@ test("keeps navigation and brand icons the same size and height when the sidebar
     expect(after.iconCenter).toEqual(after.containerCenter);
     expect(Math.abs(after.containerCenter.x - after.buttonCenter.x)).toBeLessThanOrEqual(0.5);
     expect(after.containerCenter.y).toBe(after.buttonCenter.y);
-    expect(after.button.width).toBeGreaterThanOrEqual(35);
-    expect(after.button.width).toBeLessThanOrEqual(36);
+    expect(after.button.width).toBe(36);
+    expect(after.buttonCenter.x).toBe(collapsed.railCenter);
     expect(after.button.height).toBe(36);
     expect(after.iconCenter.y).toBe(before.iconCenter.y);
   }

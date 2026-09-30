@@ -19,7 +19,7 @@ export function DeleteAllDataDialog({ deleting, onCancel, onConfirm, returnFocus
     <p className="mt-2 text-sm leading-6 text-ink-soft" id="delete-all-description">This will permanently delete all applications and their history. This action cannot be undone.</p>
     <div className="mt-6 flex justify-end gap-3">
       <button ref={cancelRef} className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={deleting} onClick={onCancel} type="button">Cancel</button>
-      <button className="rounded-nook-sm bg-rose px-4 py-2 text-sm font-medium text-cream motion-interactive hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:opacity-60" disabled={deleting} onClick={onConfirm} type="button"><StableButtonLabel label="Delete All Data" busyLabel="Deleting…" busy={deleting} /></button>
+      <button className="rounded-nook-sm bg-rose px-4 py-2 text-sm font-medium text-cream motion-interactive hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:opacity-60" disabled={deleting} onClick={onConfirm} type="button"><StableButtonLabel label="Delete all data" busyLabel="Deleting…" busy={deleting} /></button>
     </div>
   </Dialog>;
 }

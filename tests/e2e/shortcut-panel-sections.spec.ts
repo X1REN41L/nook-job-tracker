@@ -6,45 +6,41 @@ async function readSections(container: Locator) {
     heading: section.querySelector("h3")?.textContent?.trim(),
     rows: Array.from(section.querySelectorAll("li")).map((row) => ({
       action: row.querySelector(":scope > span:first-child")?.textContent?.trim(),
-      keys: row.querySelector("kbd")?.textContent?.trim(),
+      keys: row.querySelector("kbd > .sr-only")?.textContent?.trim(),
     })),
   })));
 }
 
-test("both shortcut panels show the same complete six sections on every route", async ({ page }) => {
+test("both shortcut panels show the same complete four sections on every route", async ({ page }) => {
   const isMac = process.platform === "darwin";
   const expected = [
     { heading: "General", rows: [
-      { action: "Command Palette", keys: isMac ? "⌘ K" : "Ctrl + K" },
-      { action: "Open Settings", keys: isMac ? "⌘ ⇧ ," : "Ctrl + Shift + ," },
-      { action: "Keyboard Shortcuts", keys: "?" },
-      { action: "Toggle Sidebar", keys: isMac ? "⌘ ⇧ S" : "Ctrl + Shift + S" },
-      { action: "Close / Cancel", keys: "Esc" },
-      { action: "Undo latest action", keys: "U" },
+      { action: "Command palette", keys: isMac ? "⌘K" : "Ctrl+K" },
+      { action: "Search this page", keys: "/" },
+      { action: "New job", keys: "N" },
+      { action: "Edit open application", keys: "E" },
+      { action: "Undo", keys: isMac ? "⌘Z" : "Ctrl+Z" },
+      { action: "Close", keys: "Esc" },
+      { action: "Toggle sidebar", keys: isMac ? "⌘⇧S" : "Ctrl+Shift+S" },
+      { action: "Settings", keys: isMac ? "⌘⇧," : "Ctrl+Shift+," },
+      { action: "Keyboard shortcuts", keys: "?" },
     ] },
-    { heading: "Page Navigation", rows: [
-      { action: "Dashboard", keys: "G D" },
-      { action: "Job Board", keys: "G J" },
-      { action: "Applications Table", keys: "G T" },
-      { action: "Interviews", keys: "G I" },
-    ] },
-    { heading: "Dashboard", rows: [
-      { action: "Analytics", keys: "G A" },
+    { heading: "Go to", rows: [
+      { action: "Dashboard", keys: "G then D" },
+      { action: "Analytics", keys: "G then A" },
+      { action: "Job Board", keys: "G then J" },
+      { action: "Table", keys: "G then T" },
+      { action: "Interviews", keys: "G then I" },
     ] },
     { heading: "Job Board", rows: [
-      { action: "New Job", keys: isMac ? "⌥ N" : "Alt + N" },
-      { action: "Archive focused card", keys: isMac ? "⌥ A" : "Alt + A" },
-      { action: "Delete focused card", keys: "Delete / Backspace" },
-      { action: "Previous application", keys: "↑" },
-      { action: "Next application", keys: "↓" },
-      { action: "Previous column", keys: "←" },
-      { action: "Next column", keys: "→" },
-    ] },
-    { heading: "Applications Table", rows: [
-      { action: "Search", keys: "/" },
+      { action: "Move between cards", keys: "↑ ↓ ← →" },
+      { action: "Open card", keys: isMac ? "↩" : "Enter" },
+      { action: "Pick up or drop card", keys: "Space" },
+      { action: "Archive card", keys: "E" },
+      { action: "Delete card", keys: isMac ? "Del or ⌫" : "Del or Backspace" },
     ] },
     { heading: "Interviews", rows: [
-      { action: "Search", keys: "/" },
+      { action: "Upcoming / Past", keys: "← →" },
     ] },
   ];
 
@@ -52,7 +48,7 @@ test("both shortcut panels show the same complete six sections on every route", 
   for (const route of ["/dashboard", "/jobs", "/table", "/interviews"]) {
     await page.goto(route);
     await page.keyboard.press("?");
-    const overlay = page.getByRole("dialog", { name: "Keyboard Shortcuts" });
+    const overlay = page.getByRole("dialog", { name: "Keyboard shortcuts" });
     await expect(overlay).toBeVisible();
     expect(await readSections(overlay)).toEqual(expected);
     await expectRowsAligned(overlay);
@@ -72,7 +68,7 @@ test("both shortcut panels show the same complete six sections on every route", 
 async function expectRowsAligned(container: Locator) {
   const rows = await container.locator("section[aria-label] li").evaluateAll((elements) => elements.map((row) => {
     const label = row.querySelector(":scope > span:first-child")!.getBoundingClientRect();
-    const key = row.querySelector("kbd")!.getBoundingClientRect();
+    const key = row.querySelector(":scope > kbd")!.getBoundingClientRect();
     const bounds = row.getBoundingClientRect();
     return {
       childCount: row.children.length,

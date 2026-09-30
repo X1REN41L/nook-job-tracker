@@ -106,7 +106,7 @@ test("A11Y-001: a board card exposes one real button, keeps its heading and link
   await expect(card).toBeFocused();
 });
 
-test("A11Y-001: keyboard drag, Alt+A archive, and arrow focus still work from the card button", async ({ page, request }) => {
+test("A11Y-001: keyboard drag, E archive, and arrow focus still work from the card button", async ({ page, request }) => {
   const applied = await createApplication(request, { status: "APPLIED" });
   const offer = await createApplication(request, { status: "OFFER" });
   await openJobBoard(page);
@@ -137,12 +137,12 @@ test("A11Y-001: keyboard drag, Alt+A archive, and arrow focus still work from th
   const archived = page.waitForResponse((response) =>
     response.request().method() === "PATCH" && response.url().endsWith(`/api/applications/${offer.id}`),
   );
-  await page.keyboard.press("Alt+a");
+  await page.keyboard.press("e");
   expect((await (await archived).json()).application.archived).toBe(true);
   await expect(boardCard(page, offer)).toHaveCount(0);
 });
 
-test("A11Y-001: sidebar and archived rows do not promise keyboard archive or move, and pointer drag still works", async ({ page, request }) => {
+test("A11Y-001: archived rows do not promise keyboard archive or move, and pointer drag still works", async ({ page, request }) => {
   await resetSettings(request, { archivedExpanded: true });
   const active = await createApplication(request, { status: "APPLIED" });
   const archived = await createApplication(request, { status: "APPLIED" });
@@ -155,13 +155,14 @@ test("A11Y-001: sidebar and archived rows do not promise keyboard archive or mov
 
   await expect(page.getByRole("button", { name: /^Edit or archive / })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Open or move archived / })).toHaveCount(0);
-  const row = page.getByRole("button", { name: `Open ${active.role} at ${active.company}`, exact: true });
+  const row = page.getByRole("button", { name: `Open or move ${active.role} at ${active.company}`, exact: true });
   const archivedRow = page.getByRole("button", { name: `Open archived ${archived.role} at ${archived.company}`, exact: true });
   await expect(row).toBeVisible();
   await expect(archivedRow).toBeVisible();
 
-  for (const [control, role] of [[row, active.role], [archivedRow, archived.role]] as const) {
-    for (const key of ["Enter", "Space"]) {
+  // Board cards open with Enter (Space picks them up); archived rows open with either key.
+  for (const [control, role, keys] of [[row, active.role, ["Enter"]], [archivedRow, archived.role, ["Enter", "Space"]]] as const) {
+    for (const key of keys) {
       await control.focus();
       await page.keyboard.press(key);
       const detailsDialog = page.getByRole("dialog", { name: role, exact: true });
@@ -211,23 +212,23 @@ test("A11Y-006: landmarks, the Job Board h1, metric labels, and link and heading
   await expect(main.getByRole("complementary")).toHaveCount(0);
   await expect(main.getByRole("heading", { level: 1, name: "Job Board", exact: true })).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-  await expect(page.getByRole("heading", { level: 2, name: "All applications 1", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^All applications\b/ })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Interviews, 1 upcoming", exact: true })).toBeVisible();
 
   await page.goto("/dashboard");
   await expect(page.getByRole("main").getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
-  await expect(page.getByText("Total Applications", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Total Applications" })).toHaveCount(0);
-  await expect(page.getByText("Active Pipeline", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Active Pipeline" })).toHaveCount(0);
+  await expect(page.getByText("Total applications", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Total applications" })).toHaveCount(0);
+  await expect(page.getByText("Active pipeline", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Active pipeline" })).toHaveCount(0);
 
   await page.goto("/dashboard/analytics");
-  await expect(page.getByText("Interview Rate", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Interview Rate" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { level: 2, name: "Status Breakdown" })).toBeVisible();
+  await expect(page.getByText("Interview rate", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Interview rate" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 2, name: "Status breakdown" })).toBeVisible();
 });
 
-test("A11Y-002: Interviews tabs use roving tabindex and arrows only on the tablist", async ({ page, request }) => {
+test("A11Y-002: Interviews tabs use roving tabindex, and arrows switch them from anywhere but a text field", async ({ page, request }) => {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   await createApplication(request, { status: "INTERVIEW", interviewDate: localDateKey(yesterday) });
@@ -235,7 +236,7 @@ test("A11Y-002: Interviews tabs use roving tabindex and arrows only on the tabli
 
   const upcoming = page.getByRole("tab", { name: "Upcoming" });
   const past = page.getByRole("tab", { name: "Past" });
-  const search = page.getByRole("searchbox", { name: "Search by company or role" });
+  const search = page.getByRole("searchbox", { name: "Search company or role" });
   await expect(upcoming).toHaveAttribute("tabindex", "0");
   await expect(past).toHaveAttribute("tabindex", "-1");
 
@@ -264,13 +265,14 @@ test("A11Y-002: Interviews tabs use roving tabindex and arrows only on the tabli
   const sort = page.getByRole("button", { name: /^Sort past interviews/ });
   await sort.focus();
   await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("ArrowLeft");
   await expect(past).toHaveAttribute("aria-selected", "true");
-  await expect(sort).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(upcoming).toHaveAttribute("aria-selected", "true");
 
-  await sort.evaluate((element) => (element as HTMLElement).blur());
-  await page.keyboard.press("ArrowLeft");
-  await expect(past).toHaveAttribute("aria-selected", "true");
+  await search.fill("x");
+  await page.keyboard.press("ArrowRight");
+  await expect(upcoming).toHaveAttribute("aria-selected", "true");
+  await expect(search).toBeFocused();
 });
 
 test("BIZ-002: Analytics, Stale, and the job form use the fixed board colors and names", async ({ page, request }) => {
@@ -278,7 +280,7 @@ test("BIZ-002: Analytics, Stale, and the job form use the fixed board colors and
   const application = await createApplication(request, { status: "ONLINE_ASSESSMENT", appliedDate: localDateKey() });
 
   await page.goto("/dashboard/analytics");
-  const breakdown = page.getByRole("region", { name: "Status Breakdown" });
+  const breakdown = page.getByRole("region", { name: "Status breakdown" });
   const onlineAssessment = breakdown.getByRole("listitem").filter({ hasText: "Online assessment" });
   await expect(onlineAssessment).toHaveCount(1);
   await expect(onlineAssessment.locator(".bg-sage")).toHaveCount(1);

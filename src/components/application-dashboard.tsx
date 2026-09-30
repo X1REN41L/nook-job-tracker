@@ -14,7 +14,7 @@ import { ApplicationDetailPanel } from "@/components/application-detail-panel";
 import type { ApplicationChange } from "@/components/application-detail-sections";
 import { ApplicationSidebar } from "@/components/application-sidebar";
 import { ApplicationsTable } from "@/components/applications-table";
-import { BoardToolbar, DEFAULT_BOARD_FILTERS, type BoardFilters } from "@/components/board-toolbar";
+import { BoardToolbar, DEFAULT_BOARD_FILTERS, isBoardFiltered, type BoardFilters } from "@/components/board-toolbar";
 import { CommandPalette, type PaletteCommand } from "@/components/command-palette";
 import { KanbanBoard, KanbanCardOverlay } from "@/components/kanban-board";
 import { DeleteDialog } from "@/components/delete-dialog";
@@ -36,10 +36,11 @@ import { useToastUndo, type StatusUndo, type ToastUndo } from "@/hooks/use-toast
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
 import { currentLocalDate } from "@/lib/application-date";
-import { applicationSources, compareApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationFilters, matchesBoardStatusFilter, type ApplicationFilters } from "@/lib/application-list";
+import { applicationSources, compareApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationSearch, matchesBoardStatusFilter, type ApplicationFilters } from "@/lib/application-list";
 import { subscribeToLocalDate } from "@/lib/local-date-subscription";
 import { setSettingsState } from "@/lib/settings-store";
 import { BOARDS, BOARD_STATUSES, boardLabel } from "@/lib/board-preferences";
+import { isInProgressApplication } from "@/lib/status-values";
 import { applicationApiPath } from "@/lib/application-api-path";
 import { applicationInputSchema, interviewDateSchema } from "@/lib/application-schema";
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
@@ -52,12 +53,13 @@ import type { StaleApplication } from "@/types/dashboard";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
 const blankForm = (): JobFormState => ({ company: "", role: "", status: Status.APPLIED, source: "", appliedDate: currentLocalDate(), notes: "", jobUrl: "" });
-type DragSource = "board" | "sidebar" | "archived";
+type DragSource = "board" | "archived";
 const SIDEBAR_WIDTH_KEY = "nook-sidebar-width";
 const SIDEBAR_WIDTH_EVENT = "nook-sidebar-width-change";
 const DEFAULT_SIDEBAR_WIDTH = 320;
-// 254.08px for the first three filter pills + 12px gaps + 36px padding + 1px border.
-const MIN_SIDEBAR_WIDTH = 304;
+// Just wide enough for the logo row to show the whole motto: 8px gutter + 36px logo + 12px gap
+// + 187px "Nook your job search, kept tidy" + 42px room for the collapse toggle + 8px gutter + 1px border.
+const MIN_SIDEBAR_WIDTH = 294;
 const MAX_SIDEBAR_WIDTH = 420;
 const SIDEBAR_COLLAPSE_THRESHOLD = 180;
 const SIDEBAR_REOPEN_THRESHOLD = 80;
@@ -107,7 +109,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const [applications, setApplications] = useState(initialApplications);
   const [form, setForm] = useState<JobFormState>(blankForm);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<ApplicationRecord | null>(null);
+  // One application from a card or the details panel, or several selected in the table.
+  const [pendingDelete, setPendingDelete] = useState<ApplicationRecord[] | null>(null);
   const [pendingInterviewDate, setPendingInterviewDate] = useState<ApplicationRecord | null>(null);
   const [interviewDateDraft, setInterviewDateDraft] = useState("");
   const [interviewTypeDraft, setInterviewTypeDraft] = useState<InterviewType>(InterviewType.OTHER);
@@ -131,12 +134,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
   const [bulkBusy, setBulkBusy] = useState(false);
   const isMac = typeof navigator !== "undefined" && isMacPlatform();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"all" | Status>("all");
   const sidebarCollapsed = settings.sidebarCollapsed;
   const sidebarWidth = useSyncExternalStore(subscribeToSidebarPreference, getSidebarWidth, () => DEFAULT_SIDEBAR_WIDTH);
   const archivedExpanded = settings.archivedExpanded;
-  const allApplicationsExpanded = settings.allApplicationsExpanded;
   const today = useSyncExternalStore(subscribeToLocalDate, currentLocalDate, getServerLocalDate);
   const { toast, deleteRecovery, undoing, showToast, clearApplicationUndo, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
   const saveSettings = useSettingsUpdate(showToast);
@@ -150,10 +150,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     showToast,
   });
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
-  const sidebarHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const boardHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const boardSearchRef = useRef<HTMLInputElement | null>(null);
   const focusExpandOnCollapseRef = useRef(false);
   const interviewSearchRef = useRef<HTMLInputElement | null>(null);
   const tableSearchRef = useRef<HTMLInputElement | null>(null);
@@ -161,14 +161,16 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const submissionInFlight = useRef(false);
   const dndContextId = useId();
-  const { activeId, activeDragSource, temporarilyExpanded, sensors, collisionDetection, autoScroll, onDragStart, onDragMove, onDragEnd, onDragCancel } = useBoardDrag({
+  const { activeId, temporarilyExpanded, sensors, collisionDetection, autoScroll, onDragStart, onDragMove, onDragEnd, onDragCancel } = useBoardDrag({
     sidebarCollapsed,
     onDrop: handleDrop,
   });
   const effectiveSidebarCollapsed = sidebarCollapsed && !temporarilyExpanded;
-  const staleData = useStaleApplications(today, dataRevision, page === "job-board" || page === "table" || detailId !== null).data;
+  // Loaded on every page: the board, the Table and the Archived list tag stale applications, and Overview lists them.
+  const stale = useStaleApplications(today, dataRevision);
+  const staleData = stale.data;
   const staleById = new Map<string, StaleApplication>(staleData
-    ? [...staleData.applicationsBySeverity.CRITICAL, ...staleData.applicationsBySeverity.HIGH, ...staleData.applicationsBySeverity.MEDIUM].map((item) => [item.id, item])
+    ? [...staleData.applicationsBySeverity.CRITICAL, ...staleData.applicationsBySeverity.HIGH, ...staleData.applicationsBySeverity.MEDIUM, ...staleData.archived].map((item) => [item.id, item])
     : []);
   const staleDays = new Map([...staleById].map(([id, item]) => [id, item.staleDays]));
   const cancelDelete = useCallback(() => {
@@ -297,10 +299,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     saveSettings((current) => ({ archivedExpanded: !current.archivedExpanded }));
   }
 
-  function toggleAllApplications() {
-    saveSettings((current) => ({ allApplicationsExpanded: !current.allApplicationsExpanded }));
-  }
-
   async function insertApplications(backup: BackupSnapshot) {
     const response = await fetch("/api/applications/import", {
       method: "POST",
@@ -335,8 +333,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       setInterviewDateError("");
       movingIdsRef.current.clear();
       setMovingIds(new Set());
-      setSearchTerm("");
-      setActiveFilter("all");
       setBoardFilters(DEFAULT_BOARD_FILTERS);
       setDetailId(null);
       setError("");
@@ -432,12 +428,22 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
   function requestDelete(application: ApplicationRecord, trigger: HTMLElement | null) {
     deleteTriggerRef.current = trigger;
-    setPendingDelete(application);
+    setPendingDelete([application]);
+  }
+
+  function requestBulkDelete(targets: ApplicationRecord[], trigger: HTMLElement | null) {
+    if (!targets.length) return;
+    deleteTriggerRef.current = trigger;
+    setPendingDelete(targets);
   }
 
   async function confirmDelete() {
     if (!pendingDelete) return;
-    const deletedApplication = pendingDelete;
+    if (pendingDelete.length > 1) {
+      await confirmBulkDelete(pendingDelete);
+      return;
+    }
+    const [deletedApplication] = pendingDelete;
     setError("");
     setDeleting(true);
     try {
@@ -457,10 +463,45 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         company: deletedApplication.company,
       });
       setPendingDelete(null);
-      requestAnimationFrame(() => sidebarHeadingRef.current?.focus());
+      requestAnimationFrame(() => boardHeadingRef.current?.focus());
     } catch (caught) {
       setPendingDelete(null);
       setError(caught instanceof Error ? caught.message : "Could not delete the application");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  // One request deletes the whole selection, so it is all deleted or none of it is; one Undo restores it all.
+  async function confirmBulkDelete(targets: ApplicationRecord[]) {
+    if (targets.some(({ id }) => movingIdsRef.current.has(id))) {
+      setError("Wait for the changes to finish saving, then try again.");
+      setPendingDelete(null);
+      return;
+    }
+    setError("");
+    setDeleting(true);
+    try {
+      const response = await fetch("/api/applications/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: targets.map(({ id }) => id) }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Could not delete the applications");
+      const deletedIds = new Set<string>(body.deletedIds);
+      reconcileApplications((current) => current.filter((item) => !deletedIds.has(item.id)));
+      if (detailId && deletedIds.has(detailId)) setDetailId(null);
+      // Applications already deleted elsewhere count as done; only the ones this delete removed come back on Undo.
+      const count = targets.length;
+      showToast(`Deleted ${count} ${count === 1 ? "application" : "applications"}`, deletedIds.size
+        ? { kind: "delete-batch", applicationIds: [...deletedIds], token: body.token, expiresAt: body.expiresAt }
+        : undefined);
+      setPendingDelete(null);
+      requestAnimationFrame(() => tableSearchRef.current?.focus());
+    } catch (caught) {
+      setPendingDelete(null);
+      setError(caught instanceof Error ? `${caught.message}. Nothing was deleted.` : "Could not delete the applications. Nothing was deleted.");
     } finally {
       setDeleting(false);
     }
@@ -721,6 +762,20 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       if (failed) showToast(`Undid ${undo.items.length - failed} of ${undo.items.length} changes. The others changed elsewhere or were busy.`);
       return;
     }
+    if (undo.kind === "delete-batch") {
+      const response = await fetch("/api/applications/bulk-restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: undo.token, ids: undo.applicationIds }),
+      });
+      const body = await response.json();
+      // Nothing is restored on failure, so Undo stays offered for another try until the window ends.
+      if (!response.ok) throw new Error(body.error ?? "Could not restore the applications");
+      const restored = body.applications as ApplicationRecord[];
+      reconcileApplications((current) => [...restored, ...current].sort(compareApplications));
+      showToast(`Restored ${restored.length} ${restored.length === 1 ? "application" : "applications"}`);
+      return;
+    }
 
     const response = await fetch(applicationApiPath(undo.applicationId, "restore"), {
       method: "POST",
@@ -742,7 +797,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     const application = applications.find(({ id }) => id === applicationId);
     const overId = event.over?.id;
     if (!application || overId === undefined) return;
-    if (dragSource === "sidebar" && overId !== ARCHIVED_DROP_ID) return;
     const droppedOnArchive = overId === ARCHIVED_DROP_ID || (dragSource === "board" && overId === SIDEBAR_EDGE_DROP_ID);
     if (droppedOnArchive) {
       if (dragSource === "archived") return;
@@ -756,13 +810,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     }
   }
 
-  const sidebarItems = applications
-    .filter((item) => matchesApplicationFilters(item, { search: searchTerm, status: activeFilter }))
-    .sort(compareApplications);
   const activeApplications = applications.filter((item) => !item.archived);
-  const boardApplications = activeApplications.filter((item) => matchesBoardStatusFilter(item.status, boardFilters.status));
+  const boardApplications = activeApplications.filter((item) => matchesBoardStatusFilter(item.status, boardFilters.status) && matchesApplicationSearch(item, boardFilters.search));
   const boardColumns = BOARDS.filter((board) => matchesBoardStatusFilter(board.status, boardFilters.status));
-  const boardFiltered = boardFilters.status !== "all";
+  const boardFiltered = isBoardFiltered(boardFilters);
   const sources = applicationSources(applications);
   const detailApplication = detailId ? applications.find(({ id }) => id === detailId) ?? null : null;
   const archivedItems = applications
@@ -780,21 +831,30 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }
 
   function focusSearch() {
-    const input = { interviews: interviewSearchRef, "job-board": null, table: tableSearchRef, dashboard: null }[page]?.current;
+    const input = { interviews: interviewSearchRef, "job-board": boardSearchRef, table: tableSearchRef, dashboard: null }[page]?.current;
     if (!input) return false;
     input.focus();
     return true;
   }
 
+  const firstApplicationMonth = applications.reduce<string | null>((first, application) => {
+    const month = application.appliedDate.slice(0, 7);
+    return first === null || month < first ? month : first;
+  }, null);
+
   const paletteCommands: PaletteCommand[] = [
-    { id: "go-overview", label: "Overview", group: "Pages", keywords: "dashboard needs attention stale", run: () => router.push("/dashboard") },
-    { id: "go-analytics", label: "Analytics", group: "Pages", keywords: "dashboard charts", run: () => router.push("/dashboard/analytics") },
-    { id: "go-job-board", label: "Job Board", group: "Pages", keywords: "kanban", run: () => router.push("/jobs") },
-    { id: "go-table", label: "Applications Table", group: "Pages", keywords: "list bulk", run: () => router.push("/table") },
-    { id: "go-interviews", label: "Interviews", group: "Pages", keywords: "calendar", run: () => router.push("/interviews") },
-    { id: "new-job", label: "New job", group: "Actions", keywords: "add application", run: openAddModal },
-    { id: "open-settings", label: "Open Settings", group: "Actions", keywords: "preferences theme backup", run: () => setSettingsOpen(true) },
-    { id: "show-shortcuts", label: "Keyboard Shortcuts", group: "Actions", keywords: "keys help", run: openShortcuts },
+    { id: "go-overview", label: "Overview", group: "Pages", keywords: "dashboard needs attention stale", shortcut: "go-dashboard", run: () => router.push("/dashboard") },
+    { id: "go-analytics", label: "Analytics", group: "Pages", keywords: "dashboard charts", shortcut: "go-analytics", run: () => router.push("/dashboard/analytics") },
+    { id: "go-job-board", label: "Job Board", group: "Pages", keywords: "kanban", shortcut: "go-job-board", run: () => router.push("/jobs") },
+    { id: "go-table", label: "Table", group: "Pages", keywords: "list bulk", shortcut: "go-table", run: () => router.push("/table") },
+    { id: "go-interviews", label: "Interviews", group: "Pages", keywords: "calendar", shortcut: "go-interviews", run: () => router.push("/interviews") },
+    { id: "new-job", label: "New job", group: "Actions", keywords: "add application", shortcut: "new-job", run: openAddModal },
+    // Waits for the palette to close and hand focus back, so the search box keeps it.
+    ...(page === "dashboard" ? [] : [{ id: "search", label: "Search this page", group: "Actions" as const, keywords: "find filter", shortcut: "search" as const, run: () => { window.setTimeout(focusSearch); } }]),
+    { id: "toggle-sidebar", label: "Toggle sidebar", group: "Actions", keywords: "collapse expand navigation", shortcut: "toggle-sidebar", run: toggleSidebar },
+    { id: "toggle-theme", label: "Toggle light / dark theme", group: "Actions", keywords: "dark light mode appearance", run: () => saveSettings({ theme: document.documentElement.classList.contains("dark") ? "light" : "dark" }) },
+    { id: "open-settings", label: "Open settings", group: "Actions", keywords: "preferences theme backup", shortcut: "open-settings", run: () => setSettingsOpen(true) },
+    { id: "show-shortcuts", label: "Keyboard shortcuts", group: "Actions", keywords: "keys help", shortcut: "show-shortcuts", run: openShortcuts },
   ];
 
   function moveApplicationFocus(direction: "up" | "down" | "left" | "right") {
@@ -863,6 +923,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     onToggleSidebar: toggleSidebar,
     onNavigate: (path) => router.push(path),
     onMoveApplicationFocus: moveApplicationFocus,
+    onSwitchInterviewTab: (tab) => {
+      // Clicking selects the tab without moving focus, so ← → keep working from wherever you are.
+      const button = document.querySelector<HTMLElement>(`[role="tab"][data-interview-tab="${tab}"]`);
+      if (!button || button.getAttribute("aria-selected") === "true") return false;
+      button.click();
+      return true;
+    },
     onArchiveFocused: (application) => {
       if (application.archived) return;
       void moveApplication(application, application.status, true, undefined, true);
@@ -872,7 +939,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
   return (
     <div className="select-none-ui flex h-screen flex-col overflow-hidden bg-cream text-ink">
-      {(page === "job-board" || page === "table") && (
+      {page === "job-board" && (
         <button aria-label="Add job" className="btn-primary fixed bottom-6 right-6 z-50 flex origin-bottom-right scale-[1.2] items-center gap-2 shadow-lg" onClick={openAddModal} type="button">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19" />
@@ -928,9 +995,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         >
         <ApplicationSidebar
           boards={BOARDS}
-          sidebarItems={sidebarItems}
           archivedItems={archivedItems}
-          totalApplications={applications.length}
           upcomingInterviewCount={upcomingInterviewCount}
           collapsed={effectiveSidebarCollapsed}
           width={sidebarWidth}
@@ -939,16 +1004,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           page={page}
           dashboardSection={dashboardSection}
           archivedExpanded={archivedExpanded}
-          allApplicationsExpanded={allApplicationsExpanded}
           movingIds={movingIds}
-          searchTerm={searchTerm}
-          activeFilter={activeFilter}
-          headingRef={sidebarHeadingRef}
-          searchInputRef={searchInputRef}
+          staleDays={staleDays}
           focusExpandOnCollapseRef={focusExpandOnCollapseRef}
           settingsTriggerRef={settingsTriggerRef}
-          onSearchTermChange={setSearchTerm}
-          onFilterChange={setActiveFilter}
           onToggleSidebar={toggleSidebar}
           onResizePointerDown={handleSidebarResizeStart}
           onResizeKeyDown={handleSidebarResizeKeyDown}
@@ -958,26 +1017,28 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           }}
           onOpenSettings={() => setSettingsOpen(true)}
           onToggleArchived={toggleArchived}
-          onToggleAllApplications={toggleAllApplications}
           onOpen={openDetail}
           onRequestDelete={(application, trigger) => requestDelete(application, trigger)}
           onRestore={async (application) => { await moveApplication(application, application.status, true, undefined, false); }}
         />
-        <main ref={boardScrollRef} className="board-scroll scrollbar-styled h-full min-w-0 overflow-auto py-6">
-          <div className={`page-shell ${page === "job-board" ? "h-full" : ""}`}>
+        <main ref={boardScrollRef} className={`board-scroll scrollbar-styled h-full min-w-0 py-6 ${page === "job-board" ? "overflow-hidden" : "overflow-auto"}`}>
+          {/* Keyed by page, so each page fades in when you arrive on it. */}
+          <div key={page === "dashboard" ? `dashboard-${dashboardSection}` : page} className={`page-shell motion-page-enter ${page === "job-board" ? "h-full" : ""}`}>
             {page === "job-board" ? (
               <div className="flex h-full min-h-0 flex-col">
                 <BoardToolbar
                   filters={boardFilters}
+                  headingRef={boardHeadingRef}
                   onChange={setBoardFilters}
+                  searchInputRef={boardSearchRef}
                   shownCount={boardApplications.length}
                   totalCount={activeApplications.length}
+                  activeCount={activeApplications.filter(isInProgressApplication).length}
                 />
                 <div className="min-h-0 flex-1">
                   <KanbanBoard
                     applications={boardApplications}
                     boards={boardColumns}
-                    dropDisabled={activeDragSource === "sidebar"}
                     emptyText={boardFiltered ? "No matching applications." : undefined}
                     movingIds={movingIds}
                     onOpen={openDetail}
@@ -994,10 +1055,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
                 initialFilters={tableFilters}
                 movingIds={movingIds}
                 onBulkArchive={(targets, archived) => bulkMove(targets, { archived })}
+                onBulkDelete={requestBulkDelete}
                 onBulkStatus={(targets, status) => bulkMove(targets, { status })}
                 onOpen={openDetail}
                 searchInputRef={tableSearchRef}
-                sources={sources}
                 staleDays={staleDays}
                 today={today}
               />
@@ -1009,10 +1070,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
                 onOpen={(applicationId) => { const application = applications.find((item) => item.id === applicationId); if (application) openDetail(application); }}
               />
             ) : dashboardSection === "analytics" ? (
-              <DashboardAnalytics today={today} refreshKey={dataRevision} />
+              <DashboardAnalytics firstMonth={firstApplicationMonth} refreshKey={dataRevision} today={today} />
             ) : (
               <DashboardOverview
                 applications={applications}
+                stale={stale}
                 expandAttention={expandAttention}
                 movingIds={movingIds}
                 onArchive={(application) => { void moveApplication(application, application.status, true, undefined, true); }}
@@ -1094,6 +1156,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           applications={applications}
           boards={BOARDS}
           commands={paletteCommands}
+          isMac={isMac}
           onClose={() => setCommandPaletteOpen(false)}
           onOpenApplication={openDetail}
         />
@@ -1123,7 +1186,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
       <MotionPresence open={pendingDelete !== null}>
         {pendingDelete && (
-        <DeleteDialog application={pendingDelete} deleting={deleting} onCancel={cancelDelete} onConfirm={confirmDelete} returnFocusRef={deleteTriggerRef} />
+        <DeleteDialog applications={pendingDelete} deleting={deleting} onCancel={cancelDelete} onConfirm={confirmDelete} returnFocusRef={deleteTriggerRef} />
         )}
       </MotionPresence>
 

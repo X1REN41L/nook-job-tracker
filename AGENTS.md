@@ -2,6 +2,8 @@
 
 Nook is a local-only job tracker built with Next.js, React, TypeScript, Tailwind CSS, Prisma, and SQLite. Keep solutions local and simple; add hosting, cloud services, authentication, or deployment infrastructure only when requested.
 
+Nook is a desktop (PC) app. Design, test, and review for desktop browser windows only; do not add mobile or touch-specific layouts, and do not report mobile or narrow-viewport issues, unless asked. When checking a UI change in the browser, check it with the sidebar both expanded and collapsed, and leave the sidebar in the state you found it.
+
 ## Implementation
 
 - Reuse existing components, hooks, utilities, and patterns. Avoid unnecessary migrations, abstractions, dependencies, and compatibility layers.

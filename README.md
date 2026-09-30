@@ -135,7 +135,7 @@ Then open [http://127.0.0.1:3000](http://127.0.0.1:3000). Run `npm run build` ag
 
 ## Using Nook
 
-1. **Add an application.** On the Job Board, click **Add job** or press `Alt+N` (`⌥N` on macOS). Only the company, role, and date applied are required.
+1. **Add an application.** On the Job Board, click **Add job**, or press `N` anywhere. Only the company, role, and date applied are required.
 2. **Update its status.** Drag the card to another column. From the keyboard, focus the card, press `Space` to pick it up, use the Left and Right arrow keys to choose a column, and press `Space` again to drop it (`Esc` cancels).
 3. **Review and edit details.** Click a card, or focus it and press `Enter`, to open its details. Add interview rounds, contacts, notes, and a follow-up reminder there, or choose **Edit** to change the main details.
 4. **Check in regularly.** The Dashboard shows upcoming interviews and applications that need a follow-up.
@@ -147,19 +147,22 @@ Press `?` anywhere in Nook to see every shortcut.
 
 | Action | Shortcut |
 | --- | --- |
-| Show all shortcuts | `?` |
 | Command palette: go to a page, run an action, or find an application | `Ctrl+K` / `⌘K` |
-| New job (Job Board) | `Alt+N` / `⌥N` |
-| Search | `/` |
-| Undo latest action | `U` |
-| Go to Dashboard / Job Board / Table / Interviews | `G` then `D` / `J` / `T` / `I` |
-| Go to Overview / Analytics | `G` then `O` / `A` |
-| Archive focused card | `Alt+A` / `⌥A` |
-| Delete focused card | `Delete` or `Backspace` |
-| Move between cards and columns | Arrow keys |
-| Open settings | `Ctrl+Shift+,` / `⌘⇧,` |
-| Toggle sidebar | `Ctrl+Shift+S` / `⌘⇧S` |
+| Search this page | `/` |
+| New job | `N` |
+| Edit the open application | `E` |
+| Undo | `Ctrl+Z` / `⌘Z` |
 | Close a dialog | `Esc` |
+| Toggle sidebar | `Ctrl+Shift+S` / `⌘⇧S` |
+| Settings | `Ctrl+Shift+,` / `⌘⇧,` |
+| Show all shortcuts | `?` |
+| Go to Dashboard / Analytics / Job Board / Table / Interviews | `G` then `D` / `A` / `J` / `T` / `I` |
+| Move between cards (Job Board) | Arrow keys |
+| Open card (Job Board) | `Enter` |
+| Pick up or drop card; arrows move it while held (Job Board) | `Space` |
+| Archive focused card (Job Board) | `E` |
+| Delete focused card (Job Board) | `Delete` or `Backspace` |
+| Switch Upcoming / Past (Interviews) | `←` / `→` |
 
 Keyboard moves on the Job Board are announced to screen readers. When you close a dialog, focus goes back to where you were.
 

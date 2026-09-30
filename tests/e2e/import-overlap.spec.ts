@@ -30,7 +30,7 @@ test("ignores a file selected during an import and accepts it after completion",
     await expect(page.getByRole("button", { name: "Settings" })).toBeEnabled();
     await page.getByRole("button", { name: "Settings" }).click();
     const settings = page.getByRole("dialog", { name: "Settings" });
-    await settings.getByRole("button", { name: "Backup & Restore" }).click();
+    await settings.getByRole("button", { name: "Backup & restore" }).click();
     const input = settings.locator('input[type="file"]');
     const select = (application: typeof first) => input.setInputFiles({
       name: "backup.json",
@@ -42,7 +42,7 @@ test("ignores a file selected during an import and accepts it after completion",
         createdAt: new Date().toISOString(), lastUpdated: new Date().toISOString(), events: [],
       }], settings: {
         theme: "system", defaultBoard: "APPLIED", startupPage: "dashboard", staleApplicationThreshold: 15,
-        motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false, allApplicationsExpanded: true,
+        motion: "system", timeFormat: "system", sidebarCollapsed: false, archivedExpanded: false,
       } })),
     });
 

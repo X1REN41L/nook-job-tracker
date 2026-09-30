@@ -6,7 +6,7 @@ test("shows the requested copy with zero applications", async ({ page, request }
   expect((await response.json()).applications).toEqual([]);
 
   await page.goto("/dashboard/analytics");
-  const trend = page.getByRole("region", { name: "Applications Trend" });
+  const trend = page.getByRole("region", { name: "Applications trend" });
   await expect(trend.getByText("No trend to show. Give it something to trend.", { exact: true })).toBeVisible();
   console.log(`ANALYTICS_DOM=${JSON.stringify(await trend.innerText())}`);
   await page.screenshot({ path: testInfo.outputPath("empty-analytics.png"), fullPage: true });

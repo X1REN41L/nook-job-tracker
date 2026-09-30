@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { motionIsCurrentlyOff } from "@/lib/general-preferences";
+import { motionDurationMs, motionIsCurrentlyOff } from "@/lib/general-preferences";
 
 const PresenceContext = createContext(true);
 
@@ -24,7 +24,7 @@ export function MotionPresence({ open, children, immediateExit = false }: {
   useEffect(() => {
     if (open || !mounted) return;
     const reduced = motionIsCurrentlyOff();
-    const exitDuration = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--motion-exit")) || 160;
+    const exitDuration = motionDurationMs("--motion-exit", 160);
     const timeout = window.setTimeout(() => setMounted(false), immediateExit || reduced ? 0 : exitDuration);
     return () => window.clearTimeout(timeout);
   }, [open, mounted, immediateExit]);

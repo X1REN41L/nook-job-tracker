@@ -5,9 +5,13 @@ import { useId, useRef, useState, type KeyboardEvent, type RefObject } from "rea
 import { compareInterviews, formatInterviewTime, groupUpcomingInterviews, interviewDateKey, INTERVIEW_TYPE_LABELS, type InterviewListItem } from "@/lib/interviews";
 import { matchesApplicationSearch } from "@/lib/application-list";
 import { formatCalendarDate } from "@/lib/application-date";
+import { revealDelay, revealDelayMs } from "@/lib/motion-mode";
+import { useOpeningReveal } from "@/hooks/use-opening-reveal";
 import { useTimeFormat } from "@/hooks/use-time-format";
 
 type InterviewTab = "upcoming" | "past";
+
+const GROUP_TIMING = { base: 60 };
 
 function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onOpen: (id: string) => void }) {
   const date = interviewDateKey(interview.date);
@@ -59,11 +63,13 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
 
   const query = searchQuery.trim();
   const upcoming = interviews
-    .filter((interview) => interviewDateKey(interview.date) >= today && matchesApplicationSearch(interview, query));
+    .filter((interview) => interview.inProgress && interviewDateKey(interview.date) >= today && matchesApplicationSearch(interview, query));
   const past = interviews
     .filter((interview) => interviewDateKey(interview.date) < today && matchesApplicationSearch(interview, query))
     .sort((a, b) => (pastSort === "recent" ? -1 : 1) * compareInterviews(a, b));
   const groups = groupUpcomingInterviews(upcoming, today);
+  // Groups rise in when the page opens or the tab changes; a search that brings one back shows it at once.
+  const revealing = useOpeningReveal(selectedTab, revealDelayMs(Infinity, GROUP_TIMING));
   const panelId = `${id}-panel`;
 
   function focusTab(tab: InterviewTab) {
@@ -98,6 +104,7 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
               ref={tab === "upcoming" ? upcomingTabRef : pastTabRef}
               aria-controls={panelId}
               aria-selected={selectedTab === tab}
+              data-interview-tab={tab}
               className={`border-b-2 px-0.5 pb-2 text-sm font-semibold motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-cream ${selectedTab === tab ? "border-forest text-forest" : "border-transparent text-ink-soft hover:text-ink"}`}
               id={`${id}-${tab}-tab`}
               onClick={() => setSelectedTab(tab)}
@@ -111,7 +118,7 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
           ))}
         </div>
         <label className="relative block w-full sm:max-w-xs">
-          <span className="sr-only">Search by company or role</span>
+          <span className="sr-only">Search company or role</span>
           <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -120,7 +127,7 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
             ref={searchInputRef}
             className="input pl-9 text-sm"
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search by company or role"
+            placeholder="Search company or role…"
             type="search"
             value={searchQuery}
           />
@@ -132,15 +139,15 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
           <section aria-labelledby={`${id}-upcoming-heading`}>
             <div className="mb-7 flex min-h-9 flex-wrap items-center justify-between gap-4">
               <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-upcoming-heading`}>
-                Upcoming Interviews <span className="font-sans text-base font-medium text-ink-soft">({upcoming.length})</span>
+                Upcoming interviews <span className="font-sans text-base font-medium text-ink-soft">({upcoming.length})</span>
               </h2>
             </div>
             {groups.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "All caught up — no interviews on the horizon."}</p>
             ) : (
               <div className="flex flex-col gap-9 sm:gap-12">
-                {groups.map((group) => (
-                  <section key={group.key} aria-labelledby={`${id}-${group.key}-heading`}>
+                {groups.map((group, index) => (
+                  <section key={group.key} className={revealing ? "motion-reveal" : undefined} style={revealing ? revealDelay(index, GROUP_TIMING) : undefined} aria-labelledby={`${id}-${group.key}-heading`}>
                     <h3 className={`mb-5 border-b border-line/70 pb-3 font-sans text-xs font-semibold uppercase tracking-[0.12em] ${group.key === "today" ? "text-forest" : group.key === "tomorrow" ? "text-gold" : group.key === "later-this-week" ? "text-clay" : "text-rose"}`} id={`${id}-${group.key}-heading`}>
                       {group.label}
                     </h3>
@@ -156,7 +163,7 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
           <section aria-labelledby={`${id}-past-heading`}>
             <div className="mb-7 flex min-h-9 flex-wrap items-center justify-between gap-4">
               <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-past-heading`}>
-                Past Interviews <span className="font-sans text-base font-medium text-ink-soft">({past.length})</span>
+                Past interviews <span className="font-sans text-base font-medium text-ink-soft">({past.length})</span>
               </h2>
               {past.length > 0 && (
                 <button
@@ -172,7 +179,7 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
             {past.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "None yet — patience, and a callback, will fix that."}</p>
             ) : (
-              <div>{past.map((interview) => <InterviewRow key={interview.id} interview={interview} onOpen={onOpen} />)}</div>
+              <div className={revealing ? "motion-reveal" : undefined} style={revealing ? revealDelay(0, GROUP_TIMING) : undefined}>{past.map((interview) => <InterviewRow key={interview.id} interview={interview} onOpen={onOpen} />)}</div>
             )}
           </section>
         )}

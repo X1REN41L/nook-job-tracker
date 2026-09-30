@@ -10,11 +10,17 @@ export type StatusUndo = { kind: "status"; applicationId: string; status: Status
 
 export type ToastUndo =
   | { kind: "delete"; applicationId: string; token: string; expiresAt: string; company: string }
+  // A bulk delete from the table, restored all at once with its batch token.
+  | { kind: "delete-batch"; applicationIds: string[]; token: string; expiresAt: string }
   | StatusUndo
   // A bulk change from the table: one Undo reverts every application it changed.
   | { kind: "batch"; items: StatusUndo[] };
 
-export type DeleteRecovery = Extract<ToastUndo, { kind: "delete" }>;
+export type DeleteRecovery = Extract<ToastUndo, { kind: "delete" | "delete-batch" }>;
+
+function isDeleteRecovery(undo: ToastUndo | undefined): undo is DeleteRecovery {
+  return undo?.kind === "delete" || undo?.kind === "delete-batch";
+}
 
 type ToastState = {
   message: string;
@@ -67,7 +73,8 @@ export function useToastUndo({ onUndo }: { onUndo: (undo: ToastUndo, restoreKeyb
     if (deleteRecoveryRef.current?.token !== token) return;
     deleteRecoveryRef.current = null;
     setDeleteRecoveryState(null);
-    if (toastRef.current?.undo?.kind === "delete" && toastRef.current.undo.token === token) {
+    const shown = toastRef.current?.undo;
+    if (isDeleteRecovery(shown) && shown.token === token) {
       if (toastTimer.current) clearTimeout(toastTimer.current);
       toastTimer.current = null;
       toastTiming.current = { remaining: 0, startedAt: 0 };
@@ -163,7 +170,7 @@ export function useToastUndo({ onUndo }: { onUndo: (undo: ToastUndo, restoreKeyb
       startedAt: 0,
     };
 
-    if (undo?.kind === "delete" && Number.isFinite(Date.parse(undo.expiresAt)) && Date.parse(undo.expiresAt) > Date.now()) {
+    if (isDeleteRecovery(undo) && Number.isFinite(Date.parse(undo.expiresAt)) && Date.parse(undo.expiresAt) > Date.now()) {
       deleteRecoveryRef.current = undo;
       setDeleteRecoveryState(undo);
     }
@@ -172,7 +179,7 @@ export function useToastUndo({ onUndo }: { onUndo: (undo: ToastUndo, restoreKeyb
 
   async function performUndo(undo: ToastUndo | undefined, restoreKeyboardFocus: boolean) {
     if (!undo || undoInFlight.current) return;
-    if (undo.kind === "delete" && Date.parse(undo.expiresAt) <= Date.now()) {
+    if (isDeleteRecovery(undo) && Date.parse(undo.expiresAt) <= Date.now()) {
       expireDeleteRecovery(undo.token);
       showToast("The recovery window has expired");
       return;
@@ -183,13 +190,13 @@ export function useToastUndo({ onUndo }: { onUndo: (undo: ToastUndo, restoreKeyb
     dismissToast();
     try {
       await onUndo(undo, restoreKeyboardFocus);
-      if (undo.kind === "delete") clearDeleteRecovery(undo.token);
+      if (isDeleteRecovery(undo)) clearDeleteRecovery(undo.token);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Could not restore the application";
-      const expired = undo.kind === "delete" && (
+      const expired = isDeleteRecovery(undo) && (
         Date.parse(undo.expiresAt) <= Date.now() || /expired|already used/i.test(message)
       );
-      if (expired && undo.kind === "delete") {
+      if (expired && isDeleteRecovery(undo)) {
         clearDeleteRecovery(undo.token);
         showToast(message);
       } else {

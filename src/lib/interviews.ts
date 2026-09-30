@@ -3,6 +3,7 @@ import type { InterviewType } from "@prisma/client";
 import { hourCycleOption } from "@/lib/application-date";
 import { addCalendarDays, startOfCalendarWeek } from "@/lib/calendar-date";
 import type { TimeFormat } from "@/lib/settings-values";
+import { isInProgressApplication } from "@/lib/status-values";
 import type { ApplicationRecord } from "@/types/application";
 
 export const INTERVIEW_TYPES = ["PHONE", "TECHNICAL", "ONSITE", "OTHER"] as const satisfies readonly InterviewType[];
@@ -18,6 +19,8 @@ export type InterviewListItem = {
   role: string;
   company: string;
   note: string | null;
+  /** Upcoming lists and counts include only rounds for applications still in progress. */
+  inProgress: boolean;
 };
 
 export type InterviewGroup = {
@@ -63,8 +66,8 @@ export function groupUpcomingInterviews(interviews: InterviewListItem[], today: 
   const groups: InterviewGroup[] = [
     { key: "today", label: "Today", interviews: [] },
     { key: "tomorrow", label: "Tomorrow", interviews: [] },
-    { key: "later-this-week", label: "Later This Week", interviews: [] },
-    { key: "next-week", label: "Next Week", interviews: [] },
+    { key: "later-this-week", label: "Later this week", interviews: [] },
+    { key: "next-week", label: "Next week", interviews: [] },
     { key: "later", label: "Later", interviews: [] },
   ];
 
@@ -95,10 +98,12 @@ export function getInterviewListItems(applications: ApplicationRecord[]): Interv
     role: application.role,
     company: application.company,
     note: interview.notes,
+    inProgress: isInProgressApplication(application),
   })));
 }
 
+/** Counts upcoming rounds for applications still in progress, matching the Overview card. */
 export function getUpcomingInterviewCount(applications: ApplicationRecord[], today: string) {
-  return applications.reduce((count, application) =>
+  return applications.filter(isInProgressApplication).reduce((count, application) =>
     count + application.interviews.filter((interview) => interviewDateKey(interview.date) >= today).length, 0);
 }

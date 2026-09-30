@@ -8,7 +8,7 @@ test("shows ordered sidebar destinations, marks the active route, and opens Sett
   await expect(links).toHaveCount(4);
   await expect(links.nth(0)).toHaveAccessibleName("Dashboard");
   await expect(links.nth(1)).toHaveAccessibleName("Job Board");
-  await expect(links.nth(2)).toHaveAccessibleName("Applications Table");
+  await expect(links.nth(2)).toHaveAccessibleName("Table");
   await expect(links.nth(3)).toHaveAccessibleName("Interviews, 0 upcoming");
   await expect(links.nth(0)).toHaveAttribute("aria-current", "page");
   await expect(navigation.getByRole("button", { name: "Settings", exact: true })).toBeVisible();

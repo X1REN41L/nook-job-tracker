@@ -11,10 +11,15 @@ import {
 } from "@/lib/application-list";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
 import { featuredInterview } from "@/lib/interviews";
+import { revealDelay, revealDelayMs } from "@/lib/motion-mode";
+import { useOpeningReveal } from "@/hooks/use-opening-reveal";
 import type { ApplicationRecord } from "@/types/application";
 
-const controlClass = "h-9 rounded-nook-sm border border-line bg-paper px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-60";
-const APPLIED_RANGE_LABELS: Record<AppliedRangePreset, string> = { any: "Any time", week: "This week", month: "This month", year: "This year", custom: "Custom range" };
+const controlFrameClass = "h-9 rounded-nook-sm border border-line bg-paper text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-60";
+const controlClass = `${controlFrameClass} px-3`;
+// Date fields use tighter padding so a custom range still fits on the filter row.
+const dateControlClass = `${controlFrameClass} px-2.5`;
+const APPLIED_RANGE_LABELS: Record<AppliedRangePreset, string> = { any: "Any time", week: "This week", month: "This month", "last-3-months": "Last 3 months", year: "This year", custom: "Custom range" };
 const COLUMNS: Array<{ key: TableSortKey; label: string }> = [
   { key: "role", label: "Role" },
   { key: "company", label: "Company" },
@@ -24,11 +29,14 @@ const COLUMNS: Array<{ key: TableSortKey; label: string }> = [
   { key: "interviewDate", label: "Interview" },
 ];
 
-export function ApplicationsTable({ applications, boards, initialFilters, sources, today, staleDays, movingIds, bulkBusy, searchInputRef, onOpen, onBulkStatus, onBulkArchive }: {
+/** How many rows rise in when the page opens; about a screenful. */
+const OPENING_ROW_LIMIT = 14;
+const OPENING_ROW_TIMING = { base: 60, step: 35, limit: OPENING_ROW_LIMIT };
+
+export function ApplicationsTable({ applications, boards, initialFilters, today, staleDays, movingIds, bulkBusy, searchInputRef, onOpen, onBulkStatus, onBulkArchive, onBulkDelete }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
   initialFilters: ApplicationFilters;
-  sources: string[];
   today: string;
   staleDays: ReadonlyMap<string, number>;
   movingIds: ReadonlySet<string>;
@@ -37,11 +45,14 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
   onOpen: (application: ApplicationRecord) => void;
   onBulkStatus: (applications: ApplicationRecord[], status: Status) => Promise<void>;
   onBulkArchive: (applications: ApplicationRecord[], archived: boolean) => Promise<void>;
+  /** Asks to confirm, then deletes; the trigger gets focus back if the delete is cancelled. */
+  onBulkDelete: (applications: ApplicationRecord[], trigger: HTMLElement) => void;
 }) {
   const [filters, setFilters] = useState(initialFilters);
   const [sort, setSort] = useState<TableSort>({ key: "appliedDate", direction: "desc" });
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  const [customRange, setCustomRange] = useState(false);
+  // The preset last picked, so one of two presets covering the same days (This year and Last 3 months in March) stays shown.
+  const [pickedPreset, setPickedPreset] = useState<AppliedRangePreset | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   // Keep the address in step with the filters so a reload or a shared link shows the same rows.
@@ -51,11 +62,15 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
   }, [filters]);
 
   const rows = applications.filter((application) => matchesApplicationFilters(application, filters)).sort(compareTableApplications(sort, today));
+  // Rows on screen when the page opens rise in one after another; rows shown later by filtering or sorting appear at once.
+  const revealing = useOpeningReveal("table", revealDelayMs(OPENING_ROW_LIMIT, OPENING_ROW_TIMING));
   const selectedRows = rows.filter((application) => selected.has(application.id));
   const allSelected = rows.length > 0 && selectedRows.length === rows.length;
   const archiveTarget = selectedRows.some((application) => !application.archived);
   const busy = bulkBusy || selectedRows.some((application) => movingIds.has(application.id));
-  const rangePreset = customRange ? "custom" : appliedRangePreset(filters, today);
+  const pickedRange = pickedPreset && pickedPreset !== "custom" && today ? appliedRangeForPreset(pickedPreset, today) : null;
+  const pickedMatches = pickedRange !== null && pickedRange.appliedFrom === filters.appliedFrom && pickedRange.appliedTo === filters.appliedTo;
+  const rangePreset = pickedPreset === "custom" ? "custom" : pickedMatches && pickedPreset ? pickedPreset : appliedRangePreset(filters, today);
   const filtered = (Object.keys(DEFAULT_APPLICATION_FILTERS) as Array<keyof ApplicationFilters>).some((key) => filters[key] !== DEFAULT_APPLICATION_FILTERS[key]);
 
   useEffect(() => {
@@ -68,7 +83,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
 
   function selectRangePreset(preset: AppliedRangePreset) {
     const localToday = today || currentLocalDate();
-    setCustomRange(preset === "custom");
+    setPickedPreset(preset);
     if (preset !== "custom") update(appliedRangeForPreset(preset, localToday));
     else if (!filters.appliedFrom && !filters.appliedTo) update(appliedRangeForPreset("month", localToday));
   }
@@ -106,7 +121,9 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
       <p className="mt-1 text-sm text-ink-soft" role="status">Showing {rows.length} of {applications.length} applications</p>
 
       <div aria-label="Table filters" className="mt-6 flex flex-wrap items-end gap-2 border-b border-line pb-4" role="group">
-        <label className="relative block w-60">
+        {/* The search box gives up width first so the filters stay on one line, but
+            never below the width its placeholder needs. */}
+        <label className="relative block min-w-54 max-w-60 flex-[1_1_13.5rem]">
           <span className="sr-only">Search company or role</span>
           <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
             <circle cx="11" cy="11" r="7" />
@@ -119,30 +136,31 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
           <option value="active">{STATUS_FILTER_LABELS.active}</option>
           {boards.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
         </select>
-        <select aria-label="Filter by source" className={`${controlClass} max-w-48`} onChange={(event) => update({ source: event.target.value })} value={filters.source}>
-          <option value="">All sources</option>
-          {sources.map((source) => <option key={source} value={source}>{source}</option>)}
-          {filters.source && !sources.includes(filters.source) && <option value={filters.source}>{filters.source}</option>}
-        </select>
         <select aria-label="Archived applications" className={controlClass} onChange={(event) => update({ archived: event.target.value as ArchiveScope })} value={filters.archived}>
-          <option value="active">Active</option>
-          <option value="archived">Archived</option>
-          <option value="all">Both</option>
+          <option value="active">Not archived</option>
+          <option value="archived">Archived only</option>
+          <option value="all">Include archived</option>
         </select>
         <select aria-label="Applied date range" className={controlClass} onChange={(event) => selectRangePreset(event.target.value as AppliedRangePreset)} value={rangePreset}>
           {(Object.keys(APPLIED_RANGE_LABELS) as AppliedRangePreset[]).map((preset) => <option key={preset} value={preset}>{APPLIED_RANGE_LABELS[preset]}</option>)}
         </select>
-        {rangePreset === "custom" && (
-          <div className="motion-small-reveal flex flex-wrap items-center gap-2 text-sm text-ink-soft">
-            <input aria-label="Applied from" className={controlClass} onChange={(event) => updateRangeEdge("from", event.target.value)} type="date" value={filters.appliedFrom} />
-            <span>to</span>
-            <input aria-label="Applied to" className={controlClass} onChange={(event) => updateRangeEdge("to", event.target.value)} type="date" value={filters.appliedTo} />
+        {/* The date fields and Clear filters wrap as one group, so a narrow row
+            breaks into a tidy second line instead of stranding the button. */}
+        {(rangePreset === "custom" || filtered) && (
+          <div className="flex items-center gap-2">
+            {rangePreset === "custom" && (
+              <div className="motion-small-reveal flex items-center gap-2 text-sm text-ink-soft">
+                <input aria-label="Applied from" className={dateControlClass} onChange={(event) => updateRangeEdge("from", event.target.value)} type="date" value={filters.appliedFrom} />
+                <span>to</span>
+                <input aria-label="Applied to" className={dateControlClass} onChange={(event) => updateRangeEdge("to", event.target.value)} type="date" value={filters.appliedTo} />
+              </div>
+            )}
+            {filtered && (
+              <button className="btn-ghost h-9 px-3 py-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => { setFilters(DEFAULT_APPLICATION_FILTERS); setPickedPreset(null); }} type="button">
+                Clear filters
+              </button>
+            )}
           </div>
-        )}
-        {filtered && (
-          <button className="btn-ghost h-9 px-3 py-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => { setFilters(DEFAULT_APPLICATION_FILTERS); setCustomRange(false); }} type="button">
-            Clear filters
-          </button>
         )}
       </div>
 
@@ -165,6 +183,9 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
           <button className="btn-ghost h-9 px-3 py-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={busy} onClick={() => void runBulk(() => onBulkArchive(selectedRows, archiveTarget))} type="button">
             {archiveTarget ? "Archive" : "Restore"}
           </button>
+          <button className="btn-ghost h-9 px-3 py-0 text-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose" disabled={busy} onClick={(event) => onBulkDelete(selectedRows, event.currentTarget)} type="button">
+            Delete
+          </button>
           <button className="ml-auto rounded-nook-sm px-2 py-1 text-sm font-medium text-ink-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => setSelected(new Set())} type="button">
             Clear selection
           </button>
@@ -172,9 +193,9 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
       )}
 
       {rows.length === 0 ? (
-        <p className="py-10 text-sm text-ink-soft">{applications.length === 0 ? "No applications yet. Add a job from the Job Board to see it here." : "No applications match these filters."}</p>
+        <p className="py-10 text-sm text-ink-soft">{applications.length === 0 ? "No applications yet. Press N to add a job." : "No applications match these filters."}</p>
       ) : (
-        <div className="scrollbar-styled mt-4 overflow-x-auto rounded-nook border border-line bg-paper">
+        <div className="scrollbar-styled scrollbar-x mt-4 overflow-x-auto rounded-nook border border-line bg-paper">
           <table className="w-full min-w-[56rem] border-collapse text-left text-sm">
             <thead className="border-b border-line bg-cream-2 text-xs font-semibold text-ink-soft">
               <tr>
@@ -199,11 +220,17 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
               </tr>
             </thead>
             <tbody className="divide-y divide-line/70">
-              {rows.map((application) => {
+              {rows.map((application, index) => {
                 const stale = staleDays.get(application.id);
                 const interview = featuredInterview(application.interviews, today);
+                const reveal = revealing && index < OPENING_ROW_LIMIT;
                 return (
-                  <tr className={`motion-interactive hover:bg-cream-2 ${selected.has(application.id) ? "bg-forest-tint/60" : ""}`} data-application-id={application.id} key={application.id}>
+                  <tr
+                    className={`motion-interactive hover:bg-cream-2 ${reveal ? "motion-reveal" : ""} ${selected.has(application.id) ? "bg-forest-tint/60" : ""}`}
+                    data-application-id={application.id}
+                    key={application.id}
+                    style={reveal ? revealDelay(index, OPENING_ROW_TIMING) : undefined}
+                  >
                     <td className="px-3 py-2.5">
                       <input aria-label={`Select ${application.role} at ${application.company}`} checked={selected.has(application.id)} className="h-4 w-4 accent-forest" onChange={() => toggleRow(application.id)} type="checkbox" />
                     </td>
@@ -213,10 +240,13 @@ export function ApplicationsTable({ applications, boards, initialFilters, source
                       </button>
                     </td>
                     <td className="max-w-56 truncate px-3 py-2.5 text-ink-soft">{application.company}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5">
-                      <span className="inline-flex items-center gap-1.5"><span className={`status-dot ${boardDot(boards, application.status)}`} />{boardLabel(boards, application.status)}</span>
-                      {application.archived && <span className="ml-2 text-xs text-ink-soft">Archived</span>}
-                      {stale !== undefined && !application.archived && <span className="ml-2 rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium" title="No status update for a while">Stale · {stale}d</span>}
+                    <td className="px-3 py-2.5">
+                      {/* Tags drop below the status only when the table is short on width. */}
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><span className={`status-dot ${boardDot(boards, application.status)}`} />{boardLabel(boards, application.status)}</span>
+                        {application.archived && <span className="whitespace-nowrap text-xs text-ink-soft">Archived</span>}
+                        {stale !== undefined && <span className="whitespace-nowrap rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium" title="No status update for a while">Stale · {stale}d</span>}
+                      </div>
                     </td>
                     <td className="max-w-40 truncate px-3 py-2.5 text-ink-soft">{application.source?.trim() || "—"}</td>
                     <td className="whitespace-nowrap px-3 py-2.5">

@@ -49,7 +49,7 @@ test("backup import restores the sidebar collapse preference", async ({ page, re
   const modifier = await page.evaluate(() => /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent) ? "Meta" : "Control");
   await page.keyboard.press(`${modifier}+Shift+,`);
   const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.getByRole("button", { name: "Backup & Restore" }).click();
+  await settings.getByRole("button", { name: "Backup & restore" }).click();
 
   const exported = await (await request.get("/api/applications/export")).json();
   const backup = {

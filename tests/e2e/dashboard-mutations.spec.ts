@@ -77,7 +77,7 @@ function recordRequests(page: Page, pathname: string) {
 const toast = (page: Page) => page.locator(".nook-toast-wrap.nook-toast-show");
 const undoButton = (page: Page) => toast(page).getByRole("button", { name: "Undo", exact: true });
 
-test("REACT-005: one Archive in the full Needs Attention list refetches the stale list exactly once", async ({ page, request }) => {
+test("REACT-005: one Archive in the full Needs attention list refetches the stale list exactly once", async ({ page, request }) => {
   const application = await createApplication(request);
   await page.clock.setFixedTime(new Date(Date.now() + 20 * 24 * 60 * 60 * 1000));
   const initialLoad = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/dashboard/stale");
@@ -100,7 +100,7 @@ test("REACT-005: one Archive in the full Needs Attention list refetches the stal
   expect(stale.failed).toHaveLength(0);
 });
 
-test("REACT-005: a failed Archive in the full Needs Attention list rolls back without refetching", async ({ page, request }) => {
+test("REACT-005: a failed Archive in the full Needs attention list rolls back without refetching", async ({ page, request }) => {
   const application = await createApplication(request);
   await page.clock.setFixedTime(new Date(Date.now() + 20 * 24 * 60 * 60 * 1000));
   const initialLoad = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/dashboard/stale");
@@ -122,7 +122,7 @@ test("REACT-005: a failed Archive in the full Needs Attention list rolls back wi
   expect(stale.started).toHaveLength(0);
 });
 
-test("REACT-004: Alt+A on one card is not dropped while another card's move is in flight", async ({ page, request }) => {
+test("REACT-004: E on one card is not dropped while another card's move is in flight", async ({ page, request }) => {
   const first = await createApplication(request);
   const second = await createApplication(request, "OFFER");
   await openJobBoard(page);
@@ -130,12 +130,12 @@ test("REACT-004: Alt+A on one card is not dropped while another card's move is i
   const secondPatches = patchesFor(page, second);
 
   await boardCard(page, first).focus();
-  await page.keyboard.press("Alt+a");
+  await page.keyboard.press("e");
   await expect.poll(() => hold.held.length).toBe(1);
   await expect(boardCard(page, first)).toHaveCount(0);
 
   await boardCard(page, second).focus();
-  await page.keyboard.press("Alt+a");
+  await page.keyboard.press("e");
   await expect.poll(() => secondPatches.length).toBe(1);
   await expect(boardCard(page, second)).toHaveCount(0);
 
@@ -153,13 +153,13 @@ test("REACT-004: Undo runs while a different application's move is in flight", a
 
   const archived = page.waitForResponse((response) => isPatchFor(response.request(), undone));
   await boardCard(page, undone).focus();
-  await page.keyboard.press("Alt+a");
+  await page.keyboard.press("e");
   await archived;
   await expect(toast(page)).toContainText(`Archived ${undone.company}`);
 
   const hold = await holdPatches(page, busy);
   await boardCard(page, busy).focus();
-  await page.keyboard.press("Alt+a");
+  await page.keyboard.press("e");
   await expect.poll(() => hold.held.length).toBe(1);
 
   const restored = page.waitForResponse((response) => isPatchFor(response.request(), undone));
@@ -179,7 +179,7 @@ test("REACT-004: Undo for an application whose own move is in flight is re-offer
 
   const archived = page.waitForResponse((response) => isPatchFor(response.request(), application));
   await boardCard(page, application).focus();
-  await page.keyboard.press("Alt+a");
+  await page.keyboard.press("e");
   await archived;
   await expect(toast(page)).toContainText(`Archived ${application.company}`);
 
@@ -205,7 +205,7 @@ test("REACT-004: a conflict inside Undo re-offers the toast, and the next Undo a
 
   const archived = page.waitForResponse((response) => isPatchFor(response.request(), application));
   await boardCard(page, application).focus();
-  await page.keyboard.press("Alt+a");
+  await page.keyboard.press("e");
   const archivedApplication = (await (await archived).json()).application as Application;
   await expect(toast(page)).toContainText(`Archived ${application.company}`);
 

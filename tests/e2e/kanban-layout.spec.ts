@@ -25,7 +25,7 @@ test("keeps board columns readable across zoom-equivalent viewport sizes", async
 
         const layout = await page.evaluate(() => {
           const board = document.querySelector<HTMLElement>(".board-columns")!;
-          const scroll = document.querySelector<HTMLElement>(".board-scroll")!;
+          const scroll = document.querySelector<HTMLElement>(".board-lane")!;
           const columns = [...document.querySelectorAll<HTMLElement>(".kanban-column")];
           const boardStyle = getComputedStyle(board);
           const columnStyle = getComputedStyle(columns[0]);
@@ -40,7 +40,9 @@ test("keeps board columns readable across zoom-equivalent viewport sizes", async
             + Number.parseFloat(afterStyle.marginLeft);
           const first = columns[0].getBoundingClientRect();
           const last = columns.at(-1)!.getBoundingClientRect();
-          const boardRect = board.getBoundingClientRect();
+          // The visible edges are the page title on the left and the board filters on the right.
+          const contentLeft = document.querySelector("h1")!.getBoundingClientRect().left;
+          const contentRight = document.querySelector('[aria-label="Board filters"]')!.getBoundingClientRect().right;
 
           return {
             widths,
@@ -51,8 +53,8 @@ test("keeps board columns readable across zoom-equivalent viewport sizes", async
             boardScrollWidth: board.scrollWidth,
             scrollClientWidth: scroll.clientWidth,
             scrollWidth: scroll.scrollWidth,
-            leftSpace: first.left - boardRect.left,
-            rightSpace: boardRect.right - last.right,
+            leftSpace: first.left - contentLeft,
+            rightSpace: contentRight - last.right,
           };
         });
 
@@ -73,6 +75,10 @@ test("keeps board columns readable across zoom-equivalent viewport sizes", async
         const columnsAreCapped = layout.widths.every((width) => width >= layout.maximum - 1);
         if (columnsAreCapped && layout.boardClientWidth > layout.requiredAtMinimum + 80) {
           expect(Math.abs(layout.leftSpace - layout.rightSpace)).toBeLessThanOrEqual(24);
+        } else if (!needsHorizontalScroll) {
+          // A board that fits lines up with the title on the left and the filters on the right.
+          expect(Math.abs(layout.leftSpace)).toBeLessThanOrEqual(1);
+          expect(Math.abs(layout.rightSpace)).toBeLessThanOrEqual(1);
         }
 
         measurements.push(`${monitorWidth}px @ ${Math.round(zoom * 100)}%, ${sidebar}: ${viewportWidth}px CSS, columns ${layout.widths.map((width) => Math.round(width)).join("/")}, scroll ${needsHorizontalScroll}`);

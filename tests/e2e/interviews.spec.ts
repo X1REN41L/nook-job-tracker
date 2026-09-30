@@ -97,7 +97,7 @@ test("shows dated interview details in date order and groups them by day", async
 
   await page.goto("/interviews");
 
-  await expect(page.getByRole("heading", { name: "Upcoming Interviews (3)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming interviews (3)" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Upcoming" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tab", { name: "Past" })).toHaveAttribute("aria-selected", "false");
   await expect(page.getByRole("tabpanel")).not.toHaveAttribute("tabindex", "0");
@@ -107,7 +107,7 @@ test("shows dated interview details in date order and groups them by day", async
   await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Tomorrow", exact: true })).toBeVisible();
 
-  const rows = page.getByRole("region", { name: "Upcoming Interviews (3)" }).locator("article");
+  const rows = page.getByRole("region", { name: "Upcoming interviews (3)" }).locator("article");
   await expect(rows).toHaveCount(3);
   const rowText = await rows.allTextContents();
   expect(rowText[0]).toContain("Senior Product Designer");
@@ -138,7 +138,7 @@ test("searches by role and company within the selected tab and supports keyboard
   await createInterview(request, { company: "Acme Legacy", role: "Research Lead", date: yesterday });
 
   await page.goto("/interviews");
-  const search = page.getByRole("searchbox", { name: "Search by company or role" });
+  const search = page.getByRole("searchbox", { name: "Search company or role" });
   await search.fill("  front  ");
   await expect(page.getByRole("heading", { name: /Frontend Engineer.*Fieldstone Labs/ })).toBeVisible();
   await search.fill("ACME");
@@ -174,18 +174,18 @@ test("searches by role and company within the selected tab and supports keyboard
 test("shows the specified empty states without an interview creation action", async ({ page }) => {
   await page.goto("/interviews");
 
-  await expect(page.getByRole("heading", { name: "Upcoming Interviews (0)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upcoming interviews (0)" })).toBeVisible();
   await expect(page.getByText("All caught up — no interviews on the horizon.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Add interview$/i })).toHaveCount(0);
 
   await page.getByRole("tab", { name: "Past" }).click();
   await expect(page.getByText("None yet — patience, and a callback, will fix that.", { exact: true })).toBeVisible();
 
-  await page.getByRole("searchbox", { name: "Search by company or role" }).fill("acme");
+  await page.getByRole("searchbox", { name: "Search company or role" }).fill("acme");
   await expect(page.getByText("No interviews match your search.", { exact: true })).toBeVisible();
 });
 
-test("includes dated applications from every stage and archive, groups upcoming dates, and sorts past both ways", async ({ page, request }) => {
+test("lists upcoming rounds only for applications in progress, keeps every past round, and sorts past both ways", async ({ page, request }) => {
   await page.clock.setFixedTime(new Date("2026-09-28T12:00:00"));
   const today = await localDate(page);
   const tomorrow = await localDate(page, 1);
@@ -201,15 +201,17 @@ test("includes dated applications from every stage and archive, groups upcoming 
   await createInterview(request, { company: "Older Assessment", role: "Older role", date: older, status: "ONLINE_ASSESSMENT" });
 
   await page.goto("/interviews");
-  const upcoming = page.getByRole("region", { name: "Upcoming Interviews (4)" });
-  const past = page.getByRole("region", { name: "Past Interviews (2)" });
-  await expect(page.getByTestId("upcoming-interview-count")).toHaveText("4");
+  // The Offer round and the archived Rejected round are closed, so only the Applied and Assessment rounds are upcoming.
+  const upcoming = page.getByRole("region", { name: "Upcoming interviews (2)" });
+  const past = page.getByRole("region", { name: "Past interviews (2)" });
+  await expect(page.getByTestId("upcoming-interview-count")).toHaveText("2");
   await expect(upcoming.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
   await expect(upcoming.getByRole("heading", { name: "Tomorrow", exact: true })).toBeVisible();
-  await expect(upcoming.getByRole("heading", { name: "Later This Week", exact: true })).toBeVisible();
-  await expect(upcoming.getByRole("heading", { name: "Next Week", exact: true })).toBeVisible();
-  await expect(upcoming.locator("article")).toHaveCount(4);
-  await expect(upcoming.getByText("Later Archived", { exact: false })).toBeVisible();
+  await expect(upcoming.getByRole("heading", { name: "Later this week", exact: true })).toHaveCount(0);
+  await expect(upcoming.getByRole("heading", { name: "Next week", exact: true })).toHaveCount(0);
+  await expect(upcoming.locator("article")).toHaveCount(2);
+  await expect(upcoming.getByText("Week Offer", { exact: false })).toHaveCount(0);
+  await expect(upcoming.getByText("Later Archived", { exact: false })).toHaveCount(0);
   await expect(past).toHaveCount(0);
   await page.getByRole("tab", { name: "Past" }).click();
   await expect(upcoming).toHaveCount(0);

@@ -21,7 +21,7 @@ async function createApplication(request: APIRequestContext) {
 }
 
 async function deleteThroughDashboard(page: Page, application: { id: string; company: string; role: string }) {
-  await page.getByRole("button", { name: `Open ${application.role} at ${application.company}`, exact: true }).click();
+  await page.getByRole("button", { name: `Open or move ${application.role} at ${application.company}`, exact: true }).click();
   await page.getByRole("dialog", { name: application.role }).getByRole("button", { name: "Delete", exact: true }).click();
   const deleteDialog = page.getByRole("alertdialog", { name: "Delete application?" });
   const deletion = page.waitForResponse((response) =>
@@ -63,7 +63,7 @@ test("deletion offers Undo without a separate recovery banner", async ({ page, r
   );
   await undo.click();
   expect((await restored).status()).toBe(201);
-  await expect(page.getByRole("button", { name: `Open ${application.role} at ${application.company}`, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Open or move ${application.role} at ${application.company}`, exact: true })).toBeVisible();
   await expect(undo).toBeHidden();
 });
 
@@ -97,7 +97,7 @@ test("the toast timer pauses while hidden and recovery still works after returni
   await undo.click();
   expect((await restored).status()).toBe(201);
   await expect(page.getByRole("button", { name: `Restore ${application.company}`, exact: true })).toBeHidden();
-  await expect(page.getByRole("button", { name: `Open ${application.role} at ${application.company}`, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Open or move ${application.role} at ${application.company}`, exact: true })).toBeVisible();
 });
 
 test("Undo disappears at the server-provided expiry", async ({ page, request }) => {

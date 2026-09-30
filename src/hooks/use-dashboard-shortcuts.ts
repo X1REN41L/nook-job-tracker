@@ -30,6 +30,7 @@ type DashboardShortcutOptions = {
   onToggleSidebar: () => void;
   onNavigate: (path: string) => void;
   onMoveApplicationFocus: (direction: "up" | "down" | "left" | "right") => boolean;
+  onSwitchInterviewTab: (tab: "upcoming" | "past") => boolean;
   onArchiveFocused: (application: ApplicationRecord) => void;
   onDeleteFocused: (application: ApplicationRecord, focused: HTMLElement | null) => void;
 };
@@ -58,6 +59,7 @@ export function useDashboardShortcuts({
   onToggleSidebar,
   onNavigate,
   onMoveApplicationFocus,
+  onSwitchInterviewTab,
   onArchiveFocused,
   onDeleteFocused,
 }: DashboardShortcutOptions) {
@@ -89,9 +91,13 @@ export function useDashboardShortcuts({
         onNavigate(destination);
         return;
       }
-      if (shortcut === "focus-application-up" || shortcut === "focus-application-down" || shortcut === "focus-column-left" || shortcut === "focus-column-right") {
-        const direction = shortcut === "focus-application-up" ? "up" : shortcut === "focus-application-down" ? "down" : shortcut === "focus-column-left" ? "left" : "right";
+      if (shortcut === "move-focus") {
+        const direction = ({ ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" } as const)[event.key as "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"];
         if (onMoveApplicationFocus(direction)) event.preventDefault();
+        return;
+      }
+      if (shortcut === "switch-interview-tab") {
+        if (onSwitchInterviewTab(event.key === "ArrowLeft" ? "upcoming" : "past")) event.preventDefault();
         return;
       }
 
@@ -110,7 +116,7 @@ export function useDashboardShortcuts({
         onOpenSettings();
         return;
       }
-      if (shortcut === "search-table" || shortcut === "search-interviews") {
+      if (shortcut === "search") {
         if (onFocusSearch()) event.preventDefault();
         return;
       }

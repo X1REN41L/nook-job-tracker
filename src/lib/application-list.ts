@@ -2,14 +2,12 @@ import type { Status } from "@prisma/client";
 
 import { startOfCalendarWeek } from "@/lib/calendar-date";
 import { featuredInterview } from "@/lib/interviews";
-import { STATUS_VALUES } from "@/lib/status-values";
+import { ACTIVE_PIPELINE_STATUSES, STATUS_VALUES } from "@/lib/status-values";
 
 type SearchableApplication = { company: string; role: string };
 type SortableApplication = { appliedDate: string; createdAt: string };
-type FilterableApplication = SearchableApplication & { status: Status; source: string | null; archived: boolean; appliedDate: string };
-type TableApplication = FilterableApplication & SortableApplication & { interviews: Array<{ id: string; date: string; time: string | null }> };
-
-export const ACTIVE_PIPELINE_STATUSES = ["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW"] as const satisfies readonly Status[];
+type FilterableApplication = SearchableApplication & { status: Status; archived: boolean; appliedDate: string };
+type TableApplication = FilterableApplication & SortableApplication & { source: string | null; interviews: Array<{ id: string; date: string; time: string | null }> };
 
 export type StatusFilter = "all" | "active" | Status;
 export const STATUS_FILTER_LABELS = { all: "All statuses", active: "Active pipeline" } as const;
@@ -20,17 +18,17 @@ export type ArchiveScope = "active" | "archived" | "all";
 export type ApplicationFilters = {
   search: string;
   status: StatusFilter;
-  source: string;
   archived: ArchiveScope;
   appliedFrom: string;
   appliedTo: string;
 };
 
-export const DEFAULT_APPLICATION_FILTERS: ApplicationFilters = { search: "", status: "all", source: "", archived: "active", appliedFrom: "", appliedTo: "" };
+export const DEFAULT_APPLICATION_FILTERS: ApplicationFilters = { search: "", status: "all", archived: "active", appliedFrom: "", appliedTo: "" };
 
+/** Every word in the search must appear in the company or role, in any order ("backend spotify" finds Spotify's Backend Engineer). */
 export function matchesApplicationSearch(application: SearchableApplication, search: string) {
-  const query = search.trim().toLowerCase();
-  return `${application.company} ${application.role}`.toLowerCase().includes(query);
+  const text = `${application.company} ${application.role}`.toLowerCase();
+  return search.trim().toLowerCase().split(/\s+/).every((word) => text.includes(word));
 }
 
 function sourceKey(source: string | null) {
@@ -38,10 +36,9 @@ function sourceKey(source: string | null) {
 }
 
 export function matchesApplicationFilters(application: FilterableApplication, filters: Partial<ApplicationFilters>) {
-  const { search = "", status = "all", source = "", archived = "active", appliedFrom = "", appliedTo = "" } = filters;
+  const { search = "", status = "all", archived = "active", appliedFrom = "", appliedTo = "" } = filters;
   if (archived !== "all" && application.archived !== (archived === "archived")) return false;
   if (status === "active" ? !(ACTIVE_PIPELINE_STATUSES as readonly Status[]).includes(application.status) : status !== "all" && application.status !== status) return false;
-  if (source && sourceKey(application.source) !== sourceKey(source)) return false;
   const applied = application.appliedDate.slice(0, 10);
   if ((appliedFrom && applied < appliedFrom) || (appliedTo && applied > appliedTo)) return false;
   return matchesApplicationSearch(application, search);
@@ -92,7 +89,7 @@ export function compareTableApplications(sort: TableSort, today: string) {
   };
 }
 
-export type AppliedRangePreset = "any" | "week" | "month" | "year" | "custom";
+export type AppliedRangePreset = "any" | "week" | "month" | "last-3-months" | "year" | "custom";
 type AppliedRange = Pick<ApplicationFilters, "appliedFrom" | "appliedTo">;
 
 function pad(value: number) {
@@ -114,6 +111,8 @@ export function appliedRangeForPreset(preset: Exclude<AppliedRangePreset, "custo
   const month = Number(today.slice(5, 7));
   if (preset === "week") return { appliedFrom: startOfCalendarWeek(today), appliedTo: today };
   if (preset === "month") return { appliedFrom: monthStartKey(year, month), appliedTo: today };
+  // This month and the two before it, like Analytics' Last 3 months.
+  if (preset === "last-3-months") return { appliedFrom: month > 2 ? monthStartKey(year, month - 2) : monthStartKey(year - 1, month + 10), appliedTo: today };
   if (preset === "year") return { appliedFrom: monthStartKey(year, 1), appliedTo: today };
   return { appliedFrom: "", appliedTo: "" };
 }
@@ -122,7 +121,7 @@ export function appliedRangeForPreset(preset: Exclude<AppliedRangePreset, "custo
 export function appliedRangePreset(range: AppliedRange, today: string): AppliedRangePreset {
   if (!range.appliedFrom && !range.appliedTo) return "any";
   if (!today) return "custom";
-  for (const preset of ["week", "month", "year"] as const) {
+  for (const preset of ["week", "month", "last-3-months", "year"] as const) {
     const candidate = appliedRangeForPreset(preset, today);
     if (candidate.appliedFrom === range.appliedFrom && candidate.appliedTo === range.appliedTo) return preset;
   }
@@ -145,7 +144,6 @@ export function parseApplicationFilters(params: SearchParams): ApplicationFilter
   return {
     search: read("q").slice(0, 120),
     status: status === "active" || (STATUS_VALUES as readonly string[]).includes(status) ? status as StatusFilter : "all",
-    source: read("source").slice(0, 120),
     archived: archived === "archived" || archived === "all" ? archived : "active",
     appliedFrom: DATE_KEY.test(appliedFrom) ? appliedFrom : "",
     appliedTo: DATE_KEY.test(appliedTo) ? appliedTo : "",
@@ -157,7 +155,6 @@ export function applicationTableHref(filters: Partial<ApplicationFilters>) {
   const query = new URLSearchParams();
   if (filters.search) query.set("q", filters.search);
   if (filters.status && filters.status !== "all") query.set("status", filters.status);
-  if (filters.source) query.set("source", filters.source);
   if (filters.archived && filters.archived !== "active") query.set("archived", filters.archived);
   if (filters.appliedFrom) query.set("from", filters.appliedFrom);
   if (filters.appliedTo) query.set("to", filters.appliedTo);

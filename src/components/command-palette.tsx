@@ -3,19 +3,22 @@
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { Dialog } from "@/components/dialog";
+import { ShortcutKeycaps } from "@/components/shortcut-list";
 import { compareApplications, matchesApplicationSearch } from "@/lib/application-list";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
+import { shortcutKeys, type DashboardShortcut } from "@/lib/keyboard-shortcuts";
 import type { ApplicationRecord } from "@/types/application";
 
-export type PaletteCommand = { id: string; label: string; group: "Pages" | "Actions"; keywords?: string; run: () => void };
-type PaletteItem = { id: string; label: string; detail?: string; dot?: string; group: string; run: () => void };
+export type PaletteCommand = { id: string; label: string; group: "Pages" | "Actions"; keywords?: string; shortcut?: DashboardShortcut; run: () => void };
+type PaletteItem = { id: string; label: string; detail?: string; dot?: string; shortcut?: DashboardShortcut; group: string; run: () => void };
 
 const APPLICATION_LIMIT = 8;
 
-export function CommandPalette({ applications, boards, commands, onClose, onOpenApplication }: {
+export function CommandPalette({ applications, boards, commands, isMac, onClose, onOpenApplication }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
   commands: PaletteCommand[];
+  isMac: boolean;
   onClose: () => void;
   onOpenApplication: (application: ApplicationRecord) => void;
 }) {
@@ -32,7 +35,7 @@ export function CommandPalette({ applications, boards, commands, onClose, onOpen
   const items: PaletteItem[] = [
     ...commands
       .filter((command) => `${command.label} ${command.keywords ?? ""}`.toLowerCase().includes(search))
-      .map((command) => ({ id: command.id, label: command.label, group: command.group, run: command.run })),
+      .map((command) => ({ id: command.id, label: command.label, group: command.group, shortcut: command.shortcut, run: command.run })),
     ...matchingApplications.map((application) => ({
       id: `application-${application.id}`,
       label: `${application.role} — ${application.company}`,
@@ -108,10 +111,16 @@ export function CommandPalette({ applications, boards, commands, onClose, onOpen
               {item.dot && <span className={`status-dot shrink-0 ${item.dot} ${index === active ? "ring-1 ring-cream" : ""}`} />}
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {item.detail && <span className={`shrink-0 text-xs ${index === active ? "text-cream/80" : "text-ink-soft"}`}>{item.detail}</span>}
+              {item.shortcut && <PaletteShortcut active={index === active} id={item.shortcut} isMac={isMac} />}
             </div>
           </li>
         ))}
       </ul>
     </Dialog>
   );
+}
+
+function PaletteShortcut({ id, isMac, active }: { id: DashboardShortcut; isMac: boolean; active: boolean }) {
+  const shortcut = shortcutKeys(id, isMac);
+  return shortcut && <ShortcutKeycaps inverted={active} keys={shortcut.keys} label={shortcut.text} size="small" />;
 }

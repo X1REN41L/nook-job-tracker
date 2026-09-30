@@ -69,6 +69,14 @@ export function analyticsPeriodRange(selection: AnalyticsSelection, today?: stri
   }
 }
 
+/** Trims a trend bucket (a week or month) to the Analytics period, so a bar's table link covers exactly the days it counts. */
+export function analyticsBucketRange(bucket: AnalyticsRange, range: AnalyticsRange): AnalyticsRange {
+  return {
+    startDate: bucket.startDate > range.startDate ? bucket.startDate : range.startDate,
+    endDate: bucket.endDate < range.endDate ? bucket.endDate : range.endDate,
+  };
+}
+
 export function analyticsCohortLabel({ startDate, endDate }: AnalyticsRange, period: AnalyticsPeriod, currentYear: string) {
   if (period === "CURRENT_YEAR" || period === "CUSTOM_YEAR") return startDate.slice(0, 4);
 

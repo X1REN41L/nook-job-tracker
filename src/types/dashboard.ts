@@ -25,7 +25,7 @@ export type StaleApplication = {
   company: string;
   status: Status;
   lastStatusChangedAt: string;
-  staleSince: "APPLIED_DATE" | "STATUS_CHANGE";
+  staleSince: "APPLIED_DATE" | "STATUS_CHANGE" | "INTERVIEW";
   staleDays: number;
   severity: StaleSeverity;
 };
@@ -56,7 +56,10 @@ export type DashboardOverviewData = {
 };
 
 export type StaleApplicationsData = {
+  /** Stale applications on the board; Needs attention lists these. */
   applicationsBySeverity: Record<StaleSeverity, StaleApplication[]>;
+  /** Archived applications that had gone stale, so their tag stays wherever they are shown. */
+  archived: StaleApplication[];
   counts: Record<StaleSeverity | "total", number>;
   timingCoverage: StaleTimingCoverage;
 };

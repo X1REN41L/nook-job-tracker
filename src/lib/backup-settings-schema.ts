@@ -13,7 +13,6 @@ export const settingsSchema = z.object({
   timeFormat: z.enum(TIME_FORMATS),
   sidebarCollapsed: z.boolean(),
   archivedExpanded: z.boolean(),
-  allApplicationsExpanded: z.boolean(),
 }).strict();
 
 export type ParsedBackupSettings = z.output<typeof settingsSchema>;

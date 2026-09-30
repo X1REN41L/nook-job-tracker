@@ -44,6 +44,7 @@ test("backup rejects future events, invalid stored fields and incomplete setting
     { source: " " }, { company: " Acme" },
   ]) assert.equal(accepts({ ...application(), ...change }), false, JSON.stringify(change));
   assert.equal(backupSnapshotSchema.safeParse({ ...backup(), settings: { ...defaultSettings, boards: [] } }).success, false, "Board colors are no longer a backup setting");
+  assert.equal(backupSnapshotSchema.safeParse({ ...backup(), settings: { ...defaultSettings, allApplicationsExpanded: true } }).success, false, "The sidebar application list is no longer a backup setting");
 });
 
 test("restore accepts stored historical fields and canonical comparison ignores event order", () => {
