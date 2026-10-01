@@ -10,20 +10,24 @@ import { useId, useLayoutEffect, useRef } from "react";
 
 import { useScrollbarActivity } from "@/hooks/use-scrollbar-activity";
 import { formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
+import { isFollowUpDue } from "@/lib/application-list";
 import type { BoardConfiguration } from "@/lib/board-preferences";
 import { motionIsCurrentlyOff } from "@/lib/general-preferences";
 import { cssTimeToMs, revealDelay } from "@/lib/motion-mode";
 import { featuredInterview, formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
+import { safeLink } from "@/lib/safe-link";
 import { useTimeFormat } from "@/hooks/use-time-format";
 import type { ApplicationRecord } from "@/types/application";
 
 type CardContext = {
   today: string;
+  /** Local "YYYY-MM-DDTHH:MM"; empty before hydration. */
+  now: string;
   staleDays: ReadonlyMap<string, number>;
   onOpen: (application: ApplicationRecord) => void;
 };
 
-export function KanbanBoard({ applications, boards, movingIds, emptyText, today, staleDays, onOpen }: {
+export function KanbanBoard({ applications, boards, movingIds, emptyText, today, now, staleDays, onOpen }: {
   applications: ApplicationRecord[];
   boards: BoardConfiguration[];
   movingIds: ReadonlySet<string>;
@@ -71,7 +75,7 @@ export function KanbanBoard({ applications, boards, movingIds, emptyText, today,
       <div ref={boardRef} className="board-columns flex h-full min-h-0 items-stretch gap-4" aria-label="Application status board">
         {boards.map((board, index) => {
           const items = applications.filter((application) => !application.archived && application.status === board.status);
-          return <KanbanColumn key={board.status} order={index} board={board} applications={items} movingIds={movingIds} emptyText={emptyText ?? board.emptyText} card={{ today, staleDays, onOpen }} />;
+          return <KanbanColumn key={board.status} order={index} board={board} applications={items} movingIds={movingIds} emptyText={emptyText ?? board.emptyText} card={{ today, now, staleDays, onOpen }} />;
         })}
       </div>
     </div>
@@ -110,7 +114,7 @@ function KanbanColumn({ board, order, applications, movingIds, emptyText, card }
   );
 }
 
-function KanbanCard({ application, disabled, today, staleDays, onOpen }: {
+function KanbanCard({ application, disabled, today, now, staleDays, onOpen }: {
   application: ApplicationRecord;
   disabled: boolean;
 } & CardContext) {
@@ -122,15 +126,9 @@ function KanbanCard({ application, disabled, today, staleDays, onOpen }: {
   const datesId = useId();
   const timeFormat = useTimeFormat();
   const stale = staleDays.get(application.id);
-  const interview = application.status === Status.INTERVIEW ? featuredInterview(application.interviews, today) : undefined;
-  const followUpDue = Boolean(today && application.followUpDate && application.followUpDate.slice(0, 10) <= today);
-  let postingUrl: string | undefined;
-  try {
-    const candidate = application.jobUrl?.trim();
-    if (candidate && ["http:", "https:"].includes(new URL(candidate).protocol)) postingUrl = candidate;
-  } catch {
-    // Ignore invalid URLs so the company line stays unchanged.
-  }
+  const interview = application.status === Status.INTERVIEW ? featuredInterview(application.interviews, now) : undefined;
+  const followUpDue = isFollowUpDue(application, today);
+  const postingUrl = safeLink(application.jobUrl);
 
   return (
     <article

@@ -1,11 +1,16 @@
 import type { TimeFormat } from "@/lib/settings-values";
 
-export function currentLocalDate() {
-  const date = new Date();
+export function currentLocalDate(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+/** The local date and time to the minute, as "YYYY-MM-DDTHH:MM". */
+export function currentLocalMinute() {
+  const date = new Date();
+  return `${currentLocalDate(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 export function currentBrowserTimeZone() {
@@ -21,10 +26,10 @@ export function currentBrowserTimeZone() {
 }
 
 // Calendar dates are stored at UTC midnight. The year is shown only outside the current local year.
-export function formatCalendarDate(value: string, currentYear = currentLocalDate().slice(0, 4)) {
+export function formatCalendarDate(value: string, { currentYear = currentLocalDate().slice(0, 4), weekday = false }: { currentYear?: string; weekday?: boolean } = {}) {
   const date = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
   return new Intl.DateTimeFormat(undefined, {
-    month: "short", day: "numeric", ...(value.slice(0, 4) !== currentYear && { year: "numeric" }), timeZone: "UTC",
+    ...(weekday && { weekday: "short" }), month: "short", day: "numeric", ...(value.slice(0, 4) !== currentYear && { year: "numeric" }), timeZone: "UTC",
   }).format(date);
 }
 

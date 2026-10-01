@@ -1,10 +1,11 @@
-import { Prisma, Status } from "@prisma/client";
+import { EventType, Prisma, Status } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { apiError, isDatabaseContention, parseRequest } from "@/lib/api";
 import { applicationInclude, type StoredApplication } from "@/lib/application-record";
 import { applicationEditSchema, applicationMutationSchema } from "@/lib/application-schema";
+import { followUpEventDetail } from "@/lib/follow-up-event";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma, serializeWrite } from "@/lib/prisma";
 import { nextStatusEventTime, statusTransitionDetail } from "@/lib/status-history";
@@ -49,10 +50,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const { id } = await params;
     const mutation = parseRequest(applicationMutationSchema, parseMutationJson(checked.body));
     if (!("status" in mutation)) {
-      const data = "archived" in mutation
-        ? { archived: mutation.archived }
-        : { followUpDate: mutation.followUpDate, followUpNote: mutation.followUpDate ? mutation.followUpNote : null };
-      const result = await updateApplication(id, mutation.revision, data);
+      const followUp = "archived" in mutation ? undefined : { followUpDate: mutation.followUpDate, followUpNote: mutation.followUpDate ? mutation.followUpNote : null };
+      const result = await updateApplication(id, mutation.revision, "archived" in mutation ? { archived: mutation.archived } : { ...followUp }, undefined, followUp);
       if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
       if (result.conflict) return revisionConflict(result.application);
       return NextResponse.json({ application: result.application });
@@ -72,6 +71,7 @@ async function updateApplication(
   expectedRevision: number,
   data: Prisma.ApplicationUpdateManyMutationInput,
   nextStatus?: Status,
+  followUp?: { followUpDate: Date | null; followUpNote: string | null },
 ) {
   for (let attempt = 0; attempt < 6; attempt += 1) {
     try {
@@ -107,6 +107,10 @@ async function updateApplication(
           });
           latestStatusEventId = event.id;
         }
+        if (followUp) {
+          const event = followUpEvent(current, followUp);
+          if (event) await transaction.applicationEvent.create({ data: { applicationId: current.id, ...event, createdAt: new Date() } });
+        }
         const application = await transaction.application.findUniqueOrThrow({ where: { id }, include: applicationInclude });
         return { application, conflict: false as const, latestStatusEventId };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
@@ -116,6 +120,15 @@ async function updateApplication(
     }
   }
   throw new Error("Application update retry limit reached");
+}
+
+/** The timeline entry for a follow-up change: set (or changed) or done; none when nothing changed. */
+function followUpEvent(current: StoredApplication, next: { followUpDate: Date | null; followUpNote: string | null }) {
+  const currentDate = current.followUpDate?.toISOString().slice(0, 10) ?? null;
+  const nextDate = next.followUpDate?.toISOString().slice(0, 10) ?? null;
+  if (!nextDate) return currentDate ? { type: EventType.FOLLOW_UP_DONE, detail: followUpEventDetail(currentDate) } : null;
+  if (nextDate === currentDate && next.followUpNote === current.followUpNote) return null;
+  return { type: EventType.FOLLOW_UP_SET, detail: followUpEventDetail(nextDate, next.followUpNote) };
 }
 
 function revisionConflict(application: StoredApplication) {

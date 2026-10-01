@@ -42,14 +42,39 @@ export function compareInterviews(left: Schedulable, right: Schedulable) {
     || left.id.localeCompare(right.id);
 }
 
-/** The next round on or after today, or else the most recent one. */
-export function featuredInterview<T extends Schedulable>(interviews: T[], today: string) {
-  const sorted = [...interviews].sort(compareInterviews);
-  return sorted.find((interview) => interviewDateKey(interview.date) >= today) ?? sorted.at(-1);
+// Rounds have no end time, so a timed round counts as upcoming until this long after it starts.
+export const INTERVIEW_UPCOMING_MINUTES = 60;
+
+function minutesOf(time: string) {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
 }
 
-export function hasUpcomingInterview(application: Pick<ApplicationRecord, "interviews">, today: string) {
-  return application.interviews.some((interview) => interviewDateKey(interview.date) >= today);
+/**
+ * `now` is the local "YYYY-MM-DDTHH:MM" (see `currentLocalMinute`). A timed round today stays
+ * upcoming for an hour after it starts; an all-day round stays upcoming until the day ends.
+ */
+export function isUpcomingInterview(interview: Pick<Schedulable, "date" | "time">, now: string) {
+  const date = interviewDateKey(interview.date);
+  const today = now.slice(0, 10);
+  if (date !== today) return date > today;
+  return !interview.time || minutesOf(interview.time) + INTERVIEW_UPCOMING_MINUTES > minutesOf(now.slice(11, 16));
+}
+
+/** A timed round today that has started but is still within its upcoming hour. */
+export function isInterviewInProgress(interview: Pick<Schedulable, "date" | "time">, now: string) {
+  return Boolean(interview.time) && interviewDateKey(interview.date) === now.slice(0, 10)
+    && minutesOf(interview.time!) <= minutesOf(now.slice(11, 16)) && isUpcomingInterview(interview, now);
+}
+
+/** The next upcoming round, or else the most recent one. */
+export function featuredInterview<T extends Schedulable>(interviews: T[], now: string) {
+  const sorted = [...interviews].sort(compareInterviews);
+  return sorted.find((interview) => isUpcomingInterview(interview, now)) ?? sorted.at(-1);
+}
+
+export function hasUpcomingInterview(application: Pick<ApplicationRecord, "interviews">, now: string) {
+  return application.interviews.some((interview) => isUpcomingInterview(interview, now));
 }
 
 /** Formats a stored "HH:MM" time in the browser's locale. */
@@ -58,9 +83,11 @@ export function formatInterviewTime(time: string, timeFormat: TimeFormat = "syst
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZone: "UTC", ...hourCycleOption(timeFormat) }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
 }
 
-export function groupUpcomingInterviews(interviews: InterviewListItem[], today: string): InterviewGroup[] {
+/** `firstDay` is the first day of the week, counted from Sunday (0); see `useWeekStartDay`. */
+export function groupUpcomingInterviews(interviews: InterviewListItem[], now: string, firstDay = 1): InterviewGroup[] {
+  const today = now.slice(0, 10);
   const tomorrow = addCalendarDays(today, 1);
-  const weekStart = startOfCalendarWeek(today);
+  const weekStart = startOfCalendarWeek(today, firstDay);
   const thisWeekEnd = addCalendarDays(weekStart, 6);
   const nextWeekEnd = addCalendarDays(weekStart, 13);
   const groups: InterviewGroup[] = [
@@ -72,8 +99,8 @@ export function groupUpcomingInterviews(interviews: InterviewListItem[], today: 
   ];
 
   for (const interview of interviews) {
+    if (!isUpcomingInterview(interview, now)) continue;
     const date = interviewDateKey(interview.date);
-    if (date < today) continue;
     const index = date === today ? 0
       : date === tomorrow ? 1
       : date <= thisWeekEnd ? 2
@@ -103,7 +130,7 @@ export function getInterviewListItems(applications: ApplicationRecord[]): Interv
 }
 
 /** Counts upcoming rounds for applications still in progress, matching the Overview card. */
-export function getUpcomingInterviewCount(applications: ApplicationRecord[], today: string) {
+export function getUpcomingInterviewCount(applications: ApplicationRecord[], now: string) {
   return applications.filter(isInProgressApplication).reduce((count, application) =>
-    count + application.interviews.filter((interview) => interviewDateKey(interview.date) >= today).length, 0);
+    count + application.interviews.filter((interview) => isUpcomingInterview(interview, now)).length, 0);
 }

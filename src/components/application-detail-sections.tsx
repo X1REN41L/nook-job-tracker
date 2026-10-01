@@ -5,7 +5,10 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } fr
 
 import { formatCalendarDate, formatDaysAgo, formatTimestamp } from "@/lib/application-date";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
-import { compareInterviews, formatInterviewTime, INTERVIEW_TYPE_LABELS, INTERVIEW_TYPES } from "@/lib/interviews";
+import { parseFollowUpEventDetail } from "@/lib/follow-up-event";
+import { compareInterviews, formatInterviewTime, INTERVIEW_TYPE_LABELS, INTERVIEW_TYPES, isUpcomingInterview } from "@/lib/interviews";
+import { safeLink } from "@/lib/safe-link";
+import type { TimeFormat } from "@/lib/settings-values";
 import { useTimeFormat } from "@/hooks/use-time-format";
 import type { ApplicationDetails, ApplicationRecord, ContactRecord, InterviewRecord } from "@/types/application";
 
@@ -266,7 +269,7 @@ const interviewFields = (interview: InterviewRecord): InterviewFields => ({
   date: interview.date.slice(0, 10), time: interview.time ?? "", type: interview.type, interviewers: interview.interviewers ?? "", notes: interview.notes ?? "",
 });
 
-export function InterviewsSection({ application, today, onSave }: { application: ApplicationRecord; today: string; onSave: SaveChange }) {
+export function InterviewsSection({ application, today, now, onSave }: { application: ApplicationRecord; today: string; now: string; onSave: SaveChange }) {
   const { saving, error, run } = useSave(onSave);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const headingId = useId();
@@ -300,7 +303,7 @@ export function InterviewsSection({ application, today, onSave }: { application:
                   <p className="font-medium">
                     {formatCalendarDate(interview.date)}{interview.time && `, ${formatInterviewTime(interview.time, timeFormat)}`}
                     <span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[interview.type]}</span>
-                    {today && interview.date.slice(0, 10) < today && <span className="font-normal text-ink-soft"> · Past</span>}
+                    {now && !isUpcomingInterview(interview, now) && <span className="font-normal text-ink-soft"> · Past</span>}
                   </p>
                   {interview.interviewers && <p className="mt-0.5 break-words text-ink-soft">With {interview.interviewers}</p>}
                   {interview.notes && <p className="mt-1 whitespace-pre-wrap break-words">{interview.notes}</p>}
@@ -343,15 +346,6 @@ function ContactForm({ initial, saving, submitLabel, onCancel, onSubmit }: {
       <FormActions onCancel={onCancel} saving={saving} submitLabel={submitLabel} />
     </form>
   );
-}
-
-function safeLink(value: string | null) {
-  try {
-    if (value && ["http:", "https:"].includes(new URL(value).protocol)) return value;
-  } catch {
-    // Stored links are validated; anything else is simply not linked.
-  }
-  return undefined;
 }
 
 const contactFields = (contact: ContactRecord): ContactFields => ({
@@ -419,9 +413,23 @@ function statusEventLabel(event: HistoryEvent, boards: BoardConfiguration[]) {
   return `Moved from ${boardLabel(boards, event.fromStatus)} to ${boardLabel(boards, event.toStatus)}`;
 }
 
+function FollowUpEventEntry({ event, timeFormat }: { event: HistoryEvent; timeFormat: TimeFormat }) {
+  const followUp = parseFollowUpEventDetail(event.detail);
+  const done = event.type === "FOLLOW_UP_DONE";
+  const date = followUp && formatCalendarDate(followUp.date);
+  return (
+    <>
+      <p className="text-sm font-medium">{done ? (date ? `Follow-up for ${date} done` : "Follow-up done") : date ? `Follow-up set for ${date}` : "Follow-up set"}</p>
+      {!done && followUp?.note && <p className="mt-0.5 break-words text-sm">{followUp.note}</p>}
+      <p className="mt-0.5 text-xs text-ink-soft"><time dateTime={event.createdAt}>{formatTimestamp(event.createdAt, timeFormat)}</time></p>
+    </>
+  );
+}
+
 /**
- * Status changes and dated notes, newest first. Notes can be added, edited (keeping their date), and deleted;
- * status changes can be deleted, and removing the latest one moves the application back to its previous status.
+ * Status changes, follow-ups, and dated notes, newest first. Notes can be added, edited (keeping their date), and
+ * deleted; status changes can be deleted, and removing the latest one moves the application back to its previous
+ * status. Follow-up entries are recorded when a follow-up is set, changed, or marked done.
  */
 export function TimelineSection({ boards, events, loadError, onSave }: {
   boards: BoardConfiguration[];
@@ -466,7 +474,7 @@ export function TimelineSection({ boards, events, loadError, onSave }: {
         <ol className="mt-4 border-l border-line pl-4">
           {[...events].reverse().map((event) => (
             <li className="relative pb-4 last:pb-0" key={event.id}>
-              <span aria-hidden="true" className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-paper ${event.type === "NOTE_ADDED" ? "bg-ink-soft" : event.toStatus ? boardDot(boards, event.toStatus) : "bg-neutral-dim"}`} />
+              <span aria-hidden="true" className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-paper ${event.type === "NOTE_ADDED" ? "bg-ink-soft" : event.type === "FOLLOW_UP_SET" || event.type === "FOLLOW_UP_DONE" ? "bg-clay" : event.toStatus ? boardDot(boards, event.toStatus) : "bg-neutral-dim"}`} />
               {event.type === "NOTE_ADDED" ? (
                 editing?.id === event.id ? (
                   <form onSubmit={saveEdit}>
@@ -484,6 +492,8 @@ export function TimelineSection({ boards, events, loadError, onSave }: {
                     </p>
                   </>
                 )
+              ) : event.type === "FOLLOW_UP_SET" || event.type === "FOLLOW_UP_DONE" ? (
+                <FollowUpEventEntry event={event} timeFormat={timeFormat} />
               ) : (
                 <>
                   <p className="text-sm font-medium">{statusEventLabel(event, boards)}</p>

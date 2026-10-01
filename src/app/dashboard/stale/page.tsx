@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
-// Stale Applications is now the full Needs Attention list on Overview.
+import { applicationTableHref } from "@/lib/application-list";
+
+// Stale Applications is now the Needs attention filter on the table.
 export default function StaleApplicationsPage() {
-  redirect("/dashboard?attention=all");
+  redirect(applicationTableHref({ status: "attention" }));
 }

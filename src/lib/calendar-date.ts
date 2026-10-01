@@ -17,10 +17,11 @@ export function addCalendarDays(value: string, days: number) {
   return `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
-export function startOfCalendarWeek(value: string) {
+/** The first day of the week containing `value`; `firstDay` counts from Sunday (0) like `Date.getDay`, and defaults to Monday. */
+export function startOfCalendarWeek(value: string, firstDay = 1) {
   const date = parseCalendarDateKey(value);
   if (!date) throw new Error("Invalid calendar date");
-  return addCalendarDays(value, -((date.getUTCDay() + 6) % 7));
+  return addCalendarDays(value, -((date.getUTCDay() - firstDay + 7) % 7));
 }
 
 export const calendarDateKeySchema = z.string()
@@ -42,6 +43,11 @@ export const dashboardStaleQuerySchema = z.object({
   timeZone: timeZoneSchema,
   staleApplicationThreshold: z.enum(["7", "15", "30"]).default("15").transform(Number),
 }).strict();
+
+// The user's local wall-clock time, so interviews earlier today can drop out of Upcoming.
+export const dashboardOverviewQuerySchema = dashboardStaleQuerySchema.extend({
+  time: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM"),
+});
 
 export function calendarDateInTimeZone(timestamp: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {

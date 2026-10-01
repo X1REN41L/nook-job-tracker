@@ -7,6 +7,7 @@ import {
   type AnalyticsSelection,
 } from "@/lib/analytics-period";
 import { analyzeStatusHistory, type StatusHistoryEvent } from "@/lib/status-history";
+import { isUpcomingInterview } from "@/lib/interviews";
 import { isInProgressApplication } from "@/lib/status-values";
 import type {
   DashboardAnalyticsData, DashboardOverviewData, HistoryCoverage, RateMetric, StaleApplication, StaleApplicationsData,
@@ -108,19 +109,21 @@ function daysBetween(start: string, end: string) {
   return Math.round((dateFromKey(end).getTime() - dateFromKey(start).getTime()) / 86_400_000);
 }
 
-function makeTrendBuckets(selection: AnalyticsSelection, startDate: string, endDate: string) {
+function makeTrendBuckets(selection: AnalyticsSelection, startDate: string, endDate: string, firstDay: number) {
   const buckets: Array<{ startDate: string; endDate: string; count: number }> = [];
   if (selection.period === "CURRENT_MONTH" || selection.period === "CUSTOM_MONTH") {
-    // Seven-day blocks from the 1st (1–7, 8–14, 15–21, 22–28, then the rest), so every month
-    // splits the same way whatever weekday it starts on; only the last block can be short.
+    // Calendar weeks starting on `firstDay` (0 is Sunday), cut to the month, so the first and last can be short.
     const { year, month } = monthParts(startDate);
     const lastDay = monthEnd(year, month);
     // Stops at the month's last day without stepping past it, which for December 9999 would leave the calendar.
-    for (let start = monthStart(year, month); ; start = addDays(start, 7)) {
-      const dayOfMonth = Number(start.slice(8, 10));
-      const end = dayOfMonth + 6 < Number(lastDay.slice(8, 10)) ? addDays(start, 6) : lastDay;
+    let start = monthStart(year, month);
+    for (;;) {
+      // Days left in this week, from the weekday alone, so no date outside the month (or the calendar) is ever built.
+      const daysLeft = 6 - ((dateFromKey(start).getUTCDay() - firstDay + 7) % 7);
+      const end = Number(start.slice(8, 10)) + daysLeft < Number(lastDay.slice(8, 10)) ? addDays(start, daysLeft) : lastDay;
       buckets.push({ startDate: start, endDate: end, count: 0 });
       if (end === lastDay) break;
+      start = addDays(end, 1);
     }
     return { granularity: "WEEK" as const, buckets };
   }
@@ -224,14 +227,16 @@ function staleGroups(applications: StaleApplication[]) {
   };
 }
 
-export async function getDashboardOverview(today: string, timeZone: string, staleApplicationThreshold = 15): Promise<DashboardOverviewData> {
+/** `now` is the user's local "YYYY-MM-DDTHH:MM"; see `isUpcomingInterview`. */
+export async function getDashboardOverview(now: string, timeZone: string, staleApplicationThreshold = 15): Promise<DashboardOverviewData> {
+  const today = now.slice(0, 10);
   const applications = await loadApplications();
   const historyCoverage = coverageFor(applications);
   // Each interview round counts separately, for applications still in progress.
   const upcoming = applications
     .filter(isInProgressApplication)
     .flatMap((application) => application.interviews
-      .filter((interview) => dateKey(interview.date) >= today)
+      .filter((interview) => isUpcomingInterview({ date: dateKey(interview.date), time: interview.time }, now))
       .map((interview) => ({ application, interview, date: dateKey(interview.date) })))
     .sort((left, right) =>
       left.date.localeCompare(right.date) || (left.interview.time ?? "").localeCompare(right.interview.time ?? "") || left.interview.id.localeCompare(right.interview.id),
@@ -287,7 +292,8 @@ export async function getStaleApplications(today: string, timeZone: string, stal
   };
 }
 
-export async function getDashboardAnalytics(selection: AnalyticsSelection, today?: string): Promise<DashboardAnalyticsData> {
+/** `firstDay` starts the weekly bars of month periods, counted from Sunday (0); Monday by default. */
+export async function getDashboardAnalytics(selection: AnalyticsSelection, today?: string, firstDay = 1): Promise<DashboardAnalyticsData> {
   const range = analyticsPeriodRange(selection, today);
   const applications = await loadApplications({
     appliedDate: range.endDate === "9999-12-31"
@@ -295,7 +301,7 @@ export async function getDashboardAnalytics(selection: AnalyticsSelection, today
       : { gte: dateFromKey(range.startDate), lt: dayAfterKey(range.endDate) },
   });
   const historyCoverage = coverageFor(applications);
-  const trend = makeTrendBuckets(selection, range.startDate, range.endDate);
+  const trend = makeTrendBuckets(selection, range.startDate, range.endDate, firstDay);
   const bucketsByKey = new Map(trend.buckets.map((bucket) => [bucket.startDate, bucket]));
   const statusBreakdown: Record<Status, number> = {
     APPLIED: 0,

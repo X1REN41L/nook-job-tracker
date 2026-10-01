@@ -40,10 +40,12 @@ function useApplicationHistory(application: ApplicationRecord) {
   return { events: result?.key === key ? result.events : null, error: failedKey === key };
 }
 
-export function ApplicationDetailPanel({ application, boards, today, stale, busy, error: actionError, sourceSuggestions, returnFocusRef, onClose, onChangeStatus, onArchive, onDelete, onSave }: {
+export function ApplicationDetailPanel({ application, boards, today, now, stale, busy, error: actionError, sourceSuggestions, returnFocusRef, onClose, onChangeStatus, onArchive, onDelete, onSave }: {
   application: ApplicationRecord;
   boards: BoardConfiguration[];
   today: string;
+  /** Local "YYYY-MM-DDTHH:MM"; empty before hydration. */
+  now: string;
   stale?: StaleApplication;
   busy: boolean;
   /** A failed status change, archive, or delete for this application. */
@@ -122,7 +124,7 @@ export function ApplicationDetailPanel({ application, boards, today, stale, busy
           )}
           <DetailsSection application={application} editing={editingDetails} onDone={() => setEditingDetails(false)} onSave={onSave} sourceSuggestions={sourceSuggestions} today={today} />
           <FollowUpSection application={application} onSave={onSave} today={today} />
-          <InterviewsSection application={application} onSave={onSave} today={today} />
+          <InterviewsSection application={application} now={now} onSave={onSave} today={today} />
           <ContactsSection application={application} onSave={onSave} />
           <SummarySection application={application} onSave={onSave} />
           <TimelineSection boards={boards} events={events} loadError={error} onSave={onSave} />

@@ -16,8 +16,8 @@ export function parseStoredSettings(value: string) {
       delete (stored as { boards?: unknown }).boards;
       delete (stored as { allApplicationsExpanded?: unknown }).allApplicationsExpanded;
     }
-    // Saves from before the time format setting keep their other settings and follow the browser's clock.
-    return settingsSchema.parse({ timeFormat: "system", ...(stored as object) });
+    // Saves from before the time format or week start settings keep their other settings and follow the browser's locale.
+    return settingsSchema.parse({ timeFormat: "system", weekStart: "system", ...(stored as object) });
   } catch (error) {
     console.error("Invalid persisted settings; using defaults", error);
     return defaultSettings;

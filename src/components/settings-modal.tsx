@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useSyncExternalStore } from "react";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
 
 import { ShortcutList } from "@/components/shortcut-list";
@@ -11,7 +11,7 @@ import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-mod
 import { BOARDS } from "@/lib/board-preferences";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
-import { STALE_THRESHOLDS, STARTUP_PAGE_LABELS, STARTUP_PAGES, TIME_FORMATS } from "@/lib/settings-values";
+import { STALE_THRESHOLDS, STARTUP_PAGE_LABELS, STARTUP_PAGES, TIME_FORMATS, WEEK_START_LABELS, WEEK_STARTS } from "@/lib/settings-values";
 import { MOTION_MODES } from "@/lib/motion-mode";
 
 type SettingsCategory = "general" | "shortcuts" | "backup";
@@ -23,7 +23,13 @@ const SETTINGS_CATEGORIES = [
 ] satisfies Array<{ id: SettingsCategory; label: string; Icon: typeof SlidersHorizontal }>;
 // One fixed width, wide enough for the longest option, keeps the dropdowns' edges in line.
 const settingsSelectClass = "w-44 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
+const segmentedGroupClass = "flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5";
 const subscribeToMount = () => () => {};
+
+// Every segment is the same height, so icon and text controls line up.
+function segmentClass(selected: boolean) {
+  return `flex h-8 items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${selected ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`;
+}
 
 export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll, deleteDisabled, importProgress, returnFocusRef, showToast }: {
   isMac: boolean;
@@ -46,6 +52,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
   const staleThreshold = settings.staleApplicationThreshold;
   const motion = settings.motion;
   const timeFormat = settings.timeFormat;
+  const weekStart = settings.weekStart;
   const [importError, setImportError] = useState("");
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
@@ -122,62 +129,49 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
               <div>
                 <h3 className="font-serif text-lg font-semibold">General</h3>
                 <div className="mt-5 divide-y divide-line border-y border-line">
-                  <div className="flex min-h-16 items-center justify-between gap-3 py-3">
-                    <span className="text-sm font-semibold">Theme</span>
-                    <div aria-label="Theme" className="flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5" role="group">
+                  <SettingRow label="Theme">
+                    <div aria-label="Theme" className={segmentedGroupClass} role="group">
                       {(["system", "light", "dark"] as const).map((mode) => (
-                        <button key={mode} aria-label={`Use ${mode} theme`} aria-pressed={mounted && theme === mode} className={`flex h-8 w-9 items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${mounted && theme === mode ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`} disabled={!mounted} onClick={() => saveSettings({ theme: mode })} type="button">
+                        <button key={mode} aria-label={`Use ${mode} theme`} aria-pressed={mounted && theme === mode} className={`${segmentClass(mounted && theme === mode)} w-9`} disabled={!mounted} onClick={() => saveSettings({ theme: mode })} title={`${mode[0].toUpperCase()}${mode.slice(1)}`} type="button">
                           <ThemeIcon mode={mode} />
                         </button>
                       ))}
                     </div>
-                  </div>
-                  <div className="flex min-h-16 items-center justify-between gap-3 py-3">
-                    <label className="text-sm font-semibold" htmlFor="default-board">Default board for new applications</label>
-                    <select className={settingsSelectClass} id="default-board" onChange={(event) => saveSettings({ defaultBoard: event.target.value as typeof defaultBoard })} value={defaultBoard}>
-                      {BOARDS.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex min-h-16 items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <label className="text-sm font-semibold" htmlFor="startup-page">Startup page</label>
-                      <p className="mt-0.5 text-xs text-ink-soft">Choose where Nook opens.</p>
+                  </SettingRow>
+                  <SettingRow label="Motion">
+                    <div aria-label="Motion" className={segmentedGroupClass} role="group">
+                      {MOTION_MODES.map((mode) => (
+                        <button key={mode} aria-pressed={motion === mode} className={`${segmentClass(motion === mode)} px-3 text-xs font-medium`} onClick={() => saveSettings({ motion: mode })} type="button">{mode === "system" ? "System" : mode === "on" ? "On" : "Off"}</button>
+                      ))}
                     </div>
+                  </SettingRow>
+                  <SettingRow htmlFor="startup-page" label="Startup page">
                     <select className={settingsSelectClass} id="startup-page" onChange={(event) => saveSettings({ startupPage: event.target.value as typeof startupPage })} value={startupPage}>
                       {STARTUP_PAGES.map((page) => <option key={page} value={page}>{STARTUP_PAGE_LABELS[page]}</option>)}
                     </select>
-                  </div>
-                  <div className="flex min-h-16 items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <label className="text-sm font-semibold" htmlFor="stale-threshold">Stale application threshold</label>
-                      <p className="mt-0.5 text-xs text-ink-soft">Mark applications as stale after no activity for:</p>
-                    </div>
+                  </SettingRow>
+                  <SettingRow htmlFor="default-board" label="Default board">
+                    <select className={settingsSelectClass} id="default-board" onChange={(event) => saveSettings({ defaultBoard: event.target.value as typeof defaultBoard })} value={defaultBoard}>
+                      {BOARDS.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
+                    </select>
+                  </SettingRow>
+                  <SettingRow description="Flags active applications with no progress." htmlFor="stale-threshold" label="Stale after">
                     <select className={settingsSelectClass} id="stale-threshold" onChange={(event) => saveSettings({ staleApplicationThreshold: Number(event.target.value) as typeof staleThreshold })} value={staleThreshold}>
                       {STALE_THRESHOLDS.map((days) => <option key={days} value={days}>{days} days</option>)}
                     </select>
-                  </div>
-                  <div className="flex min-h-16 items-center justify-between gap-3 py-3">
-                    <div>
-                      <p className="text-sm font-semibold">Time format</p>
-                      <p className="mt-0.5 text-xs text-ink-soft">Automatic follows your browser&apos;s language and region.</p>
-                    </div>
-                    <div aria-label="Time format" className="flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5" role="group">
+                  </SettingRow>
+                  <SettingRow label="Time format">
+                    <div aria-label="Time format" className={segmentedGroupClass} role="group">
                       {TIME_FORMATS.map((format) => (
-                        <button key={format} aria-pressed={timeFormat === format} className={`rounded-[8px] px-2.5 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${timeFormat === format ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`} onClick={() => saveSettings({ timeFormat: format })} type="button">{format === "system" ? "Automatic" : format === "12h" ? "12-hour" : "24-hour"}</button>
+                        <button key={format} aria-pressed={timeFormat === format} className={`${segmentClass(timeFormat === format)} px-3 text-xs font-medium`} onClick={() => saveSettings({ timeFormat: format })} type="button">{format === "system" ? "Automatic" : format === "12h" ? "12-hour" : "24-hour"}</button>
                       ))}
                     </div>
-                  </div>
-                  <div className="flex min-h-16 items-center justify-between gap-3 py-3">
-                    <div>
-                      <p className="text-sm font-semibold">Motion</p>
-                      <p className="mt-0.5 text-xs text-ink-soft">Control animations and transitions throughout the interface.</p>
-                    </div>
-                    <div aria-label="Motion" className="flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5" role="group">
-                      {MOTION_MODES.map((mode) => (
-                        <button key={mode} aria-pressed={motion === mode} className={`rounded-[8px] px-2.5 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${motion === mode ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`} onClick={() => saveSettings({ motion: mode })} type="button">{mode === "system" ? "System" : mode === "on" ? "On" : "Off"}</button>
-                      ))}
-                    </div>
-                  </div>
+                  </SettingRow>
+                  <SettingRow htmlFor="week-start" label="Week starts on">
+                    <select className={settingsSelectClass} id="week-start" onChange={(event) => saveSettings({ weekStart: event.target.value as typeof weekStart })} value={weekStart}>
+                      {WEEK_STARTS.map((option) => <option key={option} value={option}>{WEEK_START_LABELS[option]}</option>)}
+                    </select>
+                  </SettingRow>
                 </div>
               </div>
             )}
@@ -193,8 +187,8 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
               <div>
                 <h3 className="font-serif text-lg font-semibold">Backup &amp; restore</h3>
                 <div className="mt-5 divide-y divide-line border-y border-line">
-                  <BackupAction description="Restore applications and settings from a Nook backup." disabled={importProgress !== null} label="Import" onClick={() => importInputRef.current?.click()} title="Import data" />
-                  <BackupAction description="Download a backup of your applications and settings." label="Export" onClick={onExport} title="Export data" />
+                  <BackupAction description="Adds the backup's applications and replaces your settings." disabled={importProgress !== null} label="Import" onClick={() => importInputRef.current?.click()} title="Import data" />
+                  <BackupAction label="Export" onClick={onExport} title="Export data" />
                 </div>
                 <div className="mt-7 border-t border-line pt-5">
                   <h4 className="font-serif text-base font-semibold text-rose">Delete all data</h4>
@@ -226,12 +220,24 @@ function ThemeIcon({ mode }: { mode: "system" | "light" | "dark" }) {
   );
 }
 
-function BackupAction({ description, disabled = false, label, onClick, title }: { description: string; disabled?: boolean; label: string; onClick: () => void; title: string }) {
+function SettingRow({ children, description, htmlFor, label }: { children: ReactNode; description?: string; htmlFor?: string; label: string }) {
   return (
-    <div className="flex min-h-16 items-center justify-between gap-3 py-3">
+    <div className="flex min-h-14 items-center justify-between gap-4 py-2.5">
+      <div className="min-w-0">
+        {htmlFor ? <label className="text-sm font-semibold" htmlFor={htmlFor}>{label}</label> : <p className="text-sm font-semibold">{label}</p>}
+        {description && <p className="mt-0.5 text-xs text-ink-soft">{description}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function BackupAction({ description, disabled = false, label, onClick, title }: { description?: string; disabled?: boolean; label: string; onClick: () => void; title: string }) {
+  return (
+    <div className="flex min-h-14 items-center justify-between gap-3 py-2.5">
       <div className="min-w-0">
         <p className="text-sm font-semibold">{title}</p>
-        <p className="mt-0.5 text-xs text-ink-soft">{description}</p>
+        {description && <p className="mt-0.5 text-xs text-ink-soft">{description}</p>}
       </div>
       <button className="shrink-0 rounded-nook-sm border border-line bg-cream px-3 py-2 text-sm font-medium text-ink motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:cursor-not-allowed disabled:opacity-50" disabled={disabled} onClick={onClick} type="button">{label}</button>
     </div>

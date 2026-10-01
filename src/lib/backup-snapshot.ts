@@ -7,6 +7,7 @@ import {
 } from "@/lib/application-schema";
 import { MAX_BACKUP_APPLICATIONS } from "@/lib/backup-limits";
 import { settingsSchema } from "@/lib/backup-settings-schema";
+import { parseFollowUpEventDetail } from "@/lib/follow-up-event";
 import { isValidStatusTransition, statusTransitionDetail } from "@/lib/status-history";
 
 type TypedTransition = { fromStatus: Status; toStatus: Status };
@@ -65,6 +66,11 @@ export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, cont
     }
     if (event.type === EventType.NOTE_ADDED && (!event.detail || event.detail.trim() !== event.detail)) {
       context.addIssue({ code: "custom", message: "A dated note must have text without leading or trailing spaces" });
+      return z.NEVER;
+    }
+    const followUp = event.type === EventType.NOTE_ADDED ? null : parseFollowUpEventDetail(event.detail);
+    if (event.type !== EventType.NOTE_ADDED && (!followUp || (event.type === EventType.FOLLOW_UP_DONE && followUp.note !== null))) {
+      context.addIssue({ code: "custom", message: "A follow-up event must name its date, and a set follow-up may add its note" });
       return z.NEVER;
     }
     return event;

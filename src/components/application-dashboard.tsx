@@ -35,9 +35,9 @@ import { useStaleApplications } from "@/hooks/use-stale-applications";
 import { useToastUndo, type StatusUndo, type ToastUndo } from "@/hooks/use-toast-undo";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
-import { currentLocalDate } from "@/lib/application-date";
+import { currentLocalDate, currentLocalMinute } from "@/lib/application-date";
 import { applicationSources, compareApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationSearch, matchesBoardStatusFilter, type ApplicationFilters } from "@/lib/application-list";
-import { subscribeToLocalDate } from "@/lib/local-date-subscription";
+import { subscribeToLocalDate, subscribeToLocalMinute } from "@/lib/local-date-subscription";
 import { setSettingsState } from "@/lib/settings-store";
 import { BOARDS, BOARD_STATUSES, boardLabel } from "@/lib/board-preferences";
 import { isInProgressApplication } from "@/lib/status-values";
@@ -96,12 +96,11 @@ function getServerLocalDate() {
   return "";
 }
 
-export function ApplicationDashboard({ initialApplications, page, dashboardSection = "overview", tableFilters = DEFAULT_APPLICATION_FILTERS, expandAttention = false }: {
+export function ApplicationDashboard({ initialApplications, page, dashboardSection = "overview", tableFilters = DEFAULT_APPLICATION_FILTERS }: {
   initialApplications: ApplicationRecord[];
   page: ApplicationPageName;
   dashboardSection?: DashboardSection;
   tableFilters?: ApplicationFilters;
-  expandAttention?: boolean;
 }) {
   const router = useRouter();
   const boardScrollRef = useScrollbarActivity<HTMLElement>();
@@ -138,6 +137,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const sidebarWidth = useSyncExternalStore(subscribeToSidebarPreference, getSidebarWidth, () => DEFAULT_SIDEBAR_WIDTH);
   const archivedExpanded = settings.archivedExpanded;
   const today = useSyncExternalStore(subscribeToLocalDate, currentLocalDate, getServerLocalDate);
+  // Interviews move from upcoming to past during the day, so they follow the clock to the minute.
+  const now = useSyncExternalStore(subscribeToLocalMinute, currentLocalMinute, getServerLocalDate);
   const { toast, deleteRecovery, undoing, showToast, clearApplicationUndo, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
   const saveSettings = useSettingsUpdate(showToast);
   const lastToastRef = useRef(toast);
@@ -166,7 +167,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     onDrop: handleDrop,
   });
   const effectiveSidebarCollapsed = sidebarCollapsed && !temporarilyExpanded;
-  // Loaded on every page: the board, the Table and the Archived list tag stale applications, and Overview lists them.
+  // Loaded on every page: the board, the Table and the Archived list tag stale applications, and the Table's Needs attention filter uses them.
   const stale = useStaleApplications(today, dataRevision);
   const staleData = stale.data;
   const staleById = new Map<string, StaleApplication>(staleData
@@ -605,7 +606,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
   // Moving to Interview asks for the first round unless one is already scheduled or the prompt was skipped.
   function needsInterviewPrompt(application: ApplicationRecord) {
-    return application.status === Status.INTERVIEW && !application.interviewDatePromptDismissed && !hasUpcomingInterview(application, currentLocalDate());
+    return application.status === Status.INTERVIEW && !application.interviewDatePromptDismissed && !hasUpcomingInterview(application, currentLocalMinute());
   }
 
   function openInterviewDatePrompt(application: ApplicationRecord) {
@@ -819,9 +820,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const archivedItems = applications
     .filter((item) => item.archived)
     .sort(compareApplications);
-  const interviewToday = today || currentLocalDate();
+  const interviewNow = now || currentLocalMinute();
   const interviews = getInterviewListItems(applications);
-  const upcomingInterviewCount = getUpcomingInterviewCount(applications, interviewToday);
+  const upcomingInterviewCount = getUpcomingInterviewCount(applications, interviewNow);
   const activeApplication = applications.find(({ id }) => id === activeId) ?? null;
 
   function dropTargetLabel(id: string | number) {
@@ -1041,6 +1042,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
                     boards={boardColumns}
                     emptyText={boardFiltered ? "No matching applications." : undefined}
                     movingIds={movingIds}
+                    now={now}
                     onOpen={openDetail}
                     staleDays={staleDays}
                     today={today}
@@ -1065,7 +1067,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             ) : page === "interviews" ? (
               <InterviewsList
                 interviews={interviews}
-                today={interviewToday}
+                now={interviewNow}
                 searchInputRef={interviewSearchRef}
                 onOpen={(applicationId) => { const application = applications.find((item) => item.id === applicationId); if (application) openDetail(application); }}
               />
@@ -1074,9 +1076,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             ) : (
               <DashboardOverview
                 applications={applications}
-                stale={stale}
-                expandAttention={expandAttention}
                 movingIds={movingIds}
+                now={now}
                 onArchive={(application) => { void moveApplication(application, application.status, true, undefined, true); }}
                 onFollowUpDone={(application) => {
                   void saveApplicationChange(application, { kind: "follow-up", followUpDate: null }).then((message) => showToast(message ?? `Follow-up for ${application.company} marked done`));
@@ -1138,6 +1139,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             application={detailApplication}
             boards={BOARDS}
             busy={movingIds.has(detailApplication.id)}
+            now={now}
             error={error}
             onArchive={() => { void moveApplication(detailApplication, detailApplication.status, true, undefined, !detailApplication.archived); }}
             onClose={() => { setDetailId(null); setError(""); }}

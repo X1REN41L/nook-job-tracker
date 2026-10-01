@@ -1,16 +1,16 @@
 import type { Status } from "@prisma/client";
 
 import { startOfCalendarWeek } from "@/lib/calendar-date";
-import { featuredInterview } from "@/lib/interviews";
 import { ACTIVE_PIPELINE_STATUSES, STATUS_VALUES } from "@/lib/status-values";
 
 type SearchableApplication = { company: string; role: string };
 type SortableApplication = { appliedDate: string; createdAt: string };
-type FilterableApplication = SearchableApplication & { status: Status; archived: boolean; appliedDate: string };
-type TableApplication = FilterableApplication & SortableApplication & { source: string | null; interviews: Array<{ id: string; date: string; time: string | null }> };
+type FilterableApplication = SearchableApplication & { id: string; status: Status; archived: boolean; appliedDate: string };
+type TableApplication = FilterableApplication & SortableApplication & { source: string | null };
 
-export type StatusFilter = "all" | "active" | Status;
+export type StatusFilter = "all" | "active" | "attention" | Status;
 export const STATUS_FILTER_LABELS = { all: "All statuses", active: "Active pipeline" } as const;
+export const ATTENTION_FILTER_LABEL = "Needs attention";
 export const OUTCOME_STATUSES = ["OFFER", "REJECTED"] as const satisfies readonly Status[];
 export type BoardStatusFilter = "all" | "active" | "outcomes";
 export const BOARD_STATUS_FILTER_LABELS = { ...STATUS_FILTER_LABELS, outcomes: "Outcomes" } as const;
@@ -35,10 +35,30 @@ function sourceKey(source: string | null) {
   return source?.trim().toLowerCase() ?? "";
 }
 
-export function matchesApplicationFilters(application: FilterableApplication, filters: Partial<ApplicationFilters>) {
+/** A follow-up is due on its date and stays due until it is marked done. `today` is empty before hydration. */
+export function isFollowUpDue(application: { followUpDate: string | null }, today: string) {
+  return Boolean(today && application.followUpDate && application.followUpDate.slice(0, 10) <= today);
+}
+
+/**
+ * The applications Overview's Needs attention lists: stale ones (from the stale list) and those with a follow-up
+ * due on or before `today`.
+ */
+export function needsAttentionIds(applications: Array<{ id: string; followUpDate: string | null }>, staleIds: Iterable<string>, today: string) {
+  const ids = new Set(staleIds);
+  for (const application of applications) {
+    if (isFollowUpDue(application, today)) ids.add(application.id);
+  }
+  return ids;
+}
+
+/** `attentionIds` (see `needsAttentionIds`) is what the "attention" status filter keeps; without it, that filter matches nothing. */
+export function matchesApplicationFilters(application: FilterableApplication, filters: Partial<ApplicationFilters>, attentionIds: ReadonlySet<string> = new Set()) {
   const { search = "", status = "all", archived = "active", appliedFrom = "", appliedTo = "" } = filters;
   if (archived !== "all" && application.archived !== (archived === "archived")) return false;
-  if (status === "active" ? !(ACTIVE_PIPELINE_STATUSES as readonly Status[]).includes(application.status) : status !== "all" && application.status !== status) return false;
+  if (status === "attention") {
+    if (!attentionIds.has(application.id)) return false;
+  } else if (status === "active" ? !(ACTIVE_PIPELINE_STATUSES as readonly Status[]).includes(application.status) : status !== "all" && application.status !== status) return false;
   const applied = application.appliedDate.slice(0, 10);
   if ((appliedFrom && applied < appliedFrom) || (appliedTo && applied > appliedTo)) return false;
   return matchesApplicationSearch(application, search);
@@ -64,21 +84,19 @@ export function compareApplications(left: SortableApplication, right: SortableAp
   return right.appliedDate.localeCompare(left.appliedDate) || right.createdAt.localeCompare(left.createdAt);
 }
 
-export const TABLE_SORT_KEYS = ["role", "company", "status", "source", "appliedDate", "interviewDate"] as const;
+export const TABLE_SORT_KEYS = ["role", "company", "status", "source", "appliedDate"] as const;
 export type TableSortKey = (typeof TABLE_SORT_KEYS)[number];
 export type TableSort = { key: TableSortKey; direction: "asc" | "desc" };
 
 /**
  * Sorts by one column; empty values always go last, and ties keep the default application order.
- * The Interview column shows (and sorts by) the next round on or after `today`, or else the latest one.
  */
-export function compareTableApplications(sort: TableSort, today: string) {
+export function compareTableApplications(sort: TableSort) {
   const sign = sort.direction === "asc" ? 1 : -1;
   return (left: TableApplication, right: TableApplication) => {
     const value = (application: TableApplication) => {
       if (sort.key === "status") return String(STATUS_VALUES.indexOf(application.status)).padStart(2, "0");
       if (sort.key === "source") return application.source?.trim() ?? "";
-      if (sort.key === "interviewDate") return featuredInterview(application.interviews, today)?.date.slice(0, 10) ?? "";
       if (sort.key === "appliedDate") return application.appliedDate.slice(0, 10);
       return application[sort.key];
     };
@@ -104,12 +122,12 @@ function monthStartKey(year: number, month: number) {
 /**
  * The applied range a preset covers: from the start of the week, month, or year through `today`, the same
  * to-date ranges Analytics uses for its current periods, so its links open on the matching preset.
- * "any" clears the range.
+ * "any" clears the range. `firstDay` is the first day of the week, counted from Sunday (0).
  */
-export function appliedRangeForPreset(preset: Exclude<AppliedRangePreset, "custom">, today: string): AppliedRange {
+export function appliedRangeForPreset(preset: Exclude<AppliedRangePreset, "custom">, today: string, firstDay = 1): AppliedRange {
   const year = Number(today.slice(0, 4));
   const month = Number(today.slice(5, 7));
-  if (preset === "week") return { appliedFrom: startOfCalendarWeek(today), appliedTo: today };
+  if (preset === "week") return { appliedFrom: startOfCalendarWeek(today, firstDay), appliedTo: today };
   if (preset === "month") return { appliedFrom: monthStartKey(year, month), appliedTo: today };
   // This month and the two before it, like Analytics' Last 3 months.
   if (preset === "last-3-months") return { appliedFrom: month > 2 ? monthStartKey(year, month - 2) : monthStartKey(year - 1, month + 10), appliedTo: today };
@@ -118,11 +136,11 @@ export function appliedRangeForPreset(preset: Exclude<AppliedRangePreset, "custo
 }
 
 /** Names the preset a range matches, or "custom" when it matches none (or `today` is not known yet). */
-export function appliedRangePreset(range: AppliedRange, today: string): AppliedRangePreset {
+export function appliedRangePreset(range: AppliedRange, today: string, firstDay = 1): AppliedRangePreset {
   if (!range.appliedFrom && !range.appliedTo) return "any";
   if (!today) return "custom";
   for (const preset of ["week", "month", "last-3-months", "year"] as const) {
-    const candidate = appliedRangeForPreset(preset, today);
+    const candidate = appliedRangeForPreset(preset, today, firstDay);
     if (candidate.appliedFrom === range.appliedFrom && candidate.appliedTo === range.appliedTo) return preset;
   }
   return "custom";
@@ -143,7 +161,7 @@ export function parseApplicationFilters(params: SearchParams): ApplicationFilter
   const appliedTo = read("to");
   return {
     search: read("q").slice(0, 120),
-    status: status === "active" || (STATUS_VALUES as readonly string[]).includes(status) ? status as StatusFilter : "all",
+    status: status === "active" || status === "attention" || (STATUS_VALUES as readonly string[]).includes(status) ? status as StatusFilter : "all",
     archived: archived === "archived" || archived === "all" ? archived : "active",
     appliedFrom: DATE_KEY.test(appliedFrom) ? appliedFrom : "",
     appliedTo: DATE_KEY.test(appliedTo) ? appliedTo : "",

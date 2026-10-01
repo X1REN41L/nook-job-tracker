@@ -8,3 +8,7 @@ export const STALE_THRESHOLDS = [7, 15, 30] as const;
 // "system" follows the browser's locale; the others force a 12- or 24-hour clock.
 export const TIME_FORMATS = ["system", "12h", "24h"] as const;
 export type TimeFormat = (typeof TIME_FORMATS)[number];
+// "system" follows the browser's locale; the others force the first day of the week.
+export const WEEK_STARTS = ["system", "saturday", "sunday", "monday"] as const;
+export type WeekStart = (typeof WEEK_STARTS)[number];
+export const WEEK_START_LABELS: Record<WeekStart, string> = { system: "Automatic", saturday: "Saturday", sunday: "Sunday", monday: "Monday" };

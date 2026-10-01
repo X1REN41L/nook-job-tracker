@@ -5,14 +5,15 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 
 import { currentLocalDate, formatCalendarDate, formatDaysAgo } from "@/lib/application-date";
 import {
-  appliedRangeForPreset, appliedRangePreset, applicationTableHref, compareTableApplications, DEFAULT_APPLICATION_FILTERS, matchesApplicationFilters,
-  STATUS_FILTER_LABELS,
+  appliedRangeForPreset, appliedRangePreset, applicationTableHref, ATTENTION_FILTER_LABEL, compareTableApplications, DEFAULT_APPLICATION_FILTERS,
+  isFollowUpDue, matchesApplicationFilters, needsAttentionIds, STATUS_FILTER_LABELS,
   type AppliedRangePreset, type ApplicationFilters, type ArchiveScope, type StatusFilter, type TableSort, type TableSortKey,
 } from "@/lib/application-list";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
-import { featuredInterview } from "@/lib/interviews";
 import { revealDelay, revealDelayMs } from "@/lib/motion-mode";
+import { safeLink } from "@/lib/safe-link";
 import { useOpeningReveal } from "@/hooks/use-opening-reveal";
+import { useWeekStartDay } from "@/hooks/use-week-start-day";
 import type { ApplicationRecord } from "@/types/application";
 
 const controlFrameClass = "h-9 rounded-nook-sm border border-line bg-paper text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-60";
@@ -26,7 +27,6 @@ const COLUMNS: Array<{ key: TableSortKey; label: string }> = [
   { key: "status", label: "Status" },
   { key: "source", label: "Source" },
   { key: "appliedDate", label: "Applied" },
-  { key: "interviewDate", label: "Interview" },
 ];
 
 /** How many rows rise in when the page opens; about a screenful. */
@@ -54,6 +54,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
   // The preset last picked, so one of two presets covering the same days (This year and Last 3 months in March) stays shown.
   const [pickedPreset, setPickedPreset] = useState<AppliedRangePreset | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const firstDay = useWeekStartDay();
 
   // Keep the address in step with the filters so a reload or a shared link shows the same rows.
   useEffect(() => {
@@ -61,16 +62,17 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
     if (`${window.location.pathname}${window.location.search}` !== href) window.history.replaceState(null, "", href);
   }, [filters]);
 
-  const rows = applications.filter((application) => matchesApplicationFilters(application, filters)).sort(compareTableApplications(sort, today));
+  const attentionIds = needsAttentionIds(applications, staleDays.keys(), today);
+  const rows = applications.filter((application) => matchesApplicationFilters(application, filters, attentionIds)).sort(compareTableApplications(sort));
   // Rows on screen when the page opens rise in one after another; rows shown later by filtering or sorting appear at once.
   const revealing = useOpeningReveal("table", revealDelayMs(OPENING_ROW_LIMIT, OPENING_ROW_TIMING));
   const selectedRows = rows.filter((application) => selected.has(application.id));
   const allSelected = rows.length > 0 && selectedRows.length === rows.length;
   const archiveTarget = selectedRows.some((application) => !application.archived);
   const busy = bulkBusy || selectedRows.some((application) => movingIds.has(application.id));
-  const pickedRange = pickedPreset && pickedPreset !== "custom" && today ? appliedRangeForPreset(pickedPreset, today) : null;
+  const pickedRange = pickedPreset && pickedPreset !== "custom" && today ? appliedRangeForPreset(pickedPreset, today, firstDay) : null;
   const pickedMatches = pickedRange !== null && pickedRange.appliedFrom === filters.appliedFrom && pickedRange.appliedTo === filters.appliedTo;
-  const rangePreset = pickedPreset === "custom" ? "custom" : pickedMatches && pickedPreset ? pickedPreset : appliedRangePreset(filters, today);
+  const rangePreset = pickedPreset === "custom" ? "custom" : pickedMatches && pickedPreset ? pickedPreset : appliedRangePreset(filters, today, firstDay);
   const filtered = (Object.keys(DEFAULT_APPLICATION_FILTERS) as Array<keyof ApplicationFilters>).some((key) => filters[key] !== DEFAULT_APPLICATION_FILTERS[key]);
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
   function selectRangePreset(preset: AppliedRangePreset) {
     const localToday = today || currentLocalDate();
     setPickedPreset(preset);
-    if (preset !== "custom") update(appliedRangeForPreset(preset, localToday));
+    if (preset !== "custom") update(appliedRangeForPreset(preset, localToday, firstDay));
     else if (!filters.appliedFrom && !filters.appliedTo) update(appliedRangeForPreset("month", localToday));
   }
 
@@ -99,7 +101,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
   function toggleSort(key: TableSortKey) {
     setSort((current) => current.key === key
       ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
-      : { key, direction: key === "appliedDate" || key === "interviewDate" ? "desc" : "asc" });
+      : { key, direction: key === "appliedDate" ? "desc" : "asc" });
   }
 
   function toggleRow(id: string) {
@@ -134,6 +136,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
         <select aria-label="Filter by status" className={controlClass} onChange={(event) => update({ status: event.target.value as StatusFilter })} value={filters.status}>
           <option value="all">{STATUS_FILTER_LABELS.all}</option>
           <option value="active">{STATUS_FILTER_LABELS.active}</option>
+          <option value="attention">{ATTENTION_FILTER_LABEL}</option>
           {boards.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
         </select>
         <select aria-label="Archived applications" className={controlClass} onChange={(event) => update({ archived: event.target.value as ArchiveScope })} value={filters.archived}>
@@ -222,7 +225,8 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
             <tbody className="divide-y divide-line/70">
               {rows.map((application, index) => {
                 const stale = staleDays.get(application.id);
-                const interview = featuredInterview(application.interviews, today);
+                const followUpDue = isFollowUpDue(application, today);
+                const postingUrl = safeLink(application.jobUrl);
                 const reveal = revealing && index < OPENING_ROW_LIMIT;
                 return (
                   <tr
@@ -239,13 +243,36 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
                         {application.role}
                       </button>
                     </td>
-                    <td className="max-w-56 truncate px-3 py-2.5 text-ink-soft">{application.company}</td>
+                    <td className="max-w-56 px-3 py-2.5 text-ink-soft">
+                      <span className="flex items-center gap-1">
+                        <span className="min-w-0 truncate">{application.company}</span>
+                        {postingUrl && (
+                          <a
+                            aria-label={`Open the ${application.company} job posting in a new tab`}
+                            className="inline-flex shrink-0 rounded-nook-sm text-ink-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+                            href={postingUrl}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                            title="Open job posting"
+                          >
+                            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M7 17 17 7M8 7h9v9" />
+                            </svg>
+                          </a>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-3 py-2.5">
                       {/* Tags drop below the status only when the table is short on width. */}
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><span className={`status-dot ${boardDot(boards, application.status)}`} />{boardLabel(boards, application.status)}</span>
                         {application.archived && <span className="whitespace-nowrap text-xs text-ink-soft">Archived</span>}
                         {stale !== undefined && <span className="whitespace-nowrap rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium" title="No status update for a while">Stale · {stale}d</span>}
+                        {followUpDue && application.followUpDate && (
+                          <span className="whitespace-nowrap rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium" title={application.followUpNote ?? `Follow up on ${formatCalendarDate(application.followUpDate)}`}>
+                            Follow up due · {formatCalendarDate(application.followUpDate)}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="max-w-40 truncate px-3 py-2.5 text-ink-soft">{application.source?.trim() || "—"}</td>
@@ -253,7 +280,6 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
                       {formatCalendarDate(application.appliedDate)}
                       {today && <span className="ml-1.5 text-xs text-ink-soft">{formatDaysAgo(application.appliedDate, today)}</span>}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-ink-soft">{interview ? formatCalendarDate(interview.date) : "—"}</td>
                   </tr>
                 );
               })}

@@ -2,18 +2,19 @@
 
 import { useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
-import { compareInterviews, formatInterviewTime, groupUpcomingInterviews, interviewDateKey, INTERVIEW_TYPE_LABELS, type InterviewListItem } from "@/lib/interviews";
+import { compareInterviews, formatInterviewTime, groupUpcomingInterviews, interviewDateKey, INTERVIEW_TYPE_LABELS, isInterviewInProgress, isUpcomingInterview, type InterviewListItem } from "@/lib/interviews";
 import { matchesApplicationSearch } from "@/lib/application-list";
 import { formatCalendarDate } from "@/lib/application-date";
 import { revealDelay, revealDelayMs } from "@/lib/motion-mode";
 import { useOpeningReveal } from "@/hooks/use-opening-reveal";
 import { useTimeFormat } from "@/hooks/use-time-format";
+import { useWeekStartDay } from "@/hooks/use-week-start-day";
 
 type InterviewTab = "upcoming" | "past";
 
 const GROUP_TIMING = { base: 60 };
 
-function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onOpen: (id: string) => void }) {
+function InterviewRow({ interview, happeningNow = false, onOpen }: { interview: InterviewListItem; happeningNow?: boolean; onOpen: (id: string) => void }) {
   const date = interviewDateKey(interview.date);
   const note = interview.note?.trim();
   const timeFormat = useTimeFormat();
@@ -22,8 +23,9 @@ function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onO
     <article className="border-b border-line/70 py-3 first:pt-0 last:border-b-0 last:pb-0">
       <div className="relative grid grid-cols-1 gap-x-7 gap-y-1 rounded-nook-sm px-2 py-3 motion-interactive hover:bg-cream-2 md:grid-cols-[96px_minmax(0,1fr)] md:gap-y-0">
         <p className="text-sm font-medium text-ink-soft">
-          <time dateTime={date}>{formatCalendarDate(interview.date)}</time>
+          <time dateTime={date}>{formatCalendarDate(interview.date, { weekday: true })}</time>
           {interview.time && <span className="block text-xs font-normal">{formatInterviewTime(interview.time, timeFormat)}</span>}
+          {happeningNow && <span className="mt-1 block text-xs font-semibold text-forest">Happening now</span>}
         </p>
         <div className="min-w-0">
           <h3 className="break-words text-[clamp(1rem,calc(0.95rem_+_0.05vw),1.125rem)] font-semibold leading-6 text-ink">
@@ -48,9 +50,10 @@ function InterviewRow({ interview, onOpen }: { interview: InterviewListItem; onO
   );
 }
 
-export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
+export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
   interviews: InterviewListItem[];
-  today: string;
+  /** Local "YYYY-MM-DDTHH:MM"; see `isUpcomingInterview`. */
+  now: string;
   searchInputRef: RefObject<HTMLInputElement | null>;
   onOpen: (applicationId: string) => void;
 }) {
@@ -63,11 +66,12 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
 
   const query = searchQuery.trim();
   const upcoming = interviews
-    .filter((interview) => interview.inProgress && interviewDateKey(interview.date) >= today && matchesApplicationSearch(interview, query));
+    .filter((interview) => interview.inProgress && isUpcomingInterview(interview, now) && matchesApplicationSearch(interview, query));
   const past = interviews
-    .filter((interview) => interviewDateKey(interview.date) < today && matchesApplicationSearch(interview, query))
+    .filter((interview) => !isUpcomingInterview(interview, now) && matchesApplicationSearch(interview, query))
     .sort((a, b) => (pastSort === "recent" ? -1 : 1) * compareInterviews(a, b));
-  const groups = groupUpcomingInterviews(upcoming, today);
+  const firstDay = useWeekStartDay();
+  const groups = groupUpcomingInterviews(upcoming, now, firstDay);
   // Groups rise in when the page opens or the tab changes; a search that brings one back shows it at once.
   const revealing = useOpeningReveal(selectedTab, revealDelayMs(Infinity, GROUP_TIMING));
   const panelId = `${id}-panel`;
@@ -152,7 +156,7 @@ export function InterviewsList({ interviews, today, searchInputRef, onOpen }: {
                       {group.label}
                     </h3>
                     <div>
-                      {group.interviews.map((interview) => <InterviewRow key={interview.id} interview={interview} onOpen={onOpen} />)}
+                      {group.interviews.map((interview) => <InterviewRow key={interview.id} happeningNow={isInterviewInProgress(interview, now)} interview={interview} onOpen={onOpen} />)}
                     </div>
                   </section>
                 ))}

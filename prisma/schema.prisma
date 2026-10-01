@@ -109,4 +109,8 @@ enum InterviewType {
 enum EventType {
   STATUS_CHANGE
   NOTE_ADDED
+  // Detail: the follow-up date ("YYYY-MM-DD"), then a space and its note when it has one.
+  FOLLOW_UP_SET
+  // Detail: the date of the follow-up that was marked done or cleared.
+  FOLLOW_UP_DONE
 }

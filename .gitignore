@@ -56,5 +56,13 @@ prisma/migrations/
 .vscode/
 .idea/
 
-# Everything else is tracked during v2 development (tests, scripts, configs, agent notes, audits).
-# Development-only files get cleaned up for production before the v2 release.
+# development-only files: kept locally, not committed
+/audit/
+/STATUS.md
+/AGENTS.md
+/CLAUDE.md
+/tests/
+/playwright.config.ts
+# scripts: only the setup script ships (`npm run setup`)
+/scripts/*
+!/scripts/setup.mjs

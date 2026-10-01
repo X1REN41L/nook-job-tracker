@@ -7,6 +7,7 @@ import { DashboardMetricCard, formatDashboardPercentage } from "@/components/das
 import { analyticsBucketRange, analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod, type AnalyticsRange } from "@/lib/analytics-period";
 import { applicationTableHref } from "@/lib/application-list";
 import { revealDelay } from "@/lib/motion-mode";
+import { useWeekStartDay } from "@/hooks/use-week-start-day";
 import type { DashboardAnalyticsData as AnalyticsData } from "@/types/dashboard";
 import { BOARDS, boardDot, boardLabel } from "@/lib/board-preferences";
 
@@ -226,14 +227,16 @@ export function DashboardAnalytics({ today, firstMonth, refreshKey }: {
       ...(period === "CUSTOM_YEAR" ? { year: Number(year) } : {}),
     }, today)
     : null;
-  const selectionKey = `${today}|${period}|${period === "CUSTOM_MONTH" ? month : ""}|${period === "CUSTOM_YEAR" ? year : ""}`;
+  // Month periods split into calendar weeks that start on the day chosen in Settings.
+  const firstDay = useWeekStartDay();
+  const selectionKey = `${today}|${period}|${period === "CUSTOM_MONTH" ? month : ""}|${period === "CUSTOM_YEAR" ? year : ""}|${firstDay}`;
   const [result, setResult] = useState<{ key: string; data: AnalyticsData } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!today) return;
     const controller = new AbortController();
-    const query = new URLSearchParams({ period, today });
+    const query = new URLSearchParams({ period, today, weekStart: String(firstDay) });
     if (period === "CUSTOM_MONTH") query.set("month", month);
     if (period === "CUSTOM_YEAR") query.set("year", year);
     fetch(`/api/dashboard/analytics?${query}`, { signal: controller.signal })
@@ -251,7 +254,7 @@ export function DashboardAnalytics({ today, firstMonth, refreshKey }: {
         setFailedKey(selectionKey);
       });
     return () => controller.abort();
-  }, [today, period, month, year, selectionKey, refreshKey]);
+  }, [today, period, month, year, firstDay, selectionKey, refreshKey]);
 
   const data = result?.key === selectionKey ? result.data : null;
   const error = failedKey === selectionKey;

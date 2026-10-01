@@ -4,15 +4,15 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
-import type { DashboardOverviewData as OverviewData, StaleApplication, StaleApplicationsData } from "@/types/dashboard";
+import type { DashboardOverviewData as OverviewData, StaleApplication } from "@/types/dashboard";
 import type { ApplicationRecord } from "@/types/application";
-import { currentBrowserTimeZone, formatCalendarDate } from "@/lib/application-date";
+import { currentBrowserTimeZone, currentLocalMinute, formatCalendarDate } from "@/lib/application-date";
 import { applicationTableHref } from "@/lib/application-list";
 import { revealDelay } from "@/lib/motion-mode";
 import { BOARDS, boardLabel } from "@/lib/board-preferences";
 import { useSettings } from "@/hooks/use-settings";
 import { staleAgeLabel } from "@/lib/stale-label";
-import { formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
+import { formatInterviewTime, interviewDateKey, INTERVIEW_TYPE_LABELS, isInterviewInProgress, isUpcomingInterview } from "@/lib/interviews";
 import { useTimeFormat } from "@/hooks/use-time-format";
 
 type Rate = OverviewData["interviewRate"];
@@ -60,6 +60,8 @@ function PreviewHeading({ id, title, action }: { id: string; title: string; acti
 
 /** List rows start rising this long after the page opens, just behind the metric cards. */
 const ROW_REVEAL_START_MS = 180;
+/** Rows each Overview preview shows before View all. */
+const PREVIEW_ROWS = 3;
 
 function NeedsAttentionRow({ item, application, reveal, archiveDisabled, onOpen, onArchive }: {
   item: StaleApplication;
@@ -139,7 +141,7 @@ function FollowUpRow({ item, application, reveal, busy, onOpen, onDone }: {
   );
 }
 
-function NeedsAttention({ preview, followUps, full, rowRevealBase, loading, error, today, initiallyExpanded, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
+function NeedsAttention({ preview, followUps, rowRevealBase, loading, error, today, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
   preview: OverviewData["staleApplications"];
   followUps: OverviewData["followUps"];
   /** Delay before the first row rises; see `ROW_REVEAL_START_MS`. */
@@ -148,67 +150,40 @@ function NeedsAttention({ preview, followUps, full, rowRevealBase, loading, erro
   loading: boolean;
   error: boolean;
   today: string;
-  /** The full stale list the app already loads, shown by View all. */
-  full: { data: StaleApplicationsData | null; error: boolean };
-  initiallyExpanded: boolean;
   applications: ApplicationRecord[];
   movingIds: ReadonlySet<string>;
   onOpen: (application: ApplicationRecord) => void;
   onArchive: (application: ApplicationRecord) => void;
 }) {
-  const [expanded, setExpanded] = useState(initiallyExpanded);
   const applicationById = new Map(applications.map((application) => [application.id, application]));
-  const fullItems = full.data
-    ? [...full.data.applicationsBySeverity.CRITICAL, ...full.data.applicationsBySeverity.HIGH, ...full.data.applicationsBySeverity.MEDIUM]
-      .filter((item) => applicationById.get(item.id)?.archived === false)
-    : null;
-  const items = expanded ? fullItems ?? [] : preview.filter((item) => applicationById.get(item.id)?.archived !== true);
-  // Follow-ups come from Overview, so they show in both views; a reminder cleared here disappears at once.
+  // A reminder cleared or an application archived here disappears at once.
   const dueFollowUps = followUps.filter((item) => {
     const application = applicationById.get(item.id);
     return application && !application.archived && application.followUpDate !== null && application.followUpDate.slice(0, 10) <= today;
-  });
-  const excluded = expanded ? full.data?.timingCoverage.withoutReliableStatusTimestamp ?? 0 : 0;
-  const listLoading = expanded ? !full.data && !full.error : loading;
-  const listError = expanded ? full.error : error;
-
-  function toggle() {
-    const next = !expanded;
-    setExpanded(next);
-    // Keep the address in step so reloading keeps the full list open.
-    window.history.replaceState(null, "", next ? "/dashboard?attention=all" : "/dashboard");
-  }
+  }).slice(0, PREVIEW_ROWS);
+  // The preview holds three rows, like Upcoming interviews: due follow-ups first, then the longest-waiting stale applications.
+  const items = preview.filter((item) => applicationById.get(item.id)?.archived !== true).slice(0, PREVIEW_ROWS - dueFollowUps.length);
 
   return (
     <section className="min-w-0" aria-labelledby="needs-attention-title">
       <PreviewHeading
         id="needs-attention-title"
         title="Needs attention"
-        action={(expanded || preview.length >= 3) && (
-          <button aria-expanded={expanded} className={linkClass} onClick={toggle} type="button">
-            {expanded ? "Show fewer" : <>View all <span aria-hidden="true">→</span></>}
-          </button>
-        )}
+        action={<Link className={linkClass} href={applicationTableHref({ status: "attention" })}>View all <span aria-hidden="true">→</span></Link>}
       />
-      {expanded && <p className="mt-3 text-sm text-ink-soft">Active applications with no recent status change or interview, longest waiting first.</p>}
-      {excluded > 0 && (
-        <p className="mt-2 text-sm text-ink-soft">
-          {excluded} active {excluded === 1 ? "application is" : "applications are"} not shown because reliable status timing is unavailable.
-        </p>
-      )}
-      {listLoading ? (
-        <p className="motion-reveal py-6 text-sm text-ink-soft" role={expanded ? "status" : undefined}>Loading applications…</p>
-      ) : listError ? (
-        <p className="motion-reveal py-6 text-sm text-ink-soft">{expanded ? "Needs attention could not be loaded. Please try again later." : "Preview unavailable."}</p>
+      {loading ? (
+        <p className="motion-reveal py-6 text-sm text-ink-soft">Loading applications…</p>
+      ) : error ? (
+        <p className="motion-reveal py-6 text-sm text-ink-soft">Preview unavailable.</p>
       ) : items.length === 0 && dueFollowUps.length === 0 ? (
-        <p className="motion-reveal py-6 text-sm text-ink-soft">{expanded ? "Nothing's gone quiet yet — good sign." : "No applications need attention right now."}</p>
+        <p className="motion-reveal py-6 text-sm text-ink-soft">No applications need attention right now.</p>
       ) : (
         <ul className="divide-y divide-line/70">
           {dueFollowUps.map((item, index) => (
             <FollowUpRow application={applicationById.get(item.id)} busy={movingIds.has(item.id)} item={item} key={`follow-up-${item.id}`} onDone={onFollowUpDone} onOpen={onOpen} reveal={revealDelay(index, { base: rowRevealBase })} />
           ))}
           {items.map((item, index) => (
-            <NeedsAttentionRow application={applicationById.get(item.id)} archiveDisabled={movingIds.has(item.id)} item={item} key={item.id} onArchive={onArchive} onOpen={onOpen} reveal={revealDelay(dueFollowUps.length + index, { base: expanded ? 0 : rowRevealBase })} />
+            <NeedsAttentionRow application={applicationById.get(item.id)} archiveDisabled={movingIds.has(item.id)} item={item} key={item.id} onArchive={onArchive} onOpen={onOpen} reveal={revealDelay(dueFollowUps.length + index, { base: rowRevealBase })} />
           ))}
         </ul>
       )}
@@ -216,8 +191,9 @@ function NeedsAttention({ preview, followUps, full, rowRevealBase, loading, erro
   );
 }
 
-function UpcomingInterviewsPreview({ items, rowRevealBase, loading, error, applications, onOpen }: {
+function UpcomingInterviewsPreview({ items, now, rowRevealBase, loading, error, applications, onOpen }: {
   items: OverviewData["upcomingInterviews"]["items"];
+  now: string;
   rowRevealBase: number;
   loading: boolean;
   error: boolean;
@@ -241,7 +217,7 @@ function UpcomingInterviewsPreview({ items, rowRevealBase, loading, error, appli
         <p className="motion-reveal py-6 text-sm text-ink-soft">All caught up — no interviews on the horizon.</p>
       ) : (
         <ul className="divide-y divide-line/70">
-          {items.slice(0, 3).map((item, index) => {
+          {items.slice(0, PREVIEW_ROWS).map((item, index) => {
             const application = applicationById.get(item.applicationId);
             // Rows match Needs attention: the same inset and hover, and they open the application.
             return (
@@ -252,7 +228,7 @@ function UpcomingInterviewsPreview({ items, rowRevealBase, loading, error, appli
                   onClick={() => { if (application) onOpen(application); }}
                   type="button"
                 >
-                  <span className="block text-sm font-medium text-forest">{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time, timeFormat)}`}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></span>
+                  <span className="block text-sm font-medium text-forest">{now && isInterviewInProgress({ date: item.interviewDate, time: item.time }, now) ? "Happening now" : <>{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time, timeFormat)}`}</>}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></span>
                   <span className="mt-1 block break-words font-serif text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
                 </button>
               </li>
@@ -264,11 +240,11 @@ function UpcomingInterviewsPreview({ items, rowRevealBase, loading, error, appli
   );
 }
 
-export function DashboardOverview({ today, refreshKey, stale, expandAttention, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
+export function DashboardOverview({ today, now, refreshKey, applications, movingIds, onOpen, onArchive, onFollowUpDone }: {
   today: string;
+  /** Local "YYYY-MM-DDTHH:MM"; empty before hydration. */
+  now: string;
   refreshKey: unknown;
-  stale: { data: StaleApplicationsData | null; error: boolean };
-  expandAttention: boolean;
   applications: ApplicationRecord[];
   movingIds: ReadonlySet<string>;
   onOpen: (application: ApplicationRecord) => void;
@@ -282,10 +258,14 @@ export function DashboardOverview({ today, refreshKey, stale, expandAttention, a
 
   useEffect(() => { openedAt.current = performance.now(); }, []);
 
+  // Overview reloads each time one of today's interviews drops out of Upcoming, rather than every minute.
+  const finishedToday = now ? applications.reduce((count, application) => count
+    + application.interviews.filter((interview) => interviewDateKey(interview.date) === today && !isUpcomingInterview(interview, now)).length, 0) : 0;
+
   useEffect(() => {
     if (!today) return;
     const controller = new AbortController();
-    const query = new URLSearchParams({ today, timeZone: currentBrowserTimeZone(), staleApplicationThreshold: String(staleApplicationThreshold) });
+    const query = new URLSearchParams({ today, time: currentLocalMinute().slice(11, 16), timeZone: currentBrowserTimeZone(), staleApplicationThreshold: String(staleApplicationThreshold) });
     fetch(`/api/dashboard/overview?${query}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error("Overview request failed");
@@ -304,7 +284,7 @@ export function DashboardOverview({ today, refreshKey, stale, expandAttention, a
         setError(true);
       });
     return () => controller.abort();
-  }, [today, refreshKey, staleApplicationThreshold]);
+  }, [today, refreshKey, staleApplicationThreshold, finishedToday]);
 
   const data = result?.today === today && result.threshold === staleApplicationThreshold ? result.data : null;
   const loading = !data && !error;
@@ -322,7 +302,6 @@ export function DashboardOverview({ today, refreshKey, stale, expandAttention, a
           applications={applications}
           error={error}
           followUps={data?.followUps ?? []}
-          initiallyExpanded={expandAttention}
           loading={loading}
           movingIds={movingIds}
           onArchive={onArchive}
@@ -330,10 +309,9 @@ export function DashboardOverview({ today, refreshKey, stale, expandAttention, a
           onOpen={onOpen}
           preview={data?.staleApplications ?? []}
           rowRevealBase={result?.rowRevealBase ?? 0}
-          full={stale}
           today={today}
         />
-        <UpcomingInterviewsPreview applications={applications} rowRevealBase={result?.rowRevealBase ?? 0} error={error} items={data?.upcomingInterviews.items ?? []} loading={loading} onOpen={onOpen} />
+        <UpcomingInterviewsPreview applications={applications} now={now} rowRevealBase={result?.rowRevealBase ?? 0} error={error} items={data?.upcomingInterviews.items ?? []} loading={loading} onOpen={onOpen} />
       </div>
     </section>
   );

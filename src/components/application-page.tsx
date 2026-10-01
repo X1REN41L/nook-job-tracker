@@ -4,11 +4,10 @@ import { applicationInclude, serializeApplication } from "@/lib/application-reco
 import type { ApplicationFilters } from "@/lib/application-list";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
-export async function ApplicationPage({ page, dashboardSection, tableFilters, expandAttention }: {
+export async function ApplicationPage({ page, dashboardSection, tableFilters }: {
   page: ApplicationPageName;
   dashboardSection?: DashboardSection;
   tableFilters?: ApplicationFilters;
-  expandAttention?: boolean;
 }) {
   const applications = await prisma.application.findMany({
     include: applicationInclude,
@@ -21,7 +20,6 @@ export async function ApplicationPage({ page, dashboardSection, tableFilters, ex
       page={page}
       dashboardSection={dashboardSection}
       tableFilters={tableFilters}
-      expandAttention={expandAttention}
     />
   );
 }

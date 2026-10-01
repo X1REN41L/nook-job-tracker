@@ -10,6 +10,8 @@ const analyticsQuerySchema = z.object({
   month: z.string().regex(/^[0-9]{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM for a custom month").optional(),
   year: z.string().regex(/^[0-9]{4}$/, "Use YYYY for a custom year").optional(),
   today: calendarDateKeySchema.optional(),
+  // The first day of the week for month periods' weekly bars, counted from Sunday (0); Monday when left out.
+  weekStart: z.enum(["0", "1", "2", "3", "4", "5", "6"]).default("1"),
 }).strict().superRefine((query, context) => {
   if (["CURRENT_MONTH", "LAST_3_MONTHS", "CURRENT_YEAR"].includes(query.period) && !query.today) {
     context.addIssue({ code: "custom", path: ["today"], message: "A user calendar date is required for current periods" });
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
       ...(query.data.month ? { month: query.data.month } : {}),
       ...(query.data.year ? { year: Number(query.data.year) } : {}),
     };
-    return NextResponse.json(await getDashboardAnalytics(selection, query.data.today));
+    return NextResponse.json(await getDashboardAnalytics(selection, query.data.today, Number(query.data.weekStart)));
   } catch (error) {
     return apiError(error);
   }
