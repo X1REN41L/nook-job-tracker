@@ -8,6 +8,7 @@ import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-prefe
 import { parseFollowUpEventDetail } from "@/lib/follow-up-event";
 import { compareInterviews, formatInterviewTime, INTERVIEW_TYPE_LABELS, INTERVIEW_TYPES, isUpcomingInterview } from "@/lib/interviews";
 import { safeLink } from "@/lib/safe-link";
+import { isCreationEvent } from "@/lib/status-history";
 import type { TimeFormat } from "@/lib/settings-values";
 import { useTimeFormat } from "@/hooks/use-time-format";
 import type { ApplicationDetails, ApplicationRecord, ContactRecord, InterviewRecord } from "@/types/application";
@@ -15,7 +16,7 @@ import type { ApplicationDetails, ApplicationRecord, ContactRecord, InterviewRec
 export type ApplicationChange =
   | { kind: "details"; fields: ApplicationDetails }
   | { kind: "follow-up"; followUpDate: string | null; followUpNote?: string }
-  | { kind: "item"; collection: "interviews" | "contacts" | "notes" | "status-events"; method: "POST" | "PUT" | "DELETE"; itemId?: string; fields?: Record<string, unknown> };
+  | { kind: "item"; collection: "interviews" | "contacts" | "notes" | "status-events" | "follow-up-events"; method: "POST" | "PUT" | "DELETE"; itemId?: string; fields?: Record<string, unknown> };
 export type SaveChange = (change: ApplicationChange) => Promise<string | null>;
 export type HistoryEvent = { id: string; type: EventType; fromStatus: Status | null; toStatus: Status | null; detail: string | null; createdAt: string };
 
@@ -53,13 +54,14 @@ function ErrorText({ message }: { message: string }) {
 }
 
 /** A Delete button that asks for a second click before it removes anything. */
-function DeleteButton({ label, disabled, onDelete }: { label: string; disabled: boolean; onDelete: () => void }) {
+function DeleteButton({ label, disabled, onDelete, warning }: { label: string; disabled: boolean; onDelete: () => void; warning?: string }) {
   const [confirming, setConfirming] = useState(false);
   if (!confirming) {
     return <button aria-label={`Delete ${label}`} className={`${smallButton} text-rose hover:bg-rose-tint`} disabled={disabled} onClick={() => setConfirming(true)} type="button">Delete</button>;
   }
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {warning && <span className="text-xs text-ink">{warning}</span>}
       <button className={`${smallButton} bg-rose text-paper`} disabled={disabled} onClick={() => { setConfirming(false); onDelete(); }} type="button">Confirm delete</button>
       <button className={`${smallButton} text-ink-soft hover:bg-cream-2`} onClick={() => setConfirming(false)} type="button">Keep</button>
     </span>
@@ -380,7 +382,7 @@ function statusEventLabel(event: HistoryEvent, boards: BoardConfiguration[]) {
   return `Moved from ${boardLabel(boards, event.fromStatus)} to ${boardLabel(boards, event.toStatus)}`;
 }
 
-function FollowUpEventEntry({ event, timeFormat }: { event: HistoryEvent; timeFormat: TimeFormat }) {
+function FollowUpEventEntry({ event, timeFormat, deleteButton }: { event: HistoryEvent; timeFormat: TimeFormat; deleteButton: ReactNode }) {
   const followUp = parseFollowUpEventDetail(event.detail);
   const done = event.type === "FOLLOW_UP_DONE";
   const date = followUp && formatCalendarDate(followUp.date);
@@ -388,24 +390,32 @@ function FollowUpEventEntry({ event, timeFormat }: { event: HistoryEvent; timeFo
     <>
       <p className="text-sm font-medium">{done ? (date ? `Follow-up for ${date} done` : "Follow-up done") : date ? `Follow-up set for ${date}` : "Follow-up set"}</p>
       {!done && followUp?.note && <p className="mt-0.5 break-words text-sm">{followUp.note}</p>}
-      <p className="mt-0.5 text-xs text-ink-soft"><time dateTime={event.createdAt}>{formatTimestamp(event.createdAt, timeFormat)}</time></p>
+      <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-ink-soft">
+        <time dateTime={event.createdAt}>{formatTimestamp(event.createdAt, timeFormat)}</time>
+        {deleteButton}
+      </p>
     </>
   );
 }
 
 /**
  * Status changes, follow-ups, and dated notes, newest first. Notes can be added, edited (keeping their date), and
- * deleted; status changes can be deleted, and removing the latest one moves the application back to its previous
- * status. Follow-up entries are recorded when a follow-up is set, changed, or marked done.
+ * deleted. Status changes can be deleted, except the entry the application was added with; removing the latest one
+ * moves the application back to its previous status. Follow-up entries are recorded when a follow-up is set,
+ * changed, or marked done, and deleting one leaves the current reminder as it is.
  */
-export function TimelineSection({ boards, events, loadError, onSave }: {
+export function TimelineSection({ boards, events, loadError, onSave, status }: {
   boards: BoardConfiguration[];
   events: HistoryEvent[] | null;
   loadError: boolean;
   onSave: SaveChange;
+  status: Status;
 }) {
   const { saving, error, run } = useSave(onSave);
   const [draft, setDraft] = useState("");
+  const latestStatusEvent = events?.findLast((event) => event.type === "STATUS_CHANGE");
+  // Matches planStatusEventDeletion: removing the latest move reverts the status only when it led to the current one.
+  const revertTo = latestStatusEvent?.fromStatus && latestStatusEvent.toStatus === status ? latestStatusEvent.fromStatus : null;
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const headingId = useId();
   const timeFormat = useTimeFormat();
@@ -460,13 +470,24 @@ export function TimelineSection({ boards, events, loadError, onSave }: {
                   </>
                 )
               ) : event.type === "FOLLOW_UP_SET" || event.type === "FOLLOW_UP_DONE" ? (
-                <FollowUpEventEntry event={event} timeFormat={timeFormat} />
+                <FollowUpEventEntry
+                  deleteButton={<DeleteButton disabled={saving || editing !== null} label="this follow-up entry" onDelete={() => void run({ kind: "item", collection: "follow-up-events", method: "DELETE", itemId: event.id })} />}
+                  event={event}
+                  timeFormat={timeFormat}
+                />
               ) : (
                 <>
                   <p className="text-sm font-medium">{statusEventLabel(event, boards)}</p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-ink-soft">
                     <time dateTime={event.createdAt}>{formatTimestamp(event.createdAt, timeFormat)}</time>
-                    <DeleteButton disabled={saving || editing !== null} label="this status change" onDelete={() => void run({ kind: "item", collection: "status-events", method: "DELETE", itemId: event.id })} />
+                    {!isCreationEvent(event) && (
+                      <DeleteButton
+                        disabled={saving || editing !== null}
+                        label="this status change"
+                        onDelete={() => void run({ kind: "item", collection: "status-events", method: "DELETE", itemId: event.id })}
+                        warning={event.id === latestStatusEvent?.id && revertTo ? `Moves back to ${boardLabel(boards, revertTo)}.` : undefined}
+                      />
+                    )}
                   </p>
                 </>
               )}

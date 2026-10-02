@@ -13,9 +13,11 @@ type ChildResult =
   | { status: "ok"; application: StoredApplication }
   | { status: "conflict"; application: StoredApplication }
   | { status: "missing" }
-  | { status: "child-missing" };
+  | { status: "child-missing" }
+  | { status: "child-locked" };
 
 class ChildNotFound extends Error {}
+class ChildLocked extends Error {}
 
 /**
  * Changes an application's interviews, contacts, or dated notes under the same revision check as
@@ -38,6 +40,7 @@ async function mutateChildren(id: string, revision: number, change: (tx: Transac
       return latest ? { status: "conflict", application: latest } : { status: "missing" };
     } catch (error) {
       if (error instanceof ChildNotFound) return { status: "child-missing" };
+      if (error instanceof ChildLocked) return { status: "child-locked" };
       if (!isDatabaseContention(error) || attempt === 5) throw error;
     }
   }
@@ -47,6 +50,7 @@ async function mutateChildren(id: string, revision: number, change: (tx: Transac
 function respond(result: ChildResult, successStatus = 200) {
   if (result.status === "missing") return NextResponse.json({ error: "Application not found" }, { status: 404 });
   if (result.status === "child-missing") return NextResponse.json({ error: "That item no longer exists" }, { status: 404 });
+  if (result.status === "child-locked") return NextResponse.json({ error: "The entry an application was added with can't be deleted" }, { status: 400 });
   if (result.status === "conflict") {
     return NextResponse.json({
       error: "Application changed since it was loaded. The current version is included so you can review it.",
@@ -102,7 +106,25 @@ const deleters = {
   interviews: (tx: Transaction, id: string, itemId: string) => tx.interview.deleteMany({ where: { id: itemId, applicationId: id } }),
   contacts: (tx: Transaction, id: string, itemId: string) => tx.contact.deleteMany({ where: { id: itemId, applicationId: id } }),
   notes: (tx: Transaction, id: string, itemId: string) => tx.applicationEvent.deleteMany({ where: { id: itemId, applicationId: id, type: EventType.NOTE_ADDED } }),
+  // Follow-up entries are only a log: removing one leaves the current reminder as it is.
+  "follow-up-events": (tx: Transaction, id: string, itemId: string) => tx.applicationEvent.deleteMany({
+    where: { id: itemId, applicationId: id, type: { in: [EventType.FOLLOW_UP_SET, EventType.FOLLOW_UP_DONE] } },
+  }),
 };
+
+function deleteRoute(collection: keyof typeof deleters) {
+  return async function DELETE(request: Request, { params }: Params) {
+    try {
+      const check = await checkMutationRequest(request);
+      if (!check.ok) return check.response;
+      const { id, itemId = "" } = await params;
+      const { revision } = parseRequest(revisionOnlySchema, parseMutationJson(check.body));
+      return respond(await mutateChildren(id, revision, async (tx) => requireChange((await deleters[collection](tx, id, itemId)).count)));
+    } catch (error) {
+      return apiError(error);
+    }
+  };
+}
 
 /** POST handler that adds one item to an application's collection. */
 export function childCollectionRoute(collection: Collection) {
@@ -130,18 +152,12 @@ export function childItemRoute(collection: Collection) {
       return apiError(error);
     }
   }
-  async function DELETE(request: Request, { params }: Params) {
-    try {
-      const check = await checkMutationRequest(request);
-      if (!check.ok) return check.response;
-      const { id, itemId = "" } = await params;
-      const { revision } = parseRequest(revisionOnlySchema, parseMutationJson(check.body));
-      return respond(await mutateChildren(id, revision, async (tx) => requireChange((await deleters[collection](tx, id, itemId)).count)));
-    } catch (error) {
-      return apiError(error);
-    }
-  }
-  return { PUT, DELETE };
+  return { PUT, DELETE: deleteRoute(collection) };
+}
+
+/** DELETE handler that removes one follow-up entry from the timeline. */
+export function followUpEventRoute() {
+  return deleteRoute("follow-up-events");
 }
 
 /** DELETE handler that removes one status change and reconnects the history around it. */
@@ -157,6 +173,7 @@ export function statusEventRoute() {
         const events = await tx.applicationEvent.findMany({ where: { applicationId: id, type: EventType.STATUS_CHANGE } });
         const plan = planStatusEventDeletion(application.status, events, itemId);
         if (!plan) throw new ChildNotFound();
+        if (plan === "locked") throw new ChildLocked();
         await tx.applicationEvent.deleteMany({ where: { id: { in: plan.deleteIds }, applicationId: id } });
         if (plan.update) {
           await tx.applicationEvent.update({ where: { id: plan.update.id }, data: { fromStatus: plan.update.fromStatus, detail: plan.update.detail } });

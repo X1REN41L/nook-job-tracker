@@ -14,6 +14,11 @@ export type StatusHistoryEvent = {
   createdAt: Date | string;
 };
 
+/** The "Added as …" entry recorded when an application is created. */
+export function isCreationEvent(event: Pick<StatusHistoryEvent, "type" | "fromStatus" | "toStatus">) {
+  return event.type === EventType.STATUS_CHANGE && event.fromStatus === null && event.toStatus !== null;
+}
+
 export function statusTransitionDetail(fromStatus: Status | null, toStatus: Status) {
   return `${fromStatus ?? "null"} → ${toStatus}`;
 }
@@ -28,9 +33,10 @@ export type StatusEventDeletion = {
  * Plans removing one status change while keeping the rest of the history a connected sequence:
  * the following change is reattached to the step before the removed one, and if that makes it a
  * no-op (back to the same status) it goes too. Removing the latest change moves the application
- * back to the status it came from. Returns null when the event is not a status change.
+ * back to the status it came from. Returns null when the event is not a status change, and "locked"
+ * for the entry the application was added with, which anchors the history and cannot be removed.
  */
-export function planStatusEventDeletion(currentStatus: Status, events: StatusHistoryEvent[], eventId: string): StatusEventDeletion | null {
+export function planStatusEventDeletion(currentStatus: Status, events: StatusHistoryEvent[], eventId: string): StatusEventDeletion | "locked" | null {
   const statusEvents = events
     .filter((event) => event.type === EventType.STATUS_CHANGE)
     .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime() || left.id.localeCompare(right.id));
@@ -38,6 +44,7 @@ export function planStatusEventDeletion(currentStatus: Status, events: StatusHis
   if (index < 0) return null;
   const target = statusEvents[index];
   const next = statusEvents[index + 1];
+  if (isCreationEvent(target)) return "locked";
 
   if (!next) {
     const revert = target.fromStatus !== null && target.toStatus === currentStatus;

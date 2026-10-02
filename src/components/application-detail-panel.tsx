@@ -126,7 +126,7 @@ export function ApplicationDetailPanel({ application, boards, today, now, stale,
           <FollowUpSection application={application} onSave={onSave} today={today} />
           <InterviewsSection application={application} now={now} onSave={onSave} today={today} />
           <ContactsSection application={application} onSave={onSave} />
-          <TimelineSection boards={boards} events={events} loadError={error} onSave={onSave} />
+          <TimelineSection boards={boards} events={events} loadError={error} onSave={onSave} status={application.status} />
         </div>
 
         {actionError && <p className="shrink-0 border-t border-line bg-rose-tint px-6 py-2.5 text-sm text-ink" role="alert">{actionError}</p>}
