@@ -1,6 +1,9 @@
-import Link from "next/link";
-import type { CSSProperties } from "react";
+"use client";
 
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+
+import { motionDurationMs, motionIsCurrentlyOff } from "@/lib/general-preferences";
 import { revealDelay } from "@/lib/motion-mode";
 
 type HistoryCoverage = {
@@ -17,46 +20,55 @@ export function formatDashboardCount(value: number) {
   return String(Math.round(value));
 }
 
-/** Each card's number starts rolling this long after the card before it. */
+/** Each card rises this long after the card before it. */
 const CARD_STAGGER_MS = 60;
-/** Within a number, each digit settles this long after the one to its left. */
-const DIGIT_STAGGER_MS = 50;
-const DIGIT_STRIP = Array.from({ length: 20 }, (_, index) => index % 10);
+/** A card's number starts counting this long after its card, so the card lands first. */
+const NUMBER_DELAY_MS = 80;
 
 /**
- * Rolls each digit up into place like an odometer: every column passes through
- * a full 0–9 turn before stopping, so small numbers roll as smoothly as large
- * ones. Other characters (".", "%") fade in. Motion preferences skip the roll.
+ * A number that counts up from zero as it rises into its card, warming from soft
+ * to full ink as it lands. A value that changes in place counts from the old
+ * value to the new one. Motion preferences show the value at once.
  */
-function RollingNumber({ text, delayMs }: { text: string; delayMs: number }) {
-  const characters = [...text];
+function MetricNumber({ value, format, delayMs }: { value: number; format: (value: number) => string; delayMs: number }) {
+  const [mountedAt] = useState(() => performance.now());
+  const [shown, setShown] = useState(() => (motionIsCurrentlyOff() ? value : 0));
+  const countedFrom = useRef(shown);
+
+  useEffect(() => {
+    let frame = 0;
+    if (motionIsCurrentlyOff()) {
+      frame = requestAnimationFrame(() => setShown(value));
+      return () => cancelAnimationFrame(frame);
+    }
+    const from = countedFrom.current;
+    const duration = motionDurationMs("--motion-count", 1400);
+    // Only the first count waits for the card; later changes count at once.
+    const delay = Math.max(0, delayMs - (performance.now() - mountedAt));
+    let startedAt: number | null = null;
+    const tick = (now: number) => {
+      startedAt ??= now + delay;
+      const progress = Math.min(1, Math.max(0, (now - startedAt) / duration));
+      // A gentle ease-out (--motion-count-ease), so the count slows into its value without stalling on the last digit.
+      const current = from + (value - from) * (1 - (1 - progress) ** 3);
+      countedFrom.current = current;
+      setShown(progress === 1 ? value : current);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value, delayMs, mountedAt]);
+
+  const text = shown === value ? format(value) : format(Math.round(shown));
   return (
     <>
-      <span aria-hidden="true" className="odometer">
-        {characters.map((character, index) => {
-          // Keyed from the right, so the ones column stays the same element when the number changes length.
-          const key = characters.length - index;
-          const delay = `${delayMs + index * DIGIT_STAGGER_MS}ms`;
-          if (!/\d/.test(character)) {
-            return <span className="odometer-static" key={key} style={{ animationDelay: delay }}>{character}</span>;
-          }
-          // The hidden final digit sets the column's natural width, so the settled number is spaced like plain text.
-          return (
-            <span className="odometer-digit" key={key}>
-              <span className="odometer-sizer">{character}</span>
-              <span className="odometer-strip" style={{ "--odometer-stop": 10 + Number(character), animationDelay: delay } as CSSProperties}>
-                {DIGIT_STRIP.map((digit, row) => <span key={row}>{digit}</span>)}
-              </span>
-            </span>
-          );
-        })}
-      </span>
-      <span className="sr-only">{text}</span>
+      <span aria-hidden="true" className="motion-number tabular-nums" style={{ animationDelay: `${delayMs}ms` }}>{text}</span>
+      <span className="sr-only">{format(value)}</span>
     </>
   );
 }
 
-/** A dashboard number. With `href`, the whole card links to the matching list of applications. Numbers roll into place when they appear or change. */
+/** A dashboard number. With `href`, the whole card links to the matching list of applications. Numbers count up into place when they appear or change. */
 export function DashboardMetricCard({ label, value, format = formatDashboardCount, order = 0, detail, coverage, explanation, href }: {
   label: string;
   value: number | string;
@@ -72,7 +84,7 @@ export function DashboardMetricCard({ label, value, format = formatDashboardCoun
     <>
       <p className="min-h-10 text-sm font-medium leading-5 text-ink-soft" title={explanation}>{label}</p>
       <p className="mt-2 font-serif text-2xl font-semibold leading-tight text-ink">
-        {typeof value === "number" ? <RollingNumber delayMs={order * CARD_STAGGER_MS} text={format(value)} /> : value}
+        {typeof value === "number" ? <MetricNumber delayMs={order * CARD_STAGGER_MS + NUMBER_DELAY_MS} format={format} value={value} /> : value}
       </p>
       {detail && <p className="mt-1 text-xs text-ink-soft">{detail}</p>}
       {coverage && !coverage.isComplete && (

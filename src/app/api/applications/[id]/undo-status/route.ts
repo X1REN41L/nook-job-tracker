@@ -45,6 +45,9 @@ export async function POST(request: Request, { params }: RouteContext) {
             throw new StaleStatusEvent();
           }
           await transaction.applicationEvent.delete({ where: { id: latest.id } });
+          if (undo.promptInterviewId) {
+            await transaction.interview.deleteMany({ where: { id: undo.promptInterviewId, applicationId: id } });
+          }
           return transaction.application.update({
             where: { id },
             data: {

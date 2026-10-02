@@ -172,7 +172,7 @@ function NeedsAttention({ preview, followUps, rowRevealBase, loading, error, tod
         action={<Link className={linkClass} href={applicationTableHref({ status: "attention" })}>View all <span aria-hidden="true">→</span></Link>}
       />
       {loading ? (
-        <p className="motion-reveal py-6 text-sm text-ink-soft">Loading applications…</p>
+        <p className="py-6 text-sm text-ink-soft">Loading applications…</p>
       ) : error ? (
         <p className="motion-reveal py-6 text-sm text-ink-soft">Preview unavailable.</p>
       ) : items.length === 0 && dueFollowUps.length === 0 ? (
@@ -210,7 +210,7 @@ function UpcomingInterviewsPreview({ items, now, rowRevealBase, loading, error, 
         action={<Link className={linkClass} href="/interviews">View all <span aria-hidden="true">→</span></Link>}
       />
       {loading ? (
-        <p className="motion-reveal py-6 text-sm text-ink-soft">Loading interviews…</p>
+        <p className="py-6 text-sm text-ink-soft">Loading interviews…</p>
       ) : error ? (
         <p className="motion-reveal py-6 text-sm text-ink-soft">Preview unavailable.</p>
       ) : items.length === 0 ? (

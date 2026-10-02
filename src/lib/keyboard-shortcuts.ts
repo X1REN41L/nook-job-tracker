@@ -11,7 +11,8 @@ export function isMacPlatform() {
 
 type ShortcutBinding =
   | { kind: "key"; key: string }
-  | { kind: "combo"; code: string; primary?: boolean; shift?: boolean; alt?: boolean }
+  // `primary` is ⌘ on a Mac and Ctrl elsewhere; `control` is the Control key on every platform.
+  | { kind: "combo"; code: string; primary?: boolean; control?: boolean; shift?: boolean; alt?: boolean }
   | { kind: "sequence"; keys: readonly [string, string] };
 
 export const shortcutSections = ["General", "Go to", "Job Board", "Interviews"] as const;
@@ -35,9 +36,11 @@ export const shortcutDefinitions = [
   { id: "search", action: "Search this page", bindings: [{ kind: "key", key: "/" }], section: "General" },
   { id: "new-job", action: "New job", bindings: [{ kind: "key", key: "n" }], section: "General" },
   { id: "edit-details", action: "Edit open application", bindings: [{ kind: "key", key: "e" }], section: "General", handledInPlace: true },
-  { id: "undo", action: "Undo", bindings: [{ kind: "combo", code: "KeyZ", primary: true }], section: "General" },
+  // Ctrl+Z on every platform, a Mac included.
+  { id: "undo", action: "Undo", bindings: [{ kind: "combo", code: "KeyZ", control: true }], section: "General" },
   { id: "close", action: "Close", bindings: [{ kind: "key", key: "Escape" }], section: "General" },
-  { id: "toggle-sidebar", action: "Toggle sidebar", bindings: [{ kind: "combo", code: "KeyS", primary: true, shift: true }], section: "General" },
+  // Ctrl+/ on every platform, a Mac included, like Undo.
+  { id: "toggle-sidebar", action: "Toggle sidebar", bindings: [{ kind: "combo", code: "Slash", control: true }], section: "General" },
   { id: "open-settings", action: "Settings", bindings: [{ kind: "combo", code: "Comma", primary: true, shift: true }], section: "General" },
   { id: "show-shortcuts", action: "Keyboard shortcuts", bindings: [{ kind: "key", key: "?" }], section: "General" },
   { id: "go-dashboard", action: "Dashboard", bindings: [{ kind: "sequence", keys: ["g", "d"] }], section: "Go to", destination: "/dashboard" },
@@ -63,7 +66,7 @@ function matchesBinding(binding: ShortcutBinding, event: KeyboardEvent, isMac: b
   }
   if (binding.kind === "combo") {
     return event.code === binding.code && event.metaKey === (isMac && !!binding.primary) &&
-      event.ctrlKey === (!isMac && !!binding.primary) && event.altKey === !!binding.alt && event.shiftKey === !!binding.shift;
+      event.ctrlKey === (!!binding.control || (!isMac && !!binding.primary)) && event.altKey === !!binding.alt && event.shiftKey === !!binding.shift;
   }
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
   // Shift is part of typing symbols such as ? (and / on some layouts), but a shifted letter is not a shortcut.
@@ -103,8 +106,8 @@ function bindingKeys(binding: ShortcutBinding, isMac: boolean): string[] {
     const symbols: Record<string, string> = { " ": "Space", Enter: isMac ? "↩" : "Enter", ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", Escape: "Esc", Delete: "Del", Backspace: isMac ? "⌫" : "Backspace" };
     return [symbols[binding.key] ?? binding.key.toUpperCase()];
   }
-  const key = binding.code === "Comma" ? "," : binding.code.replace(/^Key/, "");
-  const modifiers = [binding.primary && (isMac ? "⌘" : "Ctrl"), binding.shift && (isMac ? "⇧" : "Shift"), binding.alt && (isMac ? "⌥" : "Alt")].filter((modifier) => typeof modifier === "string");
+  const key = ({ Comma: ",", Slash: "/" } as Record<string, string>)[binding.code] ?? binding.code.replace(/^Key/, "");
+  const modifiers = [binding.control && (isMac ? "⌃" : "Ctrl"), binding.primary && (isMac ? "⌘" : "Ctrl"), binding.shift && (isMac ? "⇧" : "Shift"), binding.alt && (isMac ? "⌥" : "Alt")].filter((modifier) => typeof modifier === "string");
   return [...modifiers, key];
 }
 

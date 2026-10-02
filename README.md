@@ -151,9 +151,9 @@ Press `?` anywhere in Nook to see every shortcut.
 | Search this page | `/` |
 | New job | `N` |
 | Edit the open application | `E` |
-| Undo | `Ctrl+Z` / `⌘Z` |
+| Undo | `Ctrl+Z` (`⌃Z` on Mac) |
 | Close a dialog | `Esc` |
-| Toggle sidebar | `Ctrl+Shift+S` / `⌘⇧S` |
+| Toggle sidebar | `Ctrl+/` (`⌃/` on Mac) |
 | Settings | `Ctrl+Shift+,` / `⌘⇧,` |
 | Show all shortcuts | `?` |
 | Go to Dashboard / Analytics / Job Board / Table / Interviews | `G` then `D` / `A` / `J` / `T` / `I` |

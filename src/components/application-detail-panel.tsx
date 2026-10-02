@@ -3,7 +3,7 @@
 import type { Status } from "@prisma/client";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
-import { ContactsSection, DetailsSection, FollowUpSection, InterviewsSection, SummarySection, TimelineSection, type HistoryEvent, type SaveChange } from "@/components/application-detail-sections";
+import { ContactsSection, DetailsSection, FollowUpSection, InterviewsSection, TimelineSection, type HistoryEvent, type SaveChange } from "@/components/application-detail-sections";
 import { Dialog } from "@/components/dialog";
 import { applicationApiPath } from "@/lib/application-api-path";
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
@@ -126,7 +126,6 @@ export function ApplicationDetailPanel({ application, boards, today, now, stale,
           <FollowUpSection application={application} onSave={onSave} today={today} />
           <InterviewsSection application={application} now={now} onSave={onSave} today={today} />
           <ContactsSection application={application} onSave={onSave} />
-          <SummarySection application={application} onSave={onSave} />
           <TimelineSection boards={boards} events={events} loadError={error} onSave={onSave} />
         </div>
 

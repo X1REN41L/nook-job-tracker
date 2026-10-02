@@ -395,12 +395,12 @@ function ArchivedRow({ application, boards, disabled, staleDays, onOpen, onReque
           <span className="block truncate text-sm font-semibold">{application.role}</span>
           <span className="block truncate text-xs text-ink-soft">{application.company}</span>
         </span>
-        <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-ink-soft transition-opacity duration-150 group-focus-within/archived:opacity-0 group-hover/archived:opacity-0">
+        <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-ink-soft motion-interactive group-focus-within/archived:opacity-0 group-hover/archived:opacity-0">
           {formatCalendarDate(application.appliedDate)}
           {staleDays !== undefined && <span className="rounded-full bg-clay-tint px-1.5 text-[10.5px] font-medium leading-4 text-ink" title="No status update for a while">Stale · {staleDays}d</span>}
         </span>
       </button>
-      <div className="absolute inset-y-1 right-1.5 flex items-center gap-1 rounded-nook-sm bg-cream-2 pl-2 opacity-0 transition-opacity duration-150 group-focus-within/archived:opacity-100 group-hover/archived:opacity-100">
+      <div className="absolute inset-y-1 right-1.5 flex items-center gap-1 rounded-nook-sm bg-cream-2 pl-2 opacity-0 motion-interactive group-focus-within/archived:opacity-100 group-hover/archived:opacity-100">
         <button
           className="rounded px-1.5 py-0.5 text-[11px] font-medium text-forest motion-interactive hover:text-forest-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-50"
           disabled={disabled}
@@ -450,21 +450,17 @@ function SidebarEdgeRail({
       {collapsed && page === "job-board" && (
         <SidebarArchiveRailButton archivedCount={archivedCount} isOver={isOver} onOpenArchive={onOpenArchive} />
       )}
-      {collapsed && page === "job-board" && isOver && (
-        <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-14 w-11 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-0.5 rounded-nook-sm border border-forest bg-paper text-[9px] font-semibold leading-tight text-forest-deep shadow-nook">
-          <Archive size={19} strokeWidth={1.8} />
-          <span>Archive</span>
-        </div>
-      )}
     </div>
   );
 }
 
+/** The collapsed rail's Archive button; while a card is dragged over the rail, it moves to the rail's middle to take the drop. */
 function SidebarArchiveRailButton({ archivedCount, isOver, onOpenArchive }: { archivedCount: number; isOver: boolean; onOpenArchive: () => void }) {
   return (
     <button
       aria-label={`Open Archive, ${archivedCount} archived`}
-      className={`absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-nook-sm text-ink-soft motion-interactive hover:bg-cream-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${isOver ? "bg-forest-tint text-forest-deep ring-2 ring-forest" : ""}`}
+      className={`sidebar-archive-rail-button absolute left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-nook-sm text-ink-soft hover:bg-cream-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${isOver ? "bg-forest-tint text-forest-deep ring-2 ring-forest" : ""}`}
+      data-drop-target={isOver || undefined}
       data-testid="collapsed-archive-button"
       onClick={onOpenArchive}
       title={`Archive (${archivedCount})`}

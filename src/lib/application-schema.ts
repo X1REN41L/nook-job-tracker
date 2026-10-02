@@ -154,6 +154,8 @@ export const applicationStatusUndoSchema = z.object({
   expectedLatestStatusEventId: recordIdSchema,
   archived: z.boolean(),
   interviewDatePromptDismissed: z.boolean(),
+  /** The interview round added through the date prompt that followed the move; undoing the move removes it. */
+  promptInterviewId: recordIdSchema.optional(),
 }).strict();
 
 export const applicationMutationSchema = z.union([

@@ -65,10 +65,12 @@
   --motion-standard: 190ms;
   --motion-structural: 240ms;
   --motion-chart: 560ms;
+  --motion-count: 1400ms;
   --motion-page: 320ms;
-  --motion-roll: 900ms;
   --motion-exit: 160ms;
   --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  /* The dashboard count's gentler ease-out; the count computes the same curve in script. */
+  --motion-count-ease: cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 /* Dark-mode overrides for every token above. Utilities using these tokens
@@ -397,6 +399,18 @@ body.nook-dragging * {
   width: calc(var(--sidebar-rail-width) - 1px);
 }
 
+/* The collapsed rail's Archive button glides from the bottom to the middle of
+   the rail while a card is dragged over it, and back when the drag leaves. */
+.sidebar-archive-rail-button {
+  bottom: 1rem;
+  transition: bottom var(--motion-structural) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+.sidebar-archive-rail-button[data-drop-target] {
+  bottom: calc(50% - 1.125rem);
+}
+
 /* Draws the divider under the main navigation; it insets to the tile width
    in the rail so it reads as a separator rather than a cut across the rail. */
 .sidebar-nav-divider::after {
@@ -722,57 +736,25 @@ select:not(.badge):disabled {
 @keyframes nook-bar-grow-y { from { height: 0; } }
 @keyframes nook-bar-grow-x { from { width: 0; } }
 
-/* Dashboard numbers roll into place like an odometer. Each digit column is as
-   wide as its final digit and shows one row of a 0–9–0–9 strip, which rolls
-   through a full turn to its stop in the second half; inline animation-delays
-   settle digits left to right and cards in order. Columns clip only top and
-   bottom so wider passing digits aren't cut, and the row's edges fade so
-   passing digits blur in and out. */
-.odometer {
-  --odometer-row: 1.25em;
-  display: inline-flex;
-  align-items: flex-start;
-  height: var(--odometer-row);
-  line-height: var(--odometer-row);
-  padding-inline: 0.15em;
-  margin-inline: -0.15em;
-  /* Digit glyphs sit between 20% and 80% of the row, so a settled digit is fully
-     opaque while the slivers of passing digits fade out above and below it. */
-  mask-image: linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.12) 9%, #000 20%, #000 80%, rgb(0 0 0 / 0.12) 91%, transparent);
+/* Dashboard numbers count up in script while they rise into their cards and warm
+   from soft to full ink, just behind the card's own rise through an inline
+   animation-delay. The warmth follows the count's curve, so the colour and the
+   digits land together. */
+.motion-number {
+  display: inline-block;
+  animation: nook-number-rise var(--motion-chart) var(--motion-ease) backwards,
+    nook-number-warm var(--motion-count) var(--motion-count-ease) backwards;
 }
-.odometer-digit {
-  position: relative;
-  display: block;
-  height: var(--odometer-row);
-  clip-path: inset(0 -0.5em);
-}
-.odometer-sizer {
-  visibility: hidden;
-}
-.odometer-strip {
-  position: absolute;
-  inset: 0 -0.5em auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transform: translateY(calc(var(--odometer-stop) * -1 * var(--odometer-row)));
-  animation: nook-odometer-roll var(--motion-roll) var(--motion-ease) backwards;
-  transition: transform var(--motion-roll) var(--motion-ease);
-}
-.odometer-strip > span {
-  height: var(--odometer-row);
-}
-.odometer-static {
-  animation: nook-odometer-fade var(--motion-roll) var(--motion-ease) backwards;
-}
-@keyframes nook-odometer-roll { from { transform: translateY(0); } }
-@keyframes nook-odometer-fade { from { opacity: 0; transform: translateY(0.25em); } }
-/* Each page settles in when you arrive on it: a short fade and rise, quicker
-   than the content animations inside it so the page never feels slow. */
+@keyframes nook-number-rise { from { opacity: 0; transform: translateY(0.25em); } }
+@keyframes nook-number-warm { from { color: var(--color-ink-soft); } }
+
+/* Each page fades in when you arrive on it, quicker than the content animations
+   inside it so the page never feels slow. Only the page's cards, columns, rows
+   and sections rise, so nothing moves twice. */
 .motion-page-enter {
   animation: nook-page-enter var(--motion-page) var(--motion-ease) backwards;
 }
-@keyframes nook-page-enter { from { opacity: 0; transform: translateY(6px); } }
+@keyframes nook-page-enter { from { opacity: 0; } }
 
 /* Page elements (cards, columns, rows, sections) rise and fade in one after
    another when a page opens, ordered through an inline animation-delay. */

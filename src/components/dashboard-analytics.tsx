@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
 import { analyticsBucketRange, analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod, type AnalyticsRange } from "@/lib/analytics-period";
 import { applicationTableHref } from "@/lib/application-list";
-import { revealDelay } from "@/lib/motion-mode";
+import { revealDelay, revealDelayMs } from "@/lib/motion-mode";
 import { useWeekStartDay } from "@/hooks/use-week-start-day";
 import type { DashboardAnalyticsData as AnalyticsData } from "@/types/dashboard";
 import { BOARDS, boardDot, boardLabel } from "@/lib/board-preferences";
@@ -126,10 +126,12 @@ function SectionHeading({ id, title, subtitle }: { id?: string; title: string; s
 const TREND_SUBTITLE = "Applications submitted in this period";
 /** Each chart bar starts growing this long after the one before it. */
 const BAR_STAGGER_MS = 60;
+/** The charts section rises in fifth, after the four metric cards. */
+const CHARTS_REVEAL_ORDER = 4;
 const BREAKDOWN_SUBTITLE = "Where this period's applications stand now";
 
 /** Each bar opens the table for its own week or month within the Analytics period. */
-function ApplicationsTrend({ range, trend, today }: { range: AnalyticsRange; trend: AnalyticsData["applicationsTrend"]; today: string }) {
+function ApplicationsTrend({ range, trend, today, barDelayBase }: { range: AnalyticsRange; trend: AnalyticsData["applicationsTrend"]; today: string; barDelayBase: number }) {
   // Weeks or months that haven't started yet are empty for now, not slow; their labels dim so they don't read as zero.
   const upcoming = (bucket: { startDate: string }) => bucket.startDate > today;
   const maxCount = Math.max(0, ...trend.buckets.map((bucket) => bucket.count));
@@ -151,7 +153,7 @@ function ApplicationsTrend({ range, trend, today }: { range: AnalyticsRange; tre
                 : `${formatMonth(bucket.startDate, "long")} ${bucket.startDate.slice(0, 4)}`;
               const label = upcoming(bucket) ? `${period}: not started yet` : `${period}: ${bucket.count} ${bucket.count === 1 ? "application" : "applications"}`;
               const bar = (
-                <span className="motion-bar-grow-y relative block w-full max-w-9 rounded-t-[3px] bg-forest group-hover:bg-forest-deep" style={{ height: `${(bucket.count / scale) * 100}%`, animationDelay: `${index * BAR_STAGGER_MS}ms` }}>
+                <span className="motion-bar-grow-y relative block w-full max-w-9 rounded-t-[3px] bg-forest group-hover:bg-forest-deep" style={{ height: `${(bucket.count / scale) * 100}%`, animationDelay: `${barDelayBase + index * BAR_STAGGER_MS}ms` }}>
                   {bucket.count > 0 && <span aria-hidden="true" className="absolute bottom-full left-1/2 -translate-x-1/2 pb-1 text-[11px] leading-none tabular-nums text-ink">{bucket.count}</span>}
                 </span>
               );
@@ -179,7 +181,7 @@ function ApplicationsTrend({ range, trend, today }: { range: AnalyticsRange; tre
   );
 }
 
-function StatusBreakdown({ counts, range }: { counts: AnalyticsData["statusBreakdown"]; range: AnalyticsRange }) {
+function StatusBreakdown({ counts, range, barDelayBase }: { counts: AnalyticsData["statusBreakdown"]; range: AnalyticsRange; barDelayBase: number }) {
   const maxCount = Math.max(0, ...STATUSES.map((status) => counts[status]));
   return (
     <section className="min-w-0" aria-labelledby="status-breakdown-heading">
@@ -194,7 +196,7 @@ function StatusBreakdown({ counts, range }: { counts: AnalyticsData["statusBreak
               <span className="shrink-0 tabular-nums text-ink" aria-label={`${counts[status]} applications`}>{counts[status]}</span>
             </div>
             <div aria-hidden="true" className="mt-1.5 h-2 rounded-full bg-cream-2">
-              <div className={`motion-bar-grow-x h-full rounded-full ${boardDot(BOARDS, status)}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 90 : 0}%`, animationDelay: `${index * BAR_STAGGER_MS}ms` }} />
+              <div className={`motion-bar-grow-x h-full rounded-full ${boardDot(BOARDS, status)}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 90 : 0}%`, animationDelay: `${barDelayBase + index * BAR_STAGGER_MS}ms` }} />
             </div>
           </li>
         ))}
@@ -230,8 +232,11 @@ export function DashboardAnalytics({ today, firstMonth, refreshKey }: {
   // Month periods split into calendar weeks that start on the day chosen in Settings.
   const firstDay = useWeekStartDay();
   const selectionKey = `${today}|${period}|${period === "CUSTOM_MONTH" ? month : ""}|${period === "CUSTOM_YEAR" ? year : ""}|${firstDay}`;
-  const [result, setResult] = useState<{ key: string; data: AnalyticsData } | null>(null);
+  const [result, setResult] = useState<{ key: string; data: AnalyticsData; barDelayBase: number } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
+  const openedAt = useRef(0);
+
+  useEffect(() => { openedAt.current = performance.now(); }, []);
 
   useEffect(() => {
     if (!today) return;
@@ -245,7 +250,9 @@ export function DashboardAnalytics({ today, firstMonth, refreshKey }: {
         return response.json() as Promise<AnalyticsData>;
       })
       .then((data) => {
-        setResult({ key: selectionKey, data });
+        // Bars wait for their section to start rising when the page opens; later data grows at once.
+        const barDelayBase = Math.max(0, Math.round(revealDelayMs(CHARTS_REVEAL_ORDER) - (performance.now() - openedAt.current)));
+        setResult({ key: selectionKey, data, barDelayBase });
         setFailedKey(null);
       })
       .catch((reason: unknown) => {
@@ -285,9 +292,9 @@ export function DashboardAnalytics({ today, firstMonth, refreshKey }: {
         {rateCard("Offer rate", data?.offerRate, 2)}
         {rateCard("Rejection rate", data?.rejectionRate, 3)}
       </div>
-      <div className="motion-reveal mt-9 grid min-w-0 grid-cols-1 gap-x-8 gap-y-9 @min-[760px]:grid-cols-2" style={revealDelay(4)}>
-        {data ? <ApplicationsTrend range={data.range} today={today} trend={data.applicationsTrend} /> : <div className="min-w-0"><SectionHeading subtitle={TREND_SUBTITLE} title="Applications trend" /><div className="h-52" /></div>}
-        {data ? <StatusBreakdown counts={data.statusBreakdown} range={data.range} /> : <div className="min-w-0"><SectionHeading subtitle={BREAKDOWN_SUBTITLE} title="Status breakdown" /><div className="h-52" /></div>}
+      <div className="motion-reveal mt-9 grid min-w-0 grid-cols-1 gap-x-8 gap-y-9 @min-[760px]:grid-cols-2" style={revealDelay(CHARTS_REVEAL_ORDER)}>
+        {data ? <ApplicationsTrend barDelayBase={result?.barDelayBase ?? 0} range={data.range} today={today} trend={data.applicationsTrend} /> : <div className="min-w-0"><SectionHeading subtitle={TREND_SUBTITLE} title="Applications trend" /><div className="h-52" /></div>}
+        {data ? <StatusBreakdown barDelayBase={result?.barDelayBase ?? 0} counts={data.statusBreakdown} range={data.range} /> : <div className="min-w-0"><SectionHeading subtitle={BREAKDOWN_SUBTITLE} title="Status breakdown" /><div className="h-52" /></div>}
       </div>
     </section>
   );

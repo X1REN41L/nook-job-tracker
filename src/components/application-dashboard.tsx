@@ -139,9 +139,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const today = useSyncExternalStore(subscribeToLocalDate, currentLocalDate, getServerLocalDate);
   // Interviews move from upcoming to past during the day, so they follow the clock to the minute.
   const now = useSyncExternalStore(subscribeToLocalMinute, currentLocalMinute, getServerLocalDate);
-  const { toast, deleteRecovery, undoing, showToast, clearApplicationUndo, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange } = useToastUndo({ onUndo: restoreLatestChange });
+  const { toast, deleteRecovery, undoing, showToast, clearApplicationUndo, pauseToastDismissTimer, endToastInteraction, resumeUndoToastOnTab, undoLatestChange, dismissToast } = useToastUndo({ onUndo: restoreLatestChange });
   const saveSettings = useSettingsUpdate(showToast);
   const lastToastRef = useRef(toast);
+  // A move that asks for an interview date offers its Undo once the prompt is done.
+  const promptedMoveUndo = useRef<{ message: string; undo: StatusUndo } | null>(null);
   if (toast) lastToastRef.current = toast;
   const visibleToast = toast ?? lastToastRef.current;
   const { importProgress, hasPendingImport, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport } = useApplicationBackup({
@@ -330,6 +332,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       setPendingDelete(null);
       deleteTriggerRef.current = null;
       setPendingInterviewDate(null);
+      promptedMoveUndo.current = null;
       setInterviewDateDraft("");
       setInterviewDateError("");
       movingIdsRef.current.clear();
@@ -458,10 +461,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       if (detailId === deletedApplication.id) setDetailId(null);
       showToast(`Deleted ${deletedApplication.company}`, {
         kind: "delete",
-        applicationId: deletedApplication.id,
+        application: deletedApplication,
         token: body.token,
         expiresAt: body.expiresAt,
-        company: deletedApplication.company,
       });
       setPendingDelete(null);
       requestAnimationFrame(() => boardHeadingRef.current?.focus());
@@ -496,7 +498,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       // Applications already deleted elsewhere count as done; only the ones this delete removed come back on Undo.
       const count = targets.length;
       showToast(`Deleted ${count} ${count === 1 ? "application" : "applications"}`, deletedIds.size
-        ? { kind: "delete-batch", applicationIds: [...deletedIds], token: body.token, expiresAt: body.expiresAt }
+        ? { kind: "delete-batch", applications: targets.filter(({ id }) => deletedIds.has(id)), token: body.token, expiresAt: body.expiresAt }
         : undefined);
       setPendingDelete(null);
       requestAnimationFrame(() => tableSearchRef.current?.focus());
@@ -555,17 +557,22 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       if (!response.ok) throw new Error(body.error ?? "Could not update the application status");
       reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
       const undo: StatusUndo = { kind: "status", applicationId: application.id, status: previousStatus, archived: previousArchived, interviewDatePromptDismissed: previousInterviewDatePromptDismissed, expectedLatestStatusEventId: body.latestStatusEventId ?? null, movedRevision: body.application.revision };
+      const asksForDate = !batch && !restoration && previousStatus !== Status.INTERVIEW && needsInterviewPrompt(body.application);
       if (batch) {
         batch.push(undo);
       } else if (offerUndo) {
         const message = previousArchived !== archived
           ? `${archived ? "Archived" : "Restored"} ${application.company}`
           : `${application.company} moved from ${boardLabel(BOARDS, previousStatus)} to ${boardLabel(BOARDS, status)}`;
-        showToast(message, undo);
+        if (asksForDate) {
+          // Any earlier toast steps aside; this move's Undo waits until the date is given or skipped.
+          dismissToast();
+          promptedMoveUndo.current = { message, undo };
+        } else {
+          showToast(message, undo);
+        }
       }
-      if (!batch && !restoration && previousStatus !== Status.INTERVIEW && needsInterviewPrompt(body.application)) {
-        openInterviewDatePrompt(body.application);
-      }
+      if (asksForDate) openInterviewDatePrompt(body.application);
       return "moved";
     } catch (caught) {
       if (!batch) setError(caught instanceof Error ? caught.message : "Could not update the application status");
@@ -614,6 +621,22 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setInterviewTypeDraft(InterviewType.OTHER);
     setInterviewDateError("");
     setPendingInterviewDate(application);
+  }
+
+  /**
+   * Closes the interview date prompt and offers the Undo for the move that opened it. `saved` is the revision
+   * change from saving a date or skipping, with the round a saved date added. The save belongs to the move, so
+   * Undo still reverts the move after it and removes that round.
+   */
+  function closeInterviewDatePrompt(saved?: { from: number; to: number; interviewId?: string }) {
+    setPendingInterviewDate(null);
+    const prompted = promptedMoveUndo.current;
+    promptedMoveUndo.current = null;
+    if (!prompted) return;
+    const undo = saved && saved.from === prompted.undo.movedRevision
+      ? { ...prompted.undo, movedRevision: saved.to, ...(saved.interviewId && { promptInterviewId: saved.interviewId }) }
+      : prompted.undo;
+    showToast(prompted.message, undo);
   }
 
   /**
@@ -690,7 +713,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       }
       if (!response.ok) throw new Error(body.error ?? "Could not update the interview date");
       reconcileApplications((current) => current.map((item) => item.id === pendingInterviewDate.id ? body.application : item));
-      setPendingInterviewDate(null);
+      const saved = body.application as ApplicationRecord;
+      const earlierRounds = new Set(pendingInterviewDate.interviews.map(({ id }) => id));
+      closeInterviewDatePrompt({
+        from: pendingInterviewDate.revision,
+        to: saved.revision,
+        interviewId: saved.interviews.find(({ id }) => !earlierRounds.has(id))?.id,
+      });
     } catch (caught) {
       setInterviewDateError(caught instanceof Error ? caught.message : "Could not update the interview date");
     } finally {
@@ -711,6 +740,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     const busyMessage = `${application.company} is still being updated. Try Undo again in a moment.`;
     if (undo.expectedLatestStatusEventId) {
       if (!beginMove(application.id)) throw new Error(busyMessage);
+      // Like a move, Undo shows its result at once and puts the application back if the server refuses.
+      const restored = { status: undo.status, archived: undo.archived, interviewDatePromptDismissed: undo.interviewDatePromptDismissed };
+      const before = { status: application.status, archived: application.archived, interviewDatePromptDismissed: application.interviewDatePromptDismissed, interviews: application.interviews };
+      setApplications((current) => current.map((item) => item.id === application.id
+        ? { ...item, ...restored, interviews: item.interviews.filter(({ id }) => id !== undo.promptInterviewId) }
+        : item));
+      let settled = false;
       try {
         const response = await fetch(applicationApiPath(application.id, "undo-status"), {
           method: "POST",
@@ -720,17 +756,21 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             expectedLatestStatusEventId: undo.expectedLatestStatusEventId,
             archived: undo.archived,
             interviewDatePromptDismissed: undo.interviewDatePromptDismissed,
+            ...(undo.promptInterviewId && { promptInterviewId: undo.promptInterviewId }),
           }),
         });
         const body = await response.json();
         if (response.status === 409 && body.application) {
+          settled = true;
           const latest = body.application as ApplicationRecord;
           reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
           throw new Error("This application changed elsewhere. The latest saved version has been loaded; review it before trying again.");
         }
         if (!response.ok) throw new Error(body.error ?? "Could not undo the status move");
+        settled = true;
         reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
       } finally {
+        if (!settled) setApplications((current) => current.map((item) => item.id === application.id ? { ...item, ...before } : item));
         endMove(application.id);
       }
     } else {
@@ -745,50 +785,54 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
   async function restoreLatestChange(undo: ToastUndo, restoreKeyboardFocus: boolean) {
     setPendingInterviewDate(null);
+    promptedMoveUndo.current = null;
     if (undo.kind === "status") {
       const application = await undoStatusChange(undo);
       if (application && restoreKeyboardFocus && (BOARD_STATUSES as readonly Status[]).includes(undo.status)) focusKanbanCard(application.id);
       return;
     }
     if (undo.kind === "batch") {
-      let failed = 0;
-      for (const item of undo.items) {
-        try {
-          await undoStatusChange(item);
-        } catch {
-          failed += 1;
-        }
-      }
+      // Every application flips back at once; the server still saves them one at a time.
+      const results = await Promise.allSettled(undo.items.map((item) => undoStatusChange(item)));
+      const failed = results.filter(({ status }) => status === "rejected").length;
       // Re-offering the whole batch would retry the changes that were already undone, so a partial undo only reports.
       if (failed) showToast(`Undid ${undo.items.length - failed} of ${undo.items.length} changes. The others changed elsewhere or were busy.`);
       return;
     }
-    if (undo.kind === "delete-batch") {
-      const response = await fetch("/api/applications/bulk-restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: undo.token, ids: undo.applicationIds }),
-      });
+    // Deleted applications come back at once from the records kept with the Undo, then take the server's saved versions.
+    const deleted = undo.kind === "delete-batch" ? undo.applications : [undo.application];
+    const deletedIds = new Set(deleted.map(({ id }) => id));
+    const withoutDeleted = (current: ApplicationRecord[]) => current.filter(({ id }) => !deletedIds.has(id));
+    setApplications((current) => [...deleted, ...withoutDeleted(current)].sort(compareApplications));
+    let restored: ApplicationRecord[];
+    try {
+      const response = undo.kind === "delete-batch"
+        ? await fetch("/api/applications/bulk-restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: undo.token, ids: [...deletedIds] }),
+        })
+        : await fetch(applicationApiPath(undo.application.id, "restore"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: undo.token }),
+        });
       const body = await response.json();
       // Nothing is restored on failure, so Undo stays offered for another try until the window ends.
-      if (!response.ok) throw new Error(body.error ?? "Could not restore the applications");
-      const restored = body.applications as ApplicationRecord[];
-      reconcileApplications((current) => [...restored, ...current].sort(compareApplications));
+      if (!response.ok) throw new Error(body.error ?? (undo.kind === "delete-batch" ? "Could not restore the applications" : "Could not restore the application"));
+      restored = undo.kind === "delete-batch" ? body.applications as ApplicationRecord[] : [body.application as ApplicationRecord];
+    } catch (caught) {
+      setApplications(withoutDeleted);
+      throw caught;
+    }
+    reconcileApplications((current) => [...restored, ...withoutDeleted(current)].sort(compareApplications));
+    if (undo.kind === "delete-batch") {
       showToast(`Restored ${restored.length} ${restored.length === 1 ? "application" : "applications"}`);
       return;
     }
-
-    const response = await fetch(applicationApiPath(undo.applicationId, "restore"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: undo.token }),
-    });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.error ?? "Could not restore the application");
-    const restored = body.application as ApplicationRecord;
-    reconcileApplications((current) => [restored, ...current].sort(compareApplications));
-    showToast(`Restored ${restored.company}`);
-    if (restoreKeyboardFocus && (BOARD_STATUSES as readonly Status[]).includes(restored.status)) focusKanbanCard(restored.id);
+    const [application] = restored;
+    showToast(`Restored ${application.company}`);
+    if (restoreKeyboardFocus && (BOARD_STATUSES as readonly Status[]).includes(application.status)) focusKanbanCard(application.id);
   }
 
   async function handleDrop(event: DragEndEvent) {
@@ -1201,7 +1245,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           onChangeDate={setInterviewDateDraft}
           onChangeType={setInterviewTypeDraft}
           type={interviewTypeDraft}
-          onClose={() => setPendingInterviewDate(null)}
+          onClose={() => closeInterviewDatePrompt()}
           onSkip={() => void saveInterviewDate(true)}
           saving={savingInterviewDate}
           value={interviewDateDraft}

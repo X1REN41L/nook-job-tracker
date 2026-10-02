@@ -145,16 +145,6 @@ export function JobModal({
             />
           </div>
 
-          <Field label="Summary" hint="(optional)">
-            <textarea
-              className="scrollbar-styled input min-h-16 resize-y"
-              maxLength={5000}
-              onChange={(e) => onChangeField("notes", e.target.value)}
-              placeholder="Recruiter contact, salary range, next steps…"
-              value={form.notes}
-            />
-          </Field>
-
           {error && (
             <p className="text-sm text-rose" role="alert">
               {error}

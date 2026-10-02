@@ -134,7 +134,7 @@ function DetailsForm({ application, sourceSuggestions, onDone, onSave }: {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // The summary has its own editor; keep whatever is saved now.
+    // Details editing leaves the saved summary as it is.
     if (await run({ kind: "details", fields: { ...fields, notes: application.notes ?? "" } })) onDone();
   }
 
@@ -153,39 +153,6 @@ function DetailsForm({ application, sourceSuggestions, onDone, onSave }: {
       <ErrorText message={error} />
       <FormActions onCancel={onDone} saving={saving} submitLabel="Save details" />
     </form>
-  );
-}
-
-/** The application's summary, edited in place. */
-export function SummarySection({ application, onSave }: { application: ApplicationRecord; onSave: SaveChange }) {
-  const { saving, error, run } = useSave(onSave);
-  const [draft, setDraft] = useState<string | null>(null);
-  const id = useId();
-  const summary = application.notes?.trim();
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (draft !== null && await run({ kind: "details", fields: { ...detailsOf(application), notes: draft } })) setDraft(null);
-  }
-
-  return (
-    <section aria-labelledby={`${id}-heading`} className="mt-7">
-      <SectionHeading
-        id={`${id}-heading`}
-        title="Summary"
-        action={draft === null && <button className={linkButton} onClick={() => setDraft(application.notes ?? "")} type="button">{summary ? "Edit" : "Add summary"}</button>}
-      />
-      {draft !== null ? (
-        <form className="mt-2 grid gap-2" onSubmit={submit}>
-          <label className="sr-only" htmlFor={`${id}-text`}>Summary</label>
-          <textarea autoFocus className="scrollbar-styled input min-h-24 resize-y text-sm" id={`${id}-text`} maxLength={5_000} onChange={(event) => setDraft(event.target.value)} placeholder="Recruiter contact, salary range, next steps…" value={draft} />
-          <ErrorText message={error} />
-          <FormActions onCancel={() => setDraft(null)} saving={saving} submitLabel="Save summary" />
-        </form>
-      ) : summary
-        ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{summary}</p>
-        : <p className="mt-2 text-sm text-ink-soft">No summary yet.</p>}
-    </section>
   );
 }
 
