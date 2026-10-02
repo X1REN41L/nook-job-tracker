@@ -159,4 +159,10 @@ export function useDashboardShortcuts({
     document.addEventListener("keydown", handleShortcut);
     return () => document.removeEventListener("keydown", handleShortcut);
   });
+
+  // Runs after the listener effect above, so end-to-end tests can wait for shortcuts to be live.
+  useEffect(() => {
+    document.documentElement.dataset.shortcutsReady = "true";
+    return () => { delete document.documentElement.dataset.shortcutsReady; };
+  }, []);
 }
