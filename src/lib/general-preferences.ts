@@ -1,7 +1,6 @@
 import { cssTimeToMs, motionIsOff } from "@/lib/motion-mode";
 import { getSettingsState } from "@/lib/settings-store";
 
-export function getDefaultBoard() { return getSettingsState().settings.defaultBoard; }
 export function getMotionMode() { return getSettingsState().settings.motion; }
 /** A motion duration token from the root stylesheet, such as `--motion-exit`, in milliseconds. */
 export function motionDurationMs(token: string, fallback: number) {

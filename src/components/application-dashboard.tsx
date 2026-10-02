@@ -46,7 +46,6 @@ import { applicationInputSchema, interviewDateSchema } from "@/lib/application-s
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { findPossibleDuplicate, type DuplicateMatch } from "@/lib/duplicate-match";
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";
-import { getDefaultBoard } from "@/lib/general-preferences";
 import { getInterviewListItems, getUpcomingInterviewCount, hasUpcomingInterview } from "@/lib/interviews";
 import type { ApplicationRecord, JobFormState } from "@/types/application";
 import type { StaleApplication } from "@/types/dashboard";
@@ -353,7 +352,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setForm((current) => ({ ...current, [field]: value }));
   }
   function resetForm() { setForm(blankForm()); setPendingDuplicate(null); setFormError(""); }
-  function openAddModal() { resetForm(); setForm({ ...blankForm(), status: getDefaultBoard() }); setIsModalOpen(true); }
+  function openAddModal() { resetForm(); setIsModalOpen(true); }
   function closeModal() { setIsModalOpen(false); resetForm(); }
   function openDetail(application: ApplicationRecord) {
     setDetailId(application.id);

@@ -8,7 +8,6 @@ import { ShortcutList } from "@/components/shortcut-list";
 import { DeleteAllDataDialog } from "@/components/delete-all-data-dialog";
 import { Dialog } from "@/components/dialog";
 import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-modal-shell";
-import { BOARDS } from "@/lib/board-preferences";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
 import { STALE_THRESHOLDS, STARTUP_PAGE_LABELS, STARTUP_PAGES, TIME_FORMATS, WEEK_START_LABELS, WEEK_STARTS } from "@/lib/settings-values";
@@ -47,7 +46,6 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
   const theme = settings.theme;
   const saveSettings = useSettingsUpdate(showToast);
   const mounted = useSyncExternalStore(subscribeToMount, () => true, () => false);
-  const defaultBoard = settings.defaultBoard;
   const startupPage = settings.startupPage;
   const staleThreshold = settings.staleApplicationThreshold;
   const motion = settings.motion;
@@ -148,11 +146,6 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                   <SettingRow htmlFor="startup-page" label="Startup page">
                     <select className={settingsSelectClass} id="startup-page" onChange={(event) => saveSettings({ startupPage: event.target.value as typeof startupPage })} value={startupPage}>
                       {STARTUP_PAGES.map((page) => <option key={page} value={page}>{STARTUP_PAGE_LABELS[page]}</option>)}
-                    </select>
-                  </SettingRow>
-                  <SettingRow htmlFor="default-board" label="Default board">
-                    <select className={settingsSelectClass} id="default-board" onChange={(event) => saveSettings({ defaultBoard: event.target.value as typeof defaultBoard })} value={defaultBoard}>
-                      {BOARDS.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
                     </select>
                   </SettingRow>
                   <SettingRow description="Flags active applications with no progress." htmlFor="stale-threshold" label="Stale after">

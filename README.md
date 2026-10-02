@@ -77,7 +77,6 @@ Analytics shows how many applications you sent in a period, your interview, offe
 - **Motion:** turn animations on or off, or follow your system's reduced-motion setting.
 - **Board colors:** choose a color for each status.
 - **Startup page:** open to the Dashboard, the Job Board, or Interviews.
-- **Default board:** choose the status new applications start in.
 
 ![Settings](docs/screenshots/settings.png)
 
