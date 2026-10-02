@@ -864,9 +864,9 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const archivedItems = applications
     .filter((item) => item.archived)
     .sort(compareApplications);
-  const interviewNow = now || currentLocalMinute();
   const interviews = getInterviewListItems(applications);
-  const upcomingInterviewCount = getUpcomingInterviewCount(applications, interviewNow);
+  // The server and the first render in the browser don't know the browser's clock, so the count waits for it.
+  const upcomingInterviewCount = now ? getUpcomingInterviewCount(applications, now) : null;
   const activeApplication = applications.find(({ id }) => id === activeId) ?? null;
 
   function dropTargetLabel(id: string | number) {
@@ -1111,7 +1111,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             ) : page === "interviews" ? (
               <InterviewsList
                 interviews={interviews}
-                now={interviewNow}
+                now={now}
                 searchInputRef={interviewSearchRef}
                 onOpen={(applicationId) => { const application = applications.find((item) => item.id === applicationId); if (application) openDetail(application); }}
               />

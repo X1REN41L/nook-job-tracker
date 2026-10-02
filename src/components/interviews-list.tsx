@@ -52,7 +52,7 @@ function InterviewRow({ interview, happeningNow = false, onOpen }: { interview: 
 
 export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
   interviews: InterviewListItem[];
-  /** Local "YYYY-MM-DDTHH:MM"; see `isUpcomingInterview`. */
+  /** Local "YYYY-MM-DDTHH:MM"; see `isUpcomingInterview`. Empty until the browser's clock is known. */
   now: string;
   searchInputRef: RefObject<HTMLInputElement | null>;
   onOpen: (applicationId: string) => void;
@@ -65,13 +65,15 @@ export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
   const pastTabRef = useRef<HTMLButtonElement>(null);
 
   const query = searchQuery.trim();
+  // Which rounds are upcoming depends on the browser's clock, so rows, counts and empty states wait for it.
+  const clockKnown = now !== "";
   const upcoming = interviews
     .filter((interview) => interview.inProgress && isUpcomingInterview(interview, now) && matchesApplicationSearch(interview, query));
   const past = interviews
     .filter((interview) => !isUpcomingInterview(interview, now) && matchesApplicationSearch(interview, query))
     .sort((a, b) => (pastSort === "recent" ? -1 : 1) * compareInterviews(a, b));
   const firstDay = useWeekStartDay();
-  const groups = groupUpcomingInterviews(upcoming, now, firstDay);
+  const groups = clockKnown ? groupUpcomingInterviews(upcoming, now, firstDay) : [];
   // Groups rise in when the page opens or the tab changes; a search that brings one back shows it at once.
   const revealing = useOpeningReveal(selectedTab, revealDelayMs(Infinity, GROUP_TIMING));
   const panelId = `${id}-panel`;
@@ -143,10 +145,10 @@ export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
           <section aria-labelledby={`${id}-upcoming-heading`}>
             <div className="mb-7 flex min-h-9 flex-wrap items-center justify-between gap-4">
               <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-upcoming-heading`}>
-                Upcoming interviews <span className="font-sans text-base font-medium text-ink-soft">({upcoming.length})</span>
+                Upcoming interviews {clockKnown && <span className="font-sans text-base font-medium text-ink-soft">({upcoming.length})</span>}
               </h2>
             </div>
-            {groups.length === 0 ? (
+            {!clockKnown ? null : groups.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "All caught up — no interviews on the horizon."}</p>
             ) : (
               <div className="flex flex-col gap-9 sm:gap-12">
@@ -167,9 +169,9 @@ export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
           <section aria-labelledby={`${id}-past-heading`}>
             <div className="mb-7 flex min-h-9 flex-wrap items-center justify-between gap-4">
               <h2 className="font-serif text-2xl font-semibold text-ink" id={`${id}-past-heading`}>
-                Past interviews <span className="font-sans text-base font-medium text-ink-soft">({past.length})</span>
+                Past interviews {clockKnown && <span className="font-sans text-base font-medium text-ink-soft">({past.length})</span>}
               </h2>
-              {past.length > 0 && (
+              {clockKnown && past.length > 0 && (
                 <button
                   aria-label={`Sort past interviews: ${pastSort === "recent" ? "most recent first" : "oldest first"}`}
                   className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook motion-interactive hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
@@ -180,7 +182,7 @@ export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
                 </button>
               )}
             </div>
-            {past.length === 0 ? (
+            {!clockKnown ? null : past.length === 0 ? (
               <p className="py-8 text-sm text-ink-soft">{query ? "No interviews match your search." : "None yet — patience, and a callback, will fix that."}</p>
             ) : (
               <div className={revealing ? "motion-reveal" : undefined} style={revealing ? revealDelay(0, GROUP_TIMING) : undefined}>{past.map((interview) => <InterviewRow key={interview.id} interview={interview} onOpen={onOpen} />)}</div>

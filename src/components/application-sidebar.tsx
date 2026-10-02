@@ -15,7 +15,8 @@ import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 type ApplicationSidebarProps = {
   boards: BoardConfiguration[];
   archivedItems: ApplicationRecord[];
-  upcomingInterviewCount: number;
+  /** Null until the browser's clock is known. */
+  upcomingInterviewCount: number | null;
   collapsed: boolean;
   width: number;
   minWidth: number;
@@ -210,20 +211,22 @@ export function ApplicationSidebar({
               </Link>
               <Link
                 aria-current={page === "interviews" ? "page" : undefined}
-                aria-label={`Interviews, ${upcomingInterviewCount} upcoming`}
+                aria-label={upcomingInterviewCount === null ? "Interviews" : `Interviews, ${upcomingInterviewCount} upcoming`}
                 className={`${mainNavItemClass} ${navItemStateClass(page === "interviews")}`}
                 href="/interviews"
                 title={collapsed ? "Interviews" : undefined}
               >
                 <span className="sidebar-nav-icon"><MainNavIcon Icon={CalendarClock} /></span>
                 <span className="sidebar-reveal ml-3 whitespace-nowrap">Interviews</span>
-                <span
-                  aria-hidden="true"
-                  className="sidebar-reveal ml-auto mr-2 min-w-5 rounded-full border border-line bg-cream px-1.5 py-0.5 text-center text-[11px] font-medium leading-none text-ink-soft"
-                  data-testid="upcoming-interview-count"
-                >
-                  {upcomingInterviewCount}
-                </span>
+                {upcomingInterviewCount !== null && (
+                  <span
+                    aria-hidden="true"
+                    className="sidebar-reveal ml-auto mr-2 min-w-5 rounded-full border border-line bg-cream px-1.5 py-0.5 text-center text-[11px] font-medium leading-none text-ink-soft"
+                    data-testid="upcoming-interview-count"
+                  >
+                    {upcomingInterviewCount}
+                  </span>
+                )}
               </Link>
               <button
                 ref={settingsTriggerRef}
