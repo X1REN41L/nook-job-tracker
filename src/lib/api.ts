@@ -1,6 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { ZodError, type ZodIssue } from "zod";
+import { WriteQueueFullError } from "@/lib/write-queue";
+
+export function logOperationError(operation: string, error: unknown) {
+  const code = error instanceof Prisma.PrismaClientKnownRequestError && /^P\d{4}$/.test(error.code)
+    ? error.code : error instanceof WriteQueueFullError ? "WRITE_QUEUE_FULL" : "UNEXPECTED";
+  console.error(operation, code);
+}
 
 type ValidationIssue = { path: string; message: string };
 
@@ -12,7 +19,10 @@ export function validationErrorResponse(error: ZodError, message = "Invalid requ
   return NextResponse.json({ error: message, issues: formatValidationIssues(error) }, { status: 400 });
 }
 
-export function apiError(error: unknown) {
+export function apiError(error: unknown, operation = "api.request") {
+  if (error instanceof WriteQueueFullError) {
+    return NextResponse.json({ error: "Database write queue is full. Please try again shortly." }, { status: 503, headers: { "Retry-After": "1" } });
+  }
   if (error instanceof RequestJsonError) {
     return NextResponse.json({ error: "Request body must be valid JSON" }, { status: 400 });
   }
@@ -26,11 +36,11 @@ export function apiError(error: unknown) {
   }
 
   if (isDatabaseContention(error)) {
-    console.error("API database temporarily unavailable", error instanceof Error ? error.message : "Unknown error");
+    logOperationError(operation, error);
     return NextResponse.json({ error: "Database is busy. Please try again shortly." }, { status: 503, headers: { "Retry-After": "1" } });
   }
 
-  console.error("API request failed", error instanceof Error ? error.message : "Unknown error");
+  logOperationError(operation, error);
   return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
 }
 

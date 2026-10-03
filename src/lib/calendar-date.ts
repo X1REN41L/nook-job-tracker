@@ -42,6 +42,7 @@ export const dashboardStaleQuerySchema = z.object({
   today: calendarDateKeySchema,
   timeZone: timeZoneSchema,
   staleApplicationThreshold: z.enum(["7", "15", "30"]).default("15").transform(Number),
+  offset: z.string().regex(/^\d{1,15}$/).default("0").transform(Number),
 }).strict();
 
 // The user's local wall-clock time, so interviews earlier today can drop out of Upcoming.

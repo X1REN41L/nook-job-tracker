@@ -121,7 +121,7 @@ function deleteRoute(collection: keyof typeof deleters) {
       const { revision } = parseRequest(revisionOnlySchema, parseMutationJson(check.body));
       return respond(await mutateChildren(id, revision, async (tx) => requireChange((await deleters[collection](tx, id, itemId)).count)));
     } catch (error) {
-      return apiError(error);
+      return apiError(error, "applications.children");
     }
   };
 }
@@ -135,7 +135,7 @@ export function childCollectionRoute(collection: Collection) {
       const { id } = await params;
       return respond(await creators[collection](check.body, id), 201);
     } catch (error) {
-      return apiError(error);
+      return apiError(error, "applications.children");
     }
   };
 }
@@ -149,7 +149,7 @@ export function childItemRoute(collection: Collection) {
       const { id, itemId = "" } = await params;
       return respond(await updaters[collection](check.body, id, itemId));
     } catch (error) {
-      return apiError(error);
+      return apiError(error, "applications.children");
     }
   }
   return { PUT, DELETE: deleteRoute(collection) };
@@ -181,7 +181,7 @@ export function statusEventRoute() {
         if (plan.status !== application.status) await tx.application.update({ where: { id }, data: { status: plan.status } });
       }));
     } catch (error) {
-      return apiError(error);
+      return apiError(error, "applications.children");
     }
   };
 }

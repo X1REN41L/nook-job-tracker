@@ -12,7 +12,7 @@ const patchSchema = z.object({ revision: z.number().int().nonnegative(), changes
 
 export async function GET() {
   try { return NextResponse.json(await readSettings()); }
-  catch (error) { return apiError(error); }
+  catch (error) { return apiError(error, "settings"); }
 }
 
 export async function PATCH(request: Request) {
@@ -36,5 +36,5 @@ export async function PATCH(request: Request) {
       return { conflict: false, settings, revision: 1 };
     }));
     return NextResponse.json({ settings: result.settings, revision: result.revision }, { status: result.conflict ? 409 : 200 });
-  } catch (error) { return apiError(error); }
+  } catch (error) { return apiError(error, "settings"); }
 }

@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject 
 
 import { ContactsSection, DetailsSection, FollowUpSection, InterviewsSection, TimelineSection, type HistoryEvent, type SaveChange } from "@/components/application-detail-sections";
 import { Dialog } from "@/components/dialog";
-import { applicationApiPath } from "@/lib/application-api-path";
+import { fetchApplicationDetail } from "@/lib/application-pages";
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { isEditableShortcutTarget } from "@/lib/keyboard-shortcuts";
 import { staleAgeLabel } from "@/lib/stale-label";
@@ -25,11 +25,7 @@ function useApplicationDetail(application: ApplicationSummary, latestRecord: App
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(applicationApiPath(application.id), { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Application request failed");
-        return response.json() as Promise<{ application: ApplicationRecord; events: HistoryEvent[] }>;
-      })
+    fetchApplicationDetail(application.id, controller.signal)
       .then((body) => {
         setResult({ key, record: body.application, events: body.events });
         setFailedKey(null);

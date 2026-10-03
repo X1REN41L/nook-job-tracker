@@ -35,9 +35,9 @@ export async function POST(request: Request) {
     }));
     if (result.status === 404) return NextResponse.json({ error: "Restore expired or already used" }, { status: 404 });
     if (result.status === 409) return NextResponse.json({ error: "An application with one of these IDs already exists" }, { status: 409 });
-    return NextResponse.json({ applications: result.applications }, { status: 201 });
+    return NextResponse.json({ applications: result.applications?.slice(0, 200), restoredIds: result.applications?.map(({ id }) => id) }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ error: "Application or event ID already exists" }, { status: 409 });
-    return apiError(error);
+    return apiError(error, "applications/bulk-restore");
   }
 }

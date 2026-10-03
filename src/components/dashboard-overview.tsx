@@ -11,6 +11,7 @@ import { currentBrowserTimeZone, currentLocalMinute, formatCalendarDate } from "
 import { applicationTableHref } from "@/lib/application-list";
 import { revealDelay } from "@/lib/motion-mode";
 import { BOARDS, boardLabel } from "@/lib/board-preferences";
+import { fetchDashboardOverview } from "@/lib/application-pages";
 import { useSettings } from "@/hooks/use-settings";
 import { staleAgeLabel } from "@/lib/stale-label";
 import { formatInterviewTime, interviewDateKey, INTERVIEW_TYPE_LABELS, isInterviewInProgress, isUpcomingInterview } from "@/lib/interviews";
@@ -270,11 +271,7 @@ export function DashboardOverview({ today, now, refreshKey, applications, moving
     if (!today) return;
     const controller = new AbortController();
     const query = new URLSearchParams({ today, time: currentLocalMinute().slice(11, 16), timeZone: currentBrowserTimeZone(), staleApplicationThreshold: String(staleApplicationThreshold) });
-    fetch(`/api/dashboard/overview?${query}`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Overview request failed");
-        return response.json() as Promise<OverviewData>;
-      })
+    fetchDashboardOverview(query, controller.signal)
       .then((overview) => {
         // Rows keep their place just behind the cards however long loading takes; late data doesn't wait again.
         const rowRevealBase = Math.max(0, Math.round(ROW_REVEAL_START_MS - (performance.now() - openedAt.current)));

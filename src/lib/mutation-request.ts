@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
+import { isAllowedHost } from "@/lib/allowed-host";
 import { RequestJsonError } from "@/lib/api";
-import { MAX_BACKUP_FILE_BYTES } from "@/lib/backup-limits";
 
-const MAX_MUTATION_BODY_BYTES = MAX_BACKUP_FILE_BYTES;
+import { MAX_MUTATION_BODY_BYTES } from "@/lib/backup-limits";
 
 type MutationRequestResult =
   | { ok: true; body: Uint8Array }
   | { ok: false; response: NextResponse };
 
-export async function checkMutationRequest(request: Request): Promise<MutationRequestResult> {
+type HeaderCheck = { ok: true } | { ok: false; response: NextResponse };
+
+export function checkMutationHeaders(request: Request): HeaderCheck {
+  if (!isAllowedHost(request.headers.get("host"))) {
+    return { ok: false, response: NextResponse.json({ error: "Host is not allowed" }, { status: 403 }) };
+  }
   const origin = request.headers.get("origin");
   if (!origin || origin === "null" || !isMatchingOrigin(origin, request)) {
     return {
@@ -24,6 +29,16 @@ export async function checkMutationRequest(request: Request): Promise<MutationRe
     };
   }
 
+  return { ok: true };
+}
+
+export async function checkMutationRequest(request: Request): Promise<MutationRequestResult> {
+  const headers = checkMutationHeaders(request);
+  if (!headers.ok) return headers;
+  return readBoundedJsonBody(request);
+}
+
+export async function readBoundedJsonBody(request: Request): Promise<MutationRequestResult> {
   const contentLength = request.headers.get("content-length");
   if (contentLength !== null) {
     if (!/^\d+$/.test(contentLength)) {
@@ -90,6 +105,6 @@ function isJsonContentType(contentType: string | null) {
 function tooLarge(): MutationRequestResult {
   return {
     ok: false,
-    response: NextResponse.json({ error: "Request body must not exceed 10 MB" }, { status: 413 }),
+    response: NextResponse.json({ error: "Request body must not exceed 256 KiB" }, { status: 413 }),
   };
 }

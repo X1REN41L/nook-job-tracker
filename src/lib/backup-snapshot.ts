@@ -5,21 +5,20 @@ import {
   applicationIdSchema, eventTextSchema, recordIdSchema, storedCalendarDateSchema, storedHttpUrlSchema, storedJobUrlSchema,
   storedOptionalText, storedRequiredText, storedTimeSchema,
 } from "@/lib/application-schema";
-import { MAX_BACKUP_APPLICATIONS } from "@/lib/backup-limits";
 import { settingsSchema } from "@/lib/backup-settings-schema";
 import { parseFollowUpEventDetail } from "@/lib/follow-up-event";
 import { isValidStatusTransition, statusTransitionDetail } from "@/lib/status-history";
 
-type TypedTransition = { fromStatus: Status; toStatus: Status };
+type TypedTransition = { fromStatus: Status; toStatus: Status; count: number };
 
 function possibleTrailEnds(edges: TypedTransition[], starts: Status[]) {
   if (!edges.length) return new Set(starts);
   const outgoing = new Map<Status, number>();
   const incoming = new Map<Status, number>();
   const neighbors = new Map<Status, Set<Status>>();
-  for (const { fromStatus, toStatus } of edges) {
-    outgoing.set(fromStatus, (outgoing.get(fromStatus) ?? 0) + 1);
-    incoming.set(toStatus, (incoming.get(toStatus) ?? 0) + 1);
+  for (const { fromStatus, toStatus, count } of edges) {
+    outgoing.set(fromStatus, (outgoing.get(fromStatus) ?? 0) + count);
+    incoming.set(toStatus, (incoming.get(toStatus) ?? 0) + count);
     neighbors.set(fromStatus, (neighbors.get(fromStatus) ?? new Set()).add(toStatus));
     neighbors.set(toStatus, (neighbors.get(toStatus) ?? new Set()).add(fromStatus));
   }
@@ -53,12 +52,12 @@ function possibleTrailEnds(edges: TypedTransition[], starts: Status[]) {
 
 // Real timestamps keep accepting any offset; calendar dates must be the UTC-midnight form Nook exports.
 const timestamp = z.iso.datetime({ offset: true }).transform((value) => new Date(value));
-const rawEventSnapshotSchema = z.object({
+export const rawEventSnapshotSchema = z.object({
   id: recordIdSchema, type: z.enum(EventType), detail: eventTextSchema,
   fromStatus: z.enum(Status).nullable(), toStatus: z.enum(Status).nullable(),
   createdAt: timestamp,
 }).strict();
-const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, context) => {
+export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, context) => {
   if (event.type !== EventType.STATUS_CHANGE) {
     if (event.fromStatus !== null || event.toStatus !== null) {
       context.addIssue({ code: "custom", message: "Only status change events can include status fields" });
@@ -103,86 +102,109 @@ const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, context) =>
 
   return event;
 });
-const interviewSnapshotSchema = z.object({
+export const interviewSnapshotSchema = z.object({
   id: recordIdSchema, date: storedCalendarDateSchema, time: storedTimeSchema, type: z.enum(InterviewType),
   interviewers: storedOptionalText(200), notes: storedOptionalText(2_000), createdAt: timestamp,
 }).strict();
-const contactSnapshotSchema = z.object({
+export const contactSnapshotSchema = z.object({
   id: recordIdSchema, name: storedRequiredText(120), role: storedOptionalText(120),
   email: storedOptionalText(254).refine((value) => value === null || z.email().safeParse(value).success, "Enter a valid email address"),
   linkedinUrl: storedHttpUrlSchema, notes: storedOptionalText(2_000), createdAt: timestamp,
 }).strict();
-const applicationSnapshotSchema = z.object({
+export const applicationFieldsSchema = z.object({
   id: applicationIdSchema, company: storedRequiredText(120), role: storedRequiredText(120),
   status: z.enum(Status), archived: z.boolean(), source: storedOptionalText(120), appliedDate: storedCalendarDateSchema,
   interviewDatePromptDismissed: z.boolean(), followUpDate: storedCalendarDateSchema.nullable(), followUpNote: storedOptionalText(200),
   notes: storedOptionalText(5_000), jobUrl: storedJobUrlSchema,
-  createdAt: timestamp, lastUpdated: timestamp, events: z.array(eventSnapshotSchema),
-  interviews: z.array(interviewSnapshotSchema), contacts: z.array(contactSnapshotSchema),
+  createdAt: timestamp, lastUpdated: timestamp,
 }).strict().superRefine((application, context) => {
   if (application.followUpNote !== null && application.followUpDate === null) {
     context.addIssue({ code: "custom", path: ["followUpNote"], message: "A follow-up note needs a follow-up date" });
   }
-  const statusEvents = application.events
-    .map((event, index) => ({ event, index }))
-    .filter(({ event }) => event.type === EventType.STATUS_CHANGE)
-    .sort((left, right) => {
-      const timeOrder = left.event.createdAt.getTime() - right.event.createdAt.getTime();
-      return timeOrder || left.event.id.localeCompare(right.event.id);
-    });
-  const initialEvents = statusEvents.filter(({ event }) => event.fromStatus === null && event.toStatus != null);
-  if (initialEvents.length > 1) {
-    context.addIssue({ code: "custom", path: ["events"], message: "History can contain only one initial status event" });
-  }
-  if (initialEvents.length === 1 && initialEvents[0].event.createdAt.getTime() !== statusEvents[0]?.event.createdAt.getTime()) {
-    context.addIssue({ code: "custom", path: ["events", initialEvents[0].index, "fromStatus"], message: "An initial status event must be first" });
-  }
+});
 
-  const timestampGroups: Array<typeof statusEvents> = [];
-  for (const entry of statusEvents) {
-    const lastGroup = timestampGroups.at(-1);
-    if (lastGroup?.[0].event.createdAt.getTime() === entry.event.createdAt.getTime()) lastGroup.push(entry);
-    else timestampGroups.push([entry]);
-  }
+type HistoryEvent = z.output<typeof eventSnapshotSchema>;
+type HistoryIssue = (path: (string | number)[], message: string) => void;
 
-  let possiblePreviousStatuses: Set<Status> | null = null;
-  let completeHistory = initialEvents.length === 1;
-  for (const group of timestampGroups) {
-    const groupHasUnknownTransition = group.some(({ event }) => event.toStatus === null);
-    const initial = group.find(({ event }) => event.fromStatus === null && event.toStatus != null);
-    const typedEdges = group.flatMap(({ event }) =>
-      event.fromStatus != null && event.toStatus != null
-        ? [{ fromStatus: event.fromStatus, toStatus: event.toStatus }]
-        : [],
-    );
+/** Consumes timestamp-ordered events; each timestamp uses at most Status² counters. */
+export class BackupHistoryValidator {
+  private time: number | null = null;
+  private firstTime: number | null = null;
+  private groupIndex = 0;
+  private initialCount = 0;
+  private initial: Status | null = null;
+  private unknown = false;
+  private edges = new Map<string, TypedTransition>();
+  private previous: Set<Status> | null = null;
+  private complete = false;
 
-    if (groupHasUnknownTransition) {
-      completeHistory = false;
-      possiblePreviousStatuses = null;
-      continue;
+  private issue: HistoryIssue;
+
+  constructor(issue: HistoryIssue) { this.issue = issue; }
+
+  add(event: HistoryEvent, index: number) {
+    if (event.type !== EventType.STATUS_CHANGE) return;
+    const time = event.createdAt.getTime();
+    if (this.time !== time) {
+      this.flush();
+      this.time = time;
+      this.firstTime ??= time;
+      this.groupIndex = index;
     }
-
-    const starts = initial
-      ? [initial.event.toStatus!]
-      : possiblePreviousStatuses
-        ? [...possiblePreviousStatuses]
-        : Object.values(Status);
-    const ends = possibleTrailEnds(typedEdges, starts);
-    if (!ends.size && typedEdges.length) {
-      context.addIssue({
-        code: "custom",
-        path: ["events", group[0].index, "fromStatus"],
-        message: "Status transitions must form a consistent sequence",
-      });
-      possiblePreviousStatuses = null;
-      completeHistory = false;
-      continue;
+    if (event.toStatus === null) this.unknown = true;
+    else if (event.fromStatus === null) {
+      this.initialCount++;
+      if (this.initialCount > 1) this.issue(["events"], "History can contain only one initial status event");
+      if (time !== this.firstTime) this.issue(["events", index, "fromStatus"], "An initial status event must be first");
+      this.initial = event.toStatus;
+      if (time === this.firstTime && this.initialCount === 1) this.complete = true;
+    } else {
+      const key = `${event.fromStatus}:${event.toStatus}`;
+      const edge = this.edges.get(key) ?? { fromStatus: event.fromStatus, toStatus: event.toStatus, count: 0 };
+      edge.count++;
+      this.edges.set(key, edge);
     }
-    possiblePreviousStatuses = ends;
   }
-  if (completeHistory && possiblePreviousStatuses && !possiblePreviousStatuses.has(application.status)) {
-    context.addIssue({ code: "custom", path: ["status"], message: "Saved status must match the final status in history" });
+
+  private flush() {
+    if (this.time === null) return;
+    if (this.unknown) {
+      this.complete = false;
+      this.previous = null;
+    } else {
+      const starts = this.initial ? [this.initial] : this.previous ? [...this.previous] : Object.values(Status);
+      const ends = possibleTrailEnds([...this.edges.values()], starts);
+      if (!ends.size && this.edges.size) {
+        this.issue(["events", this.groupIndex, "fromStatus"], "Status transitions must form a consistent sequence");
+        this.previous = null;
+        this.complete = false;
+      } else this.previous = ends;
+    }
+    this.initial = null;
+    this.unknown = false;
+    this.edges.clear();
   }
+
+  finish(status: Status) {
+    this.flush();
+    if (this.complete && this.previous && !this.previous.has(status)) {
+      this.issue(["status"], "Saved status must match the final status in history");
+    }
+  }
+}
+
+export function validateBackupEventTime(event: HistoryEvent, now: number, issue: HistoryIssue, index: number) {
+  if (event.createdAt.getTime() > now) issue(["events", index, "createdAt"], "Event time must not be in the future");
+}
+
+export const applicationSnapshotSchema = applicationFieldsSchema.extend({
+  events: z.array(eventSnapshotSchema), interviews: z.array(interviewSnapshotSchema), contacts: z.array(contactSnapshotSchema),
+}).superRefine((application, context) => {
+  const history = new BackupHistoryValidator((path, message) => context.addIssue({ code: "custom", path, message }));
+  application.events.map((event, index) => ({ event, index }))
+    .sort((a, b) => a.event.createdAt.getTime() - b.event.createdAt.getTime() || a.index - b.index)
+    .forEach(({ event, index }) => history.add(event, index));
+  history.finish(application.status);
 });
 // Undo restore and the import duplicate comparison read rows this server stored itself, so they check
 // field types only. They must not reuse the import rules above: rows stored under older rules would
@@ -234,15 +256,24 @@ export function storedChildren({ events, interviews, contacts }: StoredChildren)
   };
 }
 const storedComparisonSchema = applicationRestoreSnapshotSchema.omit({ revision: true });
-export const backupSnapshotSchema = z.object({
-  version: z.literal(1), applications: z.array(applicationSnapshotSchema).max(MAX_BACKUP_APPLICATIONS), settings: settingsSchema,
+export const backupEnvelopeSchema = z.object({ version: z.literal(1), settings: settingsSchema }).strict();
+export const backupSnapshotSchema = backupEnvelopeSchema.extend({
+  applications: z.array(applicationSnapshotSchema),
 }).strict().superRefine((backup, context) => {
   const now = Date.now();
-  backup.applications.forEach((application, applicationIndex) => application.events.forEach((event, eventIndex) => {
-    if (event.createdAt.getTime() > now) {
-      context.addIssue({ code: "custom", path: ["applications", applicationIndex, "events", eventIndex, "createdAt"], message: "Event time must not be in the future" });
+  const ids = { applications: new Set<string>(), events: new Set<string>(), interviews: new Set<string>(), contacts: new Set<string>() };
+  backup.applications.forEach((application, applicationIndex) => {
+    const issue: HistoryIssue = (path, message) => context.addIssue({ code: "custom", path: ["applications", applicationIndex, ...path], message });
+    if (ids.applications.has(application.id)) issue(["id"], "Backup contains duplicate IDs");
+    ids.applications.add(application.id);
+    for (const kind of ["events", "interviews", "contacts"] as const) {
+      application[kind].forEach((child, index) => {
+        if (ids[kind].has(child.id)) issue([kind, index, "id"], "Backup contains duplicate IDs");
+        ids[kind].add(child.id);
+      });
     }
-  }));
+    application.events.forEach((event, index) => validateBackupEventTime(event, now, issue, index));
+  });
 });
 export type BackupSnapshot = z.input<typeof backupSnapshotSchema>;
 

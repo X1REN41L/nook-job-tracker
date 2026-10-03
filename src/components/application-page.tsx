@@ -1,6 +1,6 @@
 import { ApplicationDashboard } from "@/components/application-dashboard";
-import { prisma } from "@/lib/prisma";
-import { applicationSummaryQuery, serializeApplicationSummary } from "@/lib/application-record";
+import { loadApplicationSummaries } from "@/lib/application-record";
+import { compareApplications } from "@/lib/application-list";
 import type { ApplicationFilters } from "@/lib/application-list";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
@@ -9,14 +9,11 @@ export async function ApplicationPage({ page, dashboardSection, tableFilters }: 
   dashboardSection?: DashboardSection;
   tableFilters?: ApplicationFilters;
 }) {
-  const applications = await prisma.application.findMany({
-    ...applicationSummaryQuery,
-    orderBy: [{ appliedDate: "desc" }, { createdAt: "desc" }],
-  });
+  const applications = (await loadApplicationSummaries()).sort(compareApplications);
 
   return (
     <ApplicationDashboard
-      initialApplications={applications.map(serializeApplicationSummary)}
+      initialApplications={applications}
       page={page}
       dashboardSection={dashboardSection}
       tableFilters={tableFilters}

@@ -42,6 +42,6 @@ export async function GET(request: Request) {
     };
     return NextResponse.json(await getDashboardAnalytics(selection, query.data.today, Number(query.data.weekStart)));
   } catch (error) {
-    return apiError(error);
+    return apiError(error, "dashboard/analytics");
   }
 }

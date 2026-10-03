@@ -36,6 +36,6 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json({ application: result.application }, { status: 201 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return NextResponse.json({ error: "Application or event ID already exists" }, { status: 409 });
-    return apiError(error);
+    return apiError(error, "applications/item/restore");
   }
 }

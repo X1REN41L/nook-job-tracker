@@ -1,4 +1,4 @@
-import { InterviewType, Prisma, Status } from "@prisma/client";
+import { Prisma, Status } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { calendarDateInTimeZone } from "@/lib/calendar-date";
@@ -6,9 +6,6 @@ import {
   analyticsPeriodRange, dateFromParts, dateKey, monthEnd, monthParts, monthStart, shiftMonth,
   type AnalyticsSelection,
 } from "@/lib/analytics-period";
-import { analyzeStatusHistory, type StatusHistoryEvent } from "@/lib/status-history";
-import { isUpcomingInterview } from "@/lib/interviews";
-import { isInProgressApplication } from "@/lib/status-values";
 import type {
   DashboardAnalyticsData, DashboardOverviewData, HistoryCoverage, RateMetric, StaleApplication, StaleApplicationsData,
   StaleTimingCoverage,
@@ -19,70 +16,45 @@ const STALE_SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM"] as const;
 const STALE_CRITICAL_DAYS = 60;
 const STALE_HIGH_DAYS = 30;
 
-type DashboardApplication = {
-  id: string;
-  company: string;
-  role: string;
-  status: Status;
-  archived: boolean;
-  appliedDate: Date;
-  followUpDate: Date | null;
-  followUpNote: string | null;
-  interviews: Array<{ id: string; date: Date; time: string | null; type: InterviewType }>;
-  events: StatusHistoryEvent[];
-};
-type AnalyzedApplication = DashboardApplication & { history: ReturnType<typeof analyzeStatusHistory> };
-
-const eventSelection = {
-  id: true,
-  type: true,
-  fromStatus: true,
-  toStatus: true,
-  detail: true,
-  createdAt: true,
-} as const;
-
-const baseSelection = {
-  id: true,
-  company: true,
-  role: true,
-  status: true,
-  archived: true,
-  appliedDate: true,
-  followUpDate: true,
-  followUpNote: true,
-  interviews: { select: { id: true, date: true, time: true, type: true } },
-  events: { select: eventSelection },
-} as const;
-
 function roundPercentage(numerator: number, denominator: number) {
   return denominator === 0 ? 0 : Math.round((numerator / denominator) * 10_000) / 100;
 }
 
-function coverageFor(applications: AnalyzedApplication[]): HistoryCoverage {
-  const completeApplications = applications.filter((application) =>
-    application.history.complete,
-  ).length;
-  const denominator = applications.length;
-  return {
-    totalApplications: denominator,
-    completeApplications,
-    incompleteApplications: denominator - completeApplications,
-    percentageComplete: roundPercentage(completeApplications, denominator),
-    isComplete: completeApplications === denominator,
-  };
-}
-
-function rateFor(applications: AnalyzedApplication[], milestone: Status, historyCoverage: HistoryCoverage): RateMetric {
-  const numerator = applications.filter((application) =>
-    application.history.knownStatuses.has(milestone),
-  ).length;
-  return {
-    numerator,
-    denominator: applications.length,
-    percentage: roundPercentage(numerator, applications.length),
-    historyCoverage,
-  };
+/** Windowed history validation preserves typed transitions, timestamp ties, and incomplete legacy history. */
+async function historyMetrics(scope = Prisma.sql`1 = 1`) {
+  const [row] = await prisma.$queryRaw<Array<{ total: bigint; complete: bigint | null; interview: bigint | null; offer: bigint | null; rejected: bigint | null }>>(Prisma.sql`
+    WITH scoped AS (SELECT id, status FROM Application a WHERE ${scope}),
+    ordered AS (
+      SELECT e.*, ROW_NUMBER() OVER (PARTITION BY e.applicationId ORDER BY e.createdAt, e.id) AS position,
+        LAG(toStatus) OVER (PARTITION BY e.applicationId ORDER BY e.createdAt, e.id) AS previousStatus,
+        LAG(createdAt) OVER (PARTITION BY e.applicationId ORDER BY e.createdAt, e.id) AS previousTime,
+        ROW_NUMBER() OVER (PARTITION BY e.applicationId ORDER BY e.createdAt DESC, e.id DESC) AS reversePosition
+      FROM ApplicationEvent e JOIN scoped a ON a.id = e.applicationId WHERE e.type = 'STATUS_CHANGE'
+    ), history AS (
+      SELECT applicationId, COUNT(*) AS n,
+        SUM(CASE WHEN toStatus IS NULL OR fromStatus = toStatus OR previousTime = createdAt
+          OR (position = 1 AND fromStatus IS NOT NULL)
+          OR (position > 1 AND (fromStatus IS NULL OR fromStatus IS NOT previousStatus)) THEN 1 ELSE 0 END) AS invalid,
+        MAX(CASE WHEN reversePosition = 1 THEN toStatus END) AS finalStatus,
+        MAX(CASE WHEN toStatus IS NOT NULL AND fromStatus IS NOT toStatus AND (fromStatus = 'INTERVIEW' OR toStatus = 'INTERVIEW') THEN 1 ELSE 0 END) AS interview,
+        MAX(CASE WHEN toStatus IS NOT NULL AND fromStatus IS NOT toStatus AND (fromStatus = 'OFFER' OR toStatus = 'OFFER') THEN 1 ELSE 0 END) AS offer,
+        MAX(CASE WHEN toStatus IS NOT NULL AND fromStatus IS NOT toStatus AND (fromStatus = 'REJECTED' OR toStatus = 'REJECTED') THEN 1 ELSE 0 END) AS rejected
+      FROM ordered GROUP BY applicationId
+    )
+    SELECT COUNT(*) AS total,
+      SUM(CASE WHEN h.n > 0 AND h.invalid = 0 AND h.finalStatus = a.status THEN 1 ELSE 0 END) AS complete,
+      SUM(CASE WHEN a.status = 'INTERVIEW' OR h.interview = 1 THEN 1 ELSE 0 END) AS interview,
+      SUM(CASE WHEN a.status = 'OFFER' OR h.offer = 1 THEN 1 ELSE 0 END) AS offer,
+      SUM(CASE WHEN a.status = 'REJECTED' OR h.rejected = 1 THEN 1 ELSE 0 END) AS rejected
+    FROM scoped a LEFT JOIN history h ON h.applicationId = a.id
+  `);
+  const total = Number(row.total);
+  const complete = Number(row.complete ?? 0);
+  const coverage: HistoryCoverage = { totalApplications: total, completeApplications: complete,
+    incompleteApplications: total - complete, percentageComplete: roundPercentage(complete, total), isComplete: total === complete };
+  const rate = (value: bigint | null): RateMetric => ({ numerator: Number(value ?? 0), denominator: total,
+    percentage: roundPercentage(Number(value ?? 0), total), historyCoverage: coverage });
+  return { total, interview: rate(row.interview), offer: rate(row.offer), rejected: rate(row.rejected) };
 }
 
 function dateFromKey(key: string) {
@@ -142,72 +114,62 @@ function makeTrendBuckets(selection: AnalyticsSelection, startDate: string, endD
   return { granularity: "MONTH" as const, buckets };
 }
 
-async function loadApplications(where?: Prisma.ApplicationWhereInput): Promise<AnalyzedApplication[]> {
-  const applications = await prisma.application.findMany({
-    where,
-    select: baseSelection,
-  });
-  return applications.map((application) => ({
-    ...application,
-    history: analyzeStatusHistory(application.status, application.events),
-  }));
-}
+type StaleRow = { id: string; company: string; role: string; status: Status; archived: boolean;
+  appliedDate: Date; statusAt: Date | null; fromStatus: Status | null; lastInterview: Date | null; upcoming: bigint };
 
-/** Stale applications still on the board, or with `archived`, the archived ones that went stale the same way. */
-function staleApplications(applications: AnalyzedApplication[], today: string, timeZone: string, threshold: number, archived = false): StaleApplication[] {
-  const result: StaleApplication[] = [];
-  for (const application of applications) {
-    if (application.archived !== archived || !ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number])) continue;
-    const lastStatusEvent = application.history.latestStatusEvent;
-    if (!lastStatusEvent) continue;
-
-    // A booked interview means the application is moving, so it is not waiting on anything.
-    const interviewDates = application.interviews.map((interview) => dateKey(interview.date));
-    if (interviewDates.some((date) => date >= today)) continue;
-
-    const statusChangedOn = calendarDateInTimeZone(new Date(lastStatusEvent.createdAt), timeZone);
-    // An application that never changed status has waited since it was applied, even when it was entered later.
-    const appliedOn = dateKey(application.appliedDate);
-    const statusSince = lastStatusEvent.fromStatus === null && appliedOn < statusChangedOn ? "APPLIED_DATE" : "STATUS_CHANGE";
-    const statusSinceOn = statusSince === "APPLIED_DATE" ? appliedOn : statusChangedOn;
-    // A past interview is activity too, so the wait restarts from the latest one.
-    const lastInterviewOn = interviewDates.reduce((latest, date) => (date > latest ? date : latest), "");
-    const staleSince = lastInterviewOn > statusSinceOn ? "INTERVIEW" : statusSince;
-    const staleDays = Math.max(0, daysBetween(staleSince === "INTERVIEW" ? lastInterviewOn : statusSinceOn, today));
-    if (staleDays < threshold) continue;
-    const severity = staleDays >= STALE_CRITICAL_DAYS ? "CRITICAL" : staleDays >= STALE_HIGH_DAYS ? "HIGH" : "MEDIUM";
-    result.push({
-      id: application.id,
-      role: application.role,
-      company: application.company,
-      status: application.status,
-      lastStatusChangedAt: new Date(lastStatusEvent.createdAt).toISOString(),
-      staleSince,
-      staleDays,
-      severity,
-    });
+async function staleData(today: string, timeZone: string, threshold: number) {
+  const active: StaleApplication[] = [];
+  const archived: StaleApplication[] = [];
+  let applicationsInScope = 0;
+  let withReliableStatusTimestamp = 0;
+  let after = "";
+  for (;;) {
+    // Only the latest timestamp group and interview extrema are needed; never load whole child arrays.
+    const page = await prisma.$queryRaw<StaleRow[]>(Prisma.sql`
+      SELECT a.id, a.company, a.role, a.status, a.archived, a.appliedDate, e.createdAt AS statusAt, e.fromStatus,
+        li.date AS lastInterview,
+        (SELECT COUNT(*) FROM Interview i WHERE i.applicationId = a.id AND i.date >= ${dateFromKey(today)}) AS upcoming
+      FROM Application a LEFT JOIN ApplicationEvent e ON e.id = (
+        SELECT x.id FROM ApplicationEvent x WHERE x.applicationId = a.id AND x.type = 'STATUS_CHANGE'
+          AND x.toStatus = a.status
+          AND x.createdAt = (SELECT MAX(createdAt) FROM ApplicationEvent WHERE applicationId = a.id AND type = 'STATUS_CHANGE')
+          AND NOT EXISTS (SELECT 1 FROM ApplicationEvent bad WHERE bad.applicationId = a.id AND bad.type = 'STATUS_CHANGE'
+            AND bad.createdAt = x.createdAt AND (bad.toStatus IS NULL OR bad.fromStatus = bad.toStatus))
+        ORDER BY x.id LIMIT 1
+      )
+      -- A joined column keeps Prisma's DateTime decoding; a bare MAX() expression does not.
+      LEFT JOIN Interview li ON li.id = (
+        SELECT i.id FROM Interview i WHERE i.applicationId = a.id ORDER BY i.date DESC, i.id DESC LIMIT 1
+      )
+      WHERE a.id > ${after} AND a.status IN ('APPLIED', 'ONLINE_ASSESSMENT', 'INTERVIEW') ORDER BY a.id LIMIT 200
+    `);
+    for (const application of page) {
+      if (!application.archived) {
+        applicationsInScope++;
+        if (application.statusAt) withReliableStatusTimestamp++;
+      }
+      if (!application.statusAt || Number(application.upcoming) > 0) continue;
+      const statusChangedOn = calendarDateInTimeZone(new Date(application.statusAt), timeZone);
+      const appliedOn = dateKey(application.appliedDate);
+      const statusSince = application.fromStatus === null && appliedOn < statusChangedOn ? "APPLIED_DATE" : "STATUS_CHANGE";
+      const statusSinceOn = statusSince === "APPLIED_DATE" ? appliedOn : statusChangedOn;
+      const lastInterviewOn = application.lastInterview ? dateKey(new Date(application.lastInterview)) : "";
+      const staleSince = lastInterviewOn > statusSinceOn ? "INTERVIEW" : statusSince;
+      const staleDays = Math.max(0, daysBetween(staleSince === "INTERVIEW" ? lastInterviewOn : statusSinceOn, today));
+      if (staleDays < threshold) continue;
+      const severity = staleDays >= STALE_CRITICAL_DAYS ? "CRITICAL" : staleDays >= STALE_HIGH_DAYS ? "HIGH" : "MEDIUM";
+      (application.archived ? archived : active).push({ id: application.id, company: application.company, role: application.role,
+        status: application.status, lastStatusChangedAt: new Date(application.statusAt).toISOString(), staleSince, staleDays, severity });
+    }
+    if (page.length < 200) break;
+    after = page.at(-1)!.id;
   }
-  return result.sort((left, right) => {
-    const severityOrder = STALE_SEVERITY_ORDER.indexOf(left.severity) - STALE_SEVERITY_ORDER.indexOf(right.severity);
-    return severityOrder || right.staleDays - left.staleDays
-      || left.lastStatusChangedAt.localeCompare(right.lastStatusChangedAt) || left.id.localeCompare(right.id);
-  });
-}
-
-function staleTimingCoverage(applications: AnalyzedApplication[]): StaleTimingCoverage {
-  const eligibleApplications = applications.filter((application) =>
-    !application.archived && ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number]),
-  );
-  const withReliableStatusTimestamp = eligibleApplications.filter((application) =>
-    application.history.latestStatusEvent !== null,
-  ).length;
-  const withoutReliableStatusTimestamp = eligibleApplications.length - withReliableStatusTimestamp;
-  return {
-    applicationsInScope: eligibleApplications.length,
-    withReliableStatusTimestamp,
-    withoutReliableStatusTimestamp,
-    isComplete: withoutReliableStatusTimestamp === 0,
-  };
+  const sort = (rows: StaleApplication[]) => rows.sort((a, b) => STALE_SEVERITY_ORDER.indexOf(a.severity) - STALE_SEVERITY_ORDER.indexOf(b.severity)
+    || b.staleDays - a.staleDays || a.lastStatusChangedAt.localeCompare(b.lastStatusChangedAt) || a.id.localeCompare(b.id));
+  const timingCoverage: StaleTimingCoverage = { applicationsInScope, withReliableStatusTimestamp,
+    withoutReliableStatusTimestamp: applicationsInScope - withReliableStatusTimestamp,
+    isComplete: applicationsInScope === withReliableStatusTimestamp };
+  return { active: sort(active), archived: sort(archived), timingCoverage };
 }
 
 function staleGroups(applications: StaleApplication[]) {
@@ -227,107 +189,56 @@ function staleGroups(applications: StaleApplication[]) {
   };
 }
 
-/** `now` is the user's local "YYYY-MM-DDTHH:MM"; see `isUpcomingInterview`. */
-export async function getDashboardOverview(now: string, timeZone: string, staleApplicationThreshold = 15): Promise<DashboardOverviewData> {
+/** `now` is the user's local calendar date and time. Follow-ups use bounded API pages. */
+export async function getDashboardOverview(now: string, timeZone: string, staleApplicationThreshold = 15, offset = 0): Promise<DashboardOverviewData> {
   const today = now.slice(0, 10);
-  const applications = await loadApplications();
-  const historyCoverage = coverageFor(applications);
-  // Each interview round counts separately, for applications still in progress.
-  const upcoming = applications
-    .filter(isInProgressApplication)
-    .flatMap((application) => application.interviews
-      .filter((interview) => isUpcomingInterview({ date: dateKey(interview.date), time: interview.time }, now))
-      .map((interview) => ({ application, interview, date: dateKey(interview.date) })))
-    .sort((left, right) =>
-      left.date.localeCompare(right.date) || (left.interview.time ?? "").localeCompare(right.interview.time ?? "") || left.interview.id.localeCompare(right.interview.id),
-    );
-  const followUps = applications
-    .filter((application) => !application.archived && application.followUpDate !== null && dateKey(application.followUpDate) <= today)
-    .map((application) => ({
-      id: application.id,
-      role: application.role,
-      company: application.company,
-      status: application.status,
-      followUpDate: dateKey(application.followUpDate!),
-      followUpNote: application.followUpNote,
-      daysOverdue: daysBetween(dateKey(application.followUpDate!), today),
-    }))
-    .sort((left, right) => left.followUpDate.localeCompare(right.followUpDate) || left.id.localeCompare(right.id));
-  const stale = staleApplications(applications, today, timeZone, staleApplicationThreshold);
-
-  return {
-    totalApplications: applications.length,
-    activePipeline: applications.filter((application) =>
-      !application.archived && ACTIVE_STATUSES.includes(application.status as typeof ACTIVE_STATUSES[number]),
-    ).length,
-    upcomingInterviews: {
-      count: upcoming.length,
-      items: upcoming.slice(0, 3).map(({ application, interview, date }) => ({
-        id: interview.id,
-        applicationId: application.id,
-        role: application.role,
-        company: application.company,
-        interviewDate: date,
-        time: interview.time,
-        type: interview.type,
-        daysUntilInterview: daysBetween(today, date),
-      })),
-    },
-    followUps,
-    interviewRate: rateFor(applications, Status.INTERVIEW, historyCoverage),
-    offerRate: rateFor(applications, Status.OFFER, historyCoverage),
-    staleApplications: stale.slice(0, 3),
-    staleTimingCoverage: staleTimingCoverage(applications),
+  const metrics = await historyMetrics();
+  const activePipeline = await prisma.application.count({ where: { archived: false, status: { in: [...ACTIVE_STATUSES] } } });
+  const minute = Number(now.slice(11, 13)) * 60 + Number(now.slice(14, 16));
+  const upcomingWhere: Prisma.InterviewWhereInput = {
+    application: { archived: false, status: { in: [...ACTIVE_STATUSES] } },
+    OR: [{ date: { gt: dateFromKey(today) } }, { date: dateFromKey(today), OR: [{ time: null }, ...(minute < 60 ? [{ time: { not: null } }] : [{ time: { gt: `${String(Math.floor((minute - 60) / 60)).padStart(2, "0")}:${String((minute - 60) % 60).padStart(2, "0")}` } }])] }],
   };
+  const count = await prisma.interview.count({ where: upcomingWhere });
+  const upcoming = await prisma.interview.findMany({ where: upcomingWhere, orderBy: [{ date: "asc" }, { time: "asc" }, { id: "asc" }], take: 3,
+    select: { id: true, date: true, time: true, type: true, application: { select: { id: true, role: true, company: true } } } });
+  const followUps = await prisma.application.findMany({ where: { archived: false, followUpDate: { lte: dateFromKey(today) } },
+    orderBy: [{ followUpDate: "asc" }, { id: "asc" }], skip: offset, take: 200,
+    select: { id: true, role: true, company: true, status: true, followUpDate: true, followUpNote: true } });
+  const stale = await staleData(today, timeZone, staleApplicationThreshold);
+  return { totalApplications: metrics.total, activePipeline,
+    upcomingInterviews: { count, items: upcoming.map(({ application, ...interview }) => ({ id: interview.id, applicationId: application.id,
+      role: application.role, company: application.company, interviewDate: dateKey(interview.date), time: interview.time,
+      type: interview.type, daysUntilInterview: daysBetween(today, dateKey(interview.date)) })) },
+    followUps: followUps.map((application) => ({ ...application, followUpDate: dateKey(application.followUpDate!), daysOverdue: daysBetween(dateKey(application.followUpDate!), today) })),
+    interviewRate: metrics.interview, offerRate: metrics.offer, staleApplications: stale.active.slice(0, 3), staleTimingCoverage: stale.timingCoverage };
 }
 
-export async function getStaleApplications(today: string, timeZone: string, staleApplicationThreshold = 15): Promise<StaleApplicationsData> {
-  const applications = await loadApplications({
-    status: { in: [...ACTIVE_STATUSES] },
-  });
-  return {
-    ...staleGroups(staleApplications(applications, today, timeZone, staleApplicationThreshold)),
-    archived: staleApplications(applications, today, timeZone, staleApplicationThreshold, true),
-    timingCoverage: staleTimingCoverage(applications),
-  };
+export async function getStaleApplications(today: string, timeZone: string, staleApplicationThreshold = 15, offset = 0): Promise<StaleApplicationsData> {
+  const stale = await staleData(today, timeZone, staleApplicationThreshold);
+  const groups = staleGroups(stale.active);
+  return { ...groups, applicationsBySeverity: {
+    CRITICAL: groups.applicationsBySeverity.CRITICAL.slice(offset, offset + 200),
+    HIGH: groups.applicationsBySeverity.HIGH.slice(offset, offset + 200),
+    MEDIUM: groups.applicationsBySeverity.MEDIUM.slice(offset, offset + 200),
+  }, archived: stale.archived.slice(offset, offset + 200), timingCoverage: stale.timingCoverage };
 }
 
-/** `firstDay` starts the weekly bars of month periods, counted from Sunday (0); Monday by default. */
 export async function getDashboardAnalytics(selection: AnalyticsSelection, today?: string, firstDay = 1): Promise<DashboardAnalyticsData> {
   const range = analyticsPeriodRange(selection, today);
-  const applications = await loadApplications({
-    appliedDate: range.endDate === "9999-12-31"
-      ? { gte: dateFromKey(range.startDate), lte: new Date(Date.UTC(9999, 11, 31, 23, 59, 59, 999)) }
-      : { gte: dateFromKey(range.startDate), lt: dayAfterKey(range.endDate) },
-  });
-  const historyCoverage = coverageFor(applications);
+  const end = range.endDate === "9999-12-31" ? new Date(Date.UTC(9999, 11, 31, 23, 59, 59, 999)) : dayAfterKey(range.endDate);
+  const appliedDate = range.endDate === "9999-12-31" ? { gte: dateFromKey(range.startDate), lte: end } : { gte: dateFromKey(range.startDate), lt: end };
+  const metrics = await historyMetrics(Prisma.sql`a.appliedDate >= ${dateFromKey(range.startDate)} AND a.appliedDate ${range.endDate === "9999-12-31" ? Prisma.sql`<=` : Prisma.sql`<`} ${end}`);
   const trend = makeTrendBuckets(selection, range.startDate, range.endDate, firstDay);
-  const bucketsByKey = new Map(trend.buckets.map((bucket) => [bucket.startDate, bucket]));
-  const statusBreakdown: Record<Status, number> = {
-    APPLIED: 0,
-    ONLINE_ASSESSMENT: 0,
-    INTERVIEW: 0,
-    OFFER: 0,
-    REJECTED: 0,
-  };
-
-  for (const application of applications) {
-    statusBreakdown[application.status] += 1;
-    const appliedDate = dateKey(application.appliedDate);
-    const bucket = trend.granularity === "WEEK"
-      ? trend.buckets.find((item) => appliedDate >= item.startDate && appliedDate <= item.endDate)
-      : bucketsByKey.get(`${appliedDate.slice(0, 7)}-01`);
-    if (bucket) bucket.count += 1;
+  const statusBreakdown: Record<Status, number> = { APPLIED: 0, ONLINE_ASSESSMENT: 0, INTERVIEW: 0, OFFER: 0, REJECTED: 0 };
+  const grouped = await prisma.application.groupBy({ by: ["status"], where: { appliedDate }, _count: true });
+  for (const row of grouped) statusBreakdown[row.status] = row._count;
+  for (const bucket of trend.buckets) {
+    const start = bucket.startDate < range.startDate ? range.startDate : bucket.startDate;
+    const finish = bucket.endDate > range.endDate ? range.endDate : bucket.endDate;
+    bucket.count = await prisma.application.count({ where: { appliedDate: finish === "9999-12-31"
+      ? { gte: dateFromKey(start), lte: end } : { gte: dateFromKey(start), lt: dayAfterKey(finish) } } });
   }
-
-  return {
-    period: selection.period,
-    range,
-    applications: applications.length,
-    interviewRate: rateFor(applications, Status.INTERVIEW, historyCoverage),
-    offerRate: rateFor(applications, Status.OFFER, historyCoverage),
-    rejectionRate: rateFor(applications, Status.REJECTED, historyCoverage),
-    statusBreakdown,
-    applicationsTrend: trend,
-  };
+  return { period: selection.period, range, applications: metrics.total, interviewRate: metrics.interview,
+    offerRate: metrics.offer, rejectionRate: metrics.rejected, statusBreakdown, applicationsTrend: trend };
 }

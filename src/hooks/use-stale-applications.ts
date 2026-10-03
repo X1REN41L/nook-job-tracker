@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { fetchStaleApplications } from "@/lib/application-pages";
 import { useSettings } from "@/hooks/use-settings";
 import { currentBrowserTimeZone } from "@/lib/application-date";
 import type { StaleApplicationsData } from "@/types/dashboard";
@@ -16,11 +17,7 @@ export function useStaleApplications(today: string, refreshKey: unknown, enabled
     if (!today || !enabled) return;
     const controller = new AbortController();
     const query = new URLSearchParams({ today, timeZone: currentBrowserTimeZone(), staleApplicationThreshold: String(staleApplicationThreshold) });
-    fetch(`/api/dashboard/stale?${query}`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Stale applications request failed");
-        return response.json() as Promise<StaleApplicationsData>;
-      })
+    fetchStaleApplications(query, controller.signal)
       .then((data) => {
         setResult({ today, threshold: staleApplicationThreshold, data });
         setFailedToday(null);

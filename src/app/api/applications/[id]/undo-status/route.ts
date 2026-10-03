@@ -72,6 +72,6 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     throw new Error("Status undo retry limit reached");
   } catch (error) {
-    return apiError(error);
+    return apiError(error, "applications/item/undo-status");
   }
 }

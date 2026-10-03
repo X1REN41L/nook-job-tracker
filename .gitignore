@@ -47,6 +47,9 @@ prisma/migrations/
 *.db-journal
 *.db-wal
 *.db-shm
+# setup state for an unfinished legacy conversion: saved interview dates and the rollback-copy record
+prisma/interview-dates-to-copy.json
+prisma/setup-rollback.json
 
 # editor swap / IDE files
 *.swp

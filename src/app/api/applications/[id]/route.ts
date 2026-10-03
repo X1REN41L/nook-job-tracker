@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { apiError, isDatabaseContention, parseRequest } from "@/lib/api";
-import { applicationInclude, type StoredApplication } from "@/lib/application-record";
-import { applicationEditSchema, applicationMutationSchema } from "@/lib/application-schema";
+import { applicationInclude, applicationSnapshotInclude, type StoredApplication } from "@/lib/application-record";
+import { applicationEditSchema, applicationMutationSchema, revisionOnlySchema } from "@/lib/application-schema";
 import { followUpEventDetail } from "@/lib/follow-up-event";
 import { checkMutationRequest, parseMutationJson } from "@/lib/mutation-request";
 import { prisma, serializeWrite } from "@/lib/prisma";
@@ -18,13 +18,13 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const { id } = await params;
     const application = await prisma.application.findUnique({
       where: { id },
-      include: { ...applicationInclude, events: { select: { id: true, type: true, fromStatus: true, toStatus: true, detail: true, createdAt: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+      include: { ...applicationInclude, events: { select: { id: true, type: true, fromStatus: true, toStatus: true, detail: true, createdAt: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 200 } },
     });
     if (!application) return NextResponse.json({ error: "Application not found" }, { status: 404 });
     const { events, ...record } = application;
     return NextResponse.json({ application: record, events });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, "applications/item");
   }
 }
 
@@ -39,7 +39,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
     if (result.conflict) return revisionConflict(result.application);
     return NextResponse.json({ application: result.application });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, "applications/item");
   }
 }
 
@@ -62,7 +62,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     if (result.conflict) return revisionConflict(result.application);
     return NextResponse.json({ application: result.application, latestStatusEventId: result.latestStatusEventId ?? null });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, "applications/item");
   }
 }
 
@@ -142,26 +142,28 @@ export async function DELETE(request: Request, { params }: RouteContext) {
   try {
     const checked = await checkMutationRequest(request);
     if (!checked.ok) return checked.response;
+    const { revision } = parseRequest(revisionOnlySchema, parseMutationJson(checked.body));
     await cleanupExpiredUndoSnapshots();
     const { id } = await params;
-    if (new URL(request.url).searchParams.get("undoable") === "1") {
-      const token = randomUUID();
-      const expiresAt = new Date(Date.now() + UNDO_SNAPSHOT_TTL_MS);
-      const deleted = await serializeWrite(() => prisma.$transaction(async (transaction) => {
-        const application = await transaction.application.findUnique({ where: { id }, include: { events: true, interviews: true, contacts: true } });
-        if (!application) return null;
+    const undoable = new URL(request.url).searchParams.get("undoable") === "1";
+    const token = randomUUID();
+    const expiresAt = new Date(Date.now() + UNDO_SNAPSHOT_TTL_MS);
+    const result = await serializeWrite(() => prisma.$transaction(async (transaction) => {
+      const application = await transaction.application.findUnique({ where: { id }, include: { ...applicationSnapshotInclude, events: true } });
+      if (!application) return null;
+      if (application.revision !== revision) return { application, conflict: true as const };
+      if (undoable) {
         await transaction.undoSnapshot.create({ data: { token, applicationId: id, payload: JSON.stringify(application), expiresAt } });
-        await transaction.application.delete({ where: { id } });
-        return true;
-      }));
-      if (!deleted) return NextResponse.json({ error: "Application not found" }, { status: 404 });
-      return NextResponse.json({ token, expiresAt: expiresAt.toISOString() });
-    }
-    // Plain DELETE is retained for callers that need permanent deletion; the UI uses ?undoable=1.
-    const result = await serializeWrite(() => prisma.application.deleteMany({ where: { id } }));
-    if (!result.count) return NextResponse.json({ error: "Application not found" }, { status: 404 });
+      }
+      await transaction.application.delete({ where: { id, revision } });
+      if (!undoable) await transaction.undoSnapshot.deleteMany({ where: { applicationId: id } });
+      return { conflict: false as const };
+    }));
+    if (!result) return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    if (result.conflict) return revisionConflict((await prisma.application.findUniqueOrThrow({ where: { id }, include: applicationInclude })));
+    if (undoable) return NextResponse.json({ token, expiresAt: expiresAt.toISOString() });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, "applications/item");
   }
 }

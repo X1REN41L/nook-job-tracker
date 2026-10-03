@@ -43,9 +43,9 @@ import { BOARDS, BOARD_STATUSES, boardLabel } from "@/lib/board-preferences";
 import { isInProgressApplication } from "@/lib/status-values";
 import { applicationApiPath } from "@/lib/application-api-path";
 import { applicationInputSchema, interviewDateSchema } from "@/lib/application-schema";
-import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { findPossibleDuplicate, type DuplicateMatch } from "@/lib/duplicate-match";
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";
+import { fetchApplicationSummaries, readApplicationResponse } from "@/lib/application-pages";
 import { getInterviewListItems, getUpcomingInterviewCount, hasUpcomingInterview } from "@/lib/interviews";
 import type { ApplicationRecord, ApplicationSummary, JobFormState } from "@/types/application";
 import type { StaleApplication } from "@/types/dashboard";
@@ -148,7 +148,6 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   if (toast) lastToastRef.current = toast;
   const visibleToast = toast ?? lastToastRef.current;
   const { importProgress, hasPendingImport, exportApplications, importApplications, resumeImportAllowDuplicate, cancelImport, abandonImport } = useApplicationBackup({
-    applications,
     insertApplications,
     onDuplicate: (candidate, match) => setPendingDuplicate({ kind: "add", candidate, match }),
     showToast,
@@ -309,18 +308,18 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     saveSettings((current) => ({ archivedExpanded: !current.archivedExpanded }));
   }
 
-  async function insertApplications(backup: BackupSnapshot) {
+  async function insertApplications(token: string) {
     const response = await fetch("/api/applications/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(backup),
+      body: JSON.stringify({ token }),
     });
-    const body = await response.json();
+    const body = await readApplicationResponse(response);
     if (!response.ok) throw new Error(body.error ?? "Could not import the applications");
-    const imported = body.applications as ApplicationRecord[];
     setSettingsState({ settings: body.settings, revision: body.settingsRevision });
-    reconcileApplications((current) => [...current, ...imported].sort(compareApplications));
-    return { created: imported, skippedIds: body.skippedIds as string[] };
+    const refreshed = await fetchApplicationSummaries();
+    reconcileApplications(() => refreshed.sort(compareApplications));
+    return { created: body.created as number, skipped: body.skipped as number };
   }
 
   async function deleteAllApplicationData() {
@@ -330,7 +329,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
-      const body = await response.json();
+      const body = await readApplicationResponse(response);
       if (!response.ok) throw new Error(body.error ?? "Could not delete application data");
 
       reconcileApplications(() => []);
@@ -390,7 +389,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(candidate),
       });
-      const body = await response.json();
+      const body = await readApplicationResponse(response);
       if (!response.ok) throw new Error(body.error ?? "Could not save the application");
       reconcileApplications((current) => [body.application, ...current].sort(compareApplications));
       showToast(`Added ${body.application.company}`);
@@ -439,13 +438,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
   function requestDelete(application: ApplicationSummary, trigger: HTMLElement | null) {
     deleteTriggerRef.current = trigger;
-    setPendingDelete([application]);
+    setPendingDelete([{ ...application }]);
   }
 
   function requestBulkDelete(targets: ApplicationSummary[], trigger: HTMLElement | null) {
     if (!targets.length) return;
     deleteTriggerRef.current = trigger;
-    setPendingDelete(targets);
+    setPendingDelete(targets.map((application) => ({ ...application })));
   }
 
   async function confirmDelete() {
@@ -461,8 +460,15 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       const response = await fetch(`${applicationApiPath(deletedApplication.id)}?undoable=1`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision: deletedApplication.revision }),
       });
-      const body = await response.json();
+      const body = await readApplicationResponse(response);
+      if (response.status === 409 && body.application) {
+        replaceApplication(body.application as ApplicationRecord);
+        setPendingDelete(null);
+        setError("This application changed since confirmation. The latest saved version has been loaded; review it and confirm deletion again.");
+        return;
+      }
       if (!response.ok) throw new Error(body.error ?? "Could not delete the application");
       reconcileApplications((current) => current.filter((item) => item.id !== deletedApplication.id));
       if (detailId === deletedApplication.id) setDetailId(null);
@@ -495,9 +501,15 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       const response = await fetch("/api/applications/bulk-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: targets.map(({ id }) => id) }),
+        body: JSON.stringify({ applications: targets.map(({ id, revision }) => ({ id, revision })) }),
       });
-      const body = await response.json();
+      const body = await readApplicationResponse(response);
+      if (response.status === 409 && Array.isArray(body.applications)) {
+        for (const application of body.applications) replaceApplication(application as ApplicationRecord);
+        setPendingDelete(null);
+        setError("Applications changed since confirmation. The latest saved versions have been loaded; review them and confirm deletion again. Nothing was deleted.");
+        return;
+      }
       if (!response.ok) throw new Error(body.error ?? "Could not delete the applications");
       const deletedIds = new Set<string>(body.deletedIds);
       reconcileApplications((current) => current.filter((item) => !deletedIds.has(item.id)));
@@ -553,7 +565,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
               }),
             }),
       });
-      const body = await response.json();
+      const body = await readApplicationResponse(response);
       if (response.status === 409 && body.application) {
         replaceApplication(body.application as ApplicationRecord);
         // Undo (offerUndo false) and bulk changes report the conflict themselves.
@@ -674,7 +686,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...change.fields, revision: application.revision }),
         });
-      const body = await response.json();
+      const body = await readApplicationResponse(response);
       if (response.status === 409 && body.application) {
         replaceApplication(body.application as ApplicationRecord);
         return "This application changed elsewhere. The latest version is loaded; review it and try again.";
@@ -708,7 +720,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ revision: pendingInterviewDate.revision, date: interviewDateDraft, type: interviewTypeDraft }),
         });
-      const body = await response.json();
+      const body = await readApplicationResponse(response);
       if (response.status === 409 && body.application) {
         const latest = body.application as ApplicationRecord;
         replaceApplication(latest);
@@ -764,7 +776,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
             ...(undo.promptInterviewId && { promptInterviewId: undo.promptInterviewId }),
           }),
         });
-        const body = await response.json();
+        const body = await readApplicationResponse(response);
         if (response.status === 409 && body.application) {
           settled = true;
           replaceApplication(body.application as ApplicationRecord);
@@ -821,7 +833,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token: undo.token }),
         });
-      const body = await response.json();
+      const body = await readApplicationResponse(response);
       // Nothing is restored on failure, so Undo stays offered for another try until the window ends.
       if (!response.ok) throw new Error(body.error ?? (undo.kind === "delete-batch" ? "Could not restore the applications" : "Could not restore the application"));
       restored = undo.kind === "delete-batch" ? body.applications as ApplicationRecord[] : [body.application as ApplicationRecord];

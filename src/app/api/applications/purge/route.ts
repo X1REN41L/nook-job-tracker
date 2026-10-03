@@ -20,6 +20,6 @@ export async function DELETE(request: Request) {
     }));
     return NextResponse.json({ success: true });
   } catch (error) {
-    return apiError(error);
+    return apiError(error, "applications/purge");
   }
 }
