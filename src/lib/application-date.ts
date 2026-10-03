@@ -33,7 +33,7 @@ export function formatCalendarDate(value: string, { currentYear = currentLocalDa
   }).format(date);
 }
 
-export function calendarDaysSince(value: string, today: string) {
+function calendarDaysSince(value: string, today: string) {
   return Math.round((Date.parse(`${today.slice(0, 10)}T00:00:00.000Z`) - Date.parse(`${value.slice(0, 10)}T00:00:00.000Z`)) / 86_400_000);
 }
 

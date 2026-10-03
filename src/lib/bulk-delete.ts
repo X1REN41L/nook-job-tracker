@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /** The most applications one bulk delete or restore handles; more than the table ever selects at once in practice. */
-export const MAX_BULK_APPLICATIONS = 1_000;
+const MAX_BULK_APPLICATIONS = 1_000;
 
-export const bulkApplicationIdsSchema = z.array(z.string().min(1).max(64)).min(1).max(MAX_BULK_APPLICATIONS)
+const bulkApplicationIdsSchema = z.array(z.string().min(1).max(64)).min(1).max(MAX_BULK_APPLICATIONS)
   .refine((ids) => new Set(ids).size === ids.length, "Application IDs must be unique");
 
 export const bulkDeleteRequestSchema = z.object({ ids: bulkApplicationIdsSchema }).strict();

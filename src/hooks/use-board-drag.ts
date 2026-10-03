@@ -23,7 +23,7 @@ import { BOARDS } from "@/lib/board-preferences";
 export const ARCHIVED_DROP_ID = "archived";
 export const SIDEBAR_EDGE_DROP_ID = "sidebar-edge";
 // Touch drags wait briefly so scrolling the board and sidebar still works.
-export const TOUCH_ACTIVATION_CONSTRAINT = { delay: 200, tolerance: 6 };
+const TOUCH_ACTIVATION_CONSTRAINT = { delay: 200, tolerance: 6 };
 const SIDEBAR_EDGE_DWELL_MS = 450;
 type DragSource = "board" | "archived";
 

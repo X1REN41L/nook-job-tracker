@@ -1,6 +1,6 @@
 import { EventType, type Status } from "@prisma/client";
 
-export type ParsedStatusTransition = {
+type ParsedStatusTransition = {
   fromStatus: Status | null;
   toStatus: Status;
 };
@@ -23,7 +23,7 @@ export function statusTransitionDetail(fromStatus: Status | null, toStatus: Stat
   return `${fromStatus ?? "null"} → ${toStatus}`;
 }
 
-export type StatusEventDeletion = {
+type StatusEventDeletion = {
   deleteIds: string[];
   update: { id: string; fromStatus: Status; detail: string } | null;
   status: Status;

@@ -4,12 +4,12 @@ import { useEffect, useRef } from "react";
 
 import { matchDashboardShortcut, shortcutDestination, startsShortcutSequence } from "@/lib/keyboard-shortcuts";
 import type { ApplicationPageName } from "@/types/navigation";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 
 type DashboardShortcutOptions = {
   isMac: boolean;
   page: ApplicationPageName;
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   isModalOpen: boolean;
   hasPendingDuplicate: boolean;
   hasPendingDelete: boolean;
@@ -31,8 +31,8 @@ type DashboardShortcutOptions = {
   onNavigate: (path: string) => void;
   onMoveApplicationFocus: (direction: "up" | "down" | "left" | "right") => boolean;
   onSwitchInterviewTab: (tab: "upcoming" | "past") => boolean;
-  onArchiveFocused: (application: ApplicationRecord) => void;
-  onDeleteFocused: (application: ApplicationRecord, focused: HTMLElement | null) => void;
+  onArchiveFocused: (application: ApplicationSummary) => void;
+  onDeleteFocused: (application: ApplicationSummary, focused: HTMLElement | null) => void;
 };
 
 export function useDashboardShortcuts({

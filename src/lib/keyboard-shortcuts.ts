@@ -16,7 +16,7 @@ type ShortcutBinding =
   | { kind: "sequence"; keys: readonly [string, string] };
 
 export const shortcutSections = ["General", "Go to", "Job Board", "Interviews"] as const;
-export type ShortcutSection = (typeof shortcutSections)[number];
+type ShortcutSection = (typeof shortcutSections)[number];
 
 type ShortcutDefinition = {
   id: string;

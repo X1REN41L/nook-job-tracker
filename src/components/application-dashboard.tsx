@@ -47,7 +47,7 @@ import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { findPossibleDuplicate, type DuplicateMatch } from "@/lib/duplicate-match";
 import { isMacPlatform } from "@/lib/keyboard-shortcuts";
 import { getInterviewListItems, getUpcomingInterviewCount, hasUpcomingInterview } from "@/lib/interviews";
-import type { ApplicationRecord, JobFormState } from "@/types/application";
+import type { ApplicationRecord, ApplicationSummary, JobFormState } from "@/types/application";
 import type { StaleApplication } from "@/types/dashboard";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
@@ -66,8 +66,8 @@ type MoveResult = "moved" | "unchanged" | "busy" | "conflict" | "failed";
 // A possible duplicate found while adding (or importing) a job, or while editing an application's details.
 // A details edit waits on `resolve` for the choice to save anyway.
 type PendingDuplicate =
-  | { kind: "add"; candidate: JobFormState; match: DuplicateMatch<ApplicationRecord> }
-  | { kind: "details"; match: DuplicateMatch<ApplicationRecord>; resolve: (saveAnyway: boolean) => void };
+  | { kind: "add"; candidate: JobFormState; match: DuplicateMatch<ApplicationSummary> }
+  | { kind: "details"; match: DuplicateMatch<ApplicationSummary>; resolve: (saveAnyway: boolean) => void };
 
 function subscribeToSidebarPreference(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
@@ -96,7 +96,7 @@ function getServerLocalDate() {
 }
 
 export function ApplicationDashboard({ initialApplications, page, dashboardSection = "overview", tableFilters = DEFAULT_APPLICATION_FILTERS }: {
-  initialApplications: ApplicationRecord[];
+  initialApplications: ApplicationSummary[];
   page: ApplicationPageName;
   dashboardSection?: DashboardSection;
   tableFilters?: ApplicationFilters;
@@ -105,11 +105,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   const boardScrollRef = useScrollbarActivity<HTMLElement>();
   const settings = useSettings();
   const [applications, setApplications] = useState(initialApplications);
+  // The latest full record a save returned, so the details panel shows its notes and contacts without reloading.
+  const [latestRecord, setLatestRecord] = useState<ApplicationRecord | null>(null);
   const [form, setForm] = useState<JobFormState>(blankForm);
   const [isModalOpen, setIsModalOpen] = useState(false);
   // One application from a card or the details panel, or several selected in the table.
-  const [pendingDelete, setPendingDelete] = useState<ApplicationRecord[] | null>(null);
-  const [pendingInterviewDate, setPendingInterviewDate] = useState<ApplicationRecord | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ApplicationSummary[] | null>(null);
+  const [pendingInterviewDate, setPendingInterviewDate] = useState<ApplicationSummary | null>(null);
   const [interviewDateDraft, setInterviewDateDraft] = useState("");
   const [interviewTypeDraft, setInterviewTypeDraft] = useState<InterviewType>(InterviewType.OTHER);
   const [interviewDateError, setInterviewDateError] = useState("");
@@ -179,9 +181,15 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     setPendingDelete(null);
   }, []);
 
-  function reconcileApplications(update: (current: ApplicationRecord[]) => ApplicationRecord[]) {
+  function reconcileApplications(update: (current: ApplicationSummary[]) => ApplicationSummary[]) {
     setApplications(update);
     setDataRevision((revision) => revision + 1);
+  }
+
+  /** Shows the server's saved version of one application in place of the one on screen. */
+  function replaceApplication(record: ApplicationRecord) {
+    reconcileApplications((current) => current.map((item) => item.id === record.id ? record : item));
+    setLatestRecord(record);
   }
 
   function beginMove(applicationId: string) {
@@ -354,7 +362,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   function resetForm() { setForm(blankForm()); setPendingDuplicate(null); setFormError(""); }
   function openAddModal() { resetForm(); setIsModalOpen(true); }
   function closeModal() { setIsModalOpen(false); resetForm(); }
-  function openDetail(application: ApplicationRecord) {
+  function openDetail(application: ApplicationSummary) {
     setDetailId(application.id);
   }
 
@@ -429,12 +437,12 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     openDetail(existing);
   }
 
-  function requestDelete(application: ApplicationRecord, trigger: HTMLElement | null) {
+  function requestDelete(application: ApplicationSummary, trigger: HTMLElement | null) {
     deleteTriggerRef.current = trigger;
     setPendingDelete([application]);
   }
 
-  function requestBulkDelete(targets: ApplicationRecord[], trigger: HTMLElement | null) {
+  function requestBulkDelete(targets: ApplicationSummary[], trigger: HTMLElement | null) {
     if (!targets.length) return;
     deleteTriggerRef.current = trigger;
     setPendingDelete(targets);
@@ -475,7 +483,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }
 
   // One request deletes the whole selection, so it is all deleted or none of it is; one Undo restores it all.
-  async function confirmBulkDelete(targets: ApplicationRecord[]) {
+  async function confirmBulkDelete(targets: ApplicationSummary[]) {
     if (targets.some(({ id }) => movingIdsRef.current.has(id))) {
       setError("Wait for the changes to finish saving, then try again.");
       setPendingDelete(null);
@@ -510,10 +518,10 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }
 
   async function moveApplication(
-    application: ApplicationRecord,
+    application: ApplicationSummary,
     status: Status,
     offerUndo = true,
-    restoration?: Pick<ApplicationRecord, "interviewDatePromptDismissed">,
+    restoration?: Pick<ApplicationSummary, "interviewDatePromptDismissed">,
     archived = application.archived,
     // Collects undo entries for a bulk change instead of offering one toast per application.
     batch?: StatusUndo[],
@@ -547,14 +555,13 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       });
       const body = await response.json();
       if (response.status === 409 && body.application) {
-        const latest = body.application as ApplicationRecord;
-        reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+        replaceApplication(body.application as ApplicationRecord);
         // Undo (offerUndo false) and bulk changes report the conflict themselves.
         if (offerUndo && !batch) setError("This application changed elsewhere. The latest saved version has been loaded; try your action again.");
         return "conflict";
       }
       if (!response.ok) throw new Error(body.error ?? "Could not update the application status");
-      reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
+      replaceApplication(body.application as ApplicationRecord);
       const undo: StatusUndo = { kind: "status", applicationId: application.id, status: previousStatus, archived: previousArchived, interviewDatePromptDismissed: previousInterviewDatePromptDismissed, expectedLatestStatusEventId: body.latestStatusEventId ?? null, movedRevision: body.application.revision };
       const asksForDate = !batch && !restoration && previousStatus !== Status.INTERVIEW && needsInterviewPrompt(body.application);
       if (batch) {
@@ -584,7 +591,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }
 
   // Bulk changes send one request per application, so each keeps its own revision check and status history.
-  async function bulkMove(targets: ApplicationRecord[], change: { status: Status } | { archived: boolean }) {
+  async function bulkMove(targets: ApplicationSummary[], change: { status: Status } | { archived: boolean }) {
     const undo: StatusUndo[] = [];
     let failed = 0;
     setError("");
@@ -611,11 +618,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   }
 
   // Moving to Interview asks for the first round unless one is already scheduled or the prompt was skipped.
-  function needsInterviewPrompt(application: ApplicationRecord) {
+  function needsInterviewPrompt(application: ApplicationSummary) {
     return application.status === Status.INTERVIEW && !application.interviewDatePromptDismissed && !hasUpcomingInterview(application, currentLocalMinute());
   }
 
-  function openInterviewDatePrompt(application: ApplicationRecord) {
+  function openInterviewDatePrompt(application: ApplicationSummary) {
     setInterviewDateDraft(currentLocalDate());
     setInterviewTypeDraft(InterviewType.OTHER);
     setInterviewDateError("");
@@ -643,7 +650,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
    * interview round, contact, dated note, or status change. Each request carries the application's revision.
    * Returns an error message, or null once saved.
    */
-  async function saveApplicationChange(application: ApplicationRecord, change: ApplicationChange) {
+  async function saveApplicationChange(application: ApplicationSummary, change: ApplicationChange) {
     if (change.kind === "details") {
       const match = findPossibleDuplicate(change.fields, applications, application.id);
       // An empty message keeps the form open without an error when the user decides not to save.
@@ -669,12 +676,11 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         });
       const body = await response.json();
       if (response.status === 409 && body.application) {
-        const latest = body.application as ApplicationRecord;
-        reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+        replaceApplication(body.application as ApplicationRecord);
         return "This application changed elsewhere. The latest version is loaded; review it and try again.";
       }
       if (!response.ok) return (body.issues?.[0]?.message as string | undefined) ?? body.error ?? "Could not save the change";
-      reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
+      replaceApplication(body.application as ApplicationRecord);
       return null;
     } catch {
       return "Could not save the change";
@@ -705,14 +711,14 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
       const body = await response.json();
       if (response.status === 409 && body.application) {
         const latest = body.application as ApplicationRecord;
-        reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+        replaceApplication(latest);
         setPendingInterviewDate(latest);
         setInterviewDateError("This application changed elsewhere. The latest version has been loaded; your date is still here. Review it and save again.");
         return;
       }
       if (!response.ok) throw new Error(body.error ?? "Could not update the interview date");
-      reconcileApplications((current) => current.map((item) => item.id === pendingInterviewDate.id ? body.application : item));
       const saved = body.application as ApplicationRecord;
+      replaceApplication(saved);
       const earlierRounds = new Set(pendingInterviewDate.interviews.map(({ id }) => id));
       closeInterviewDatePrompt({
         from: pendingInterviewDate.revision,
@@ -761,13 +767,12 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         const body = await response.json();
         if (response.status === 409 && body.application) {
           settled = true;
-          const latest = body.application as ApplicationRecord;
-          reconcileApplications((current) => current.map((item) => item.id === latest.id ? latest : item));
+          replaceApplication(body.application as ApplicationRecord);
           throw new Error("This application changed elsewhere. The latest saved version has been loaded; review it before trying again.");
         }
         if (!response.ok) throw new Error(body.error ?? "Could not undo the status move");
         settled = true;
-        reconcileApplications((current) => current.map((item) => item.id === application.id ? body.application : item));
+        replaceApplication(body.application as ApplicationRecord);
       } finally {
         if (!settled) setApplications((current) => current.map((item) => item.id === application.id ? { ...item, ...before } : item));
         endMove(application.id);
@@ -801,7 +806,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
     // Deleted applications come back at once from the records kept with the Undo, then take the server's saved versions.
     const deleted = undo.kind === "delete-batch" ? undo.applications : [undo.application];
     const deletedIds = new Set(deleted.map(({ id }) => id));
-    const withoutDeleted = (current: ApplicationRecord[]) => current.filter(({ id }) => !deletedIds.has(id));
+    const withoutDeleted = (current: ApplicationSummary[]) => current.filter(({ id }) => !deletedIds.has(id));
     setApplications((current) => [...deleted, ...withoutDeleted(current)].sort(compareApplications));
     let restored: ApplicationRecord[];
     try {
@@ -1180,6 +1185,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
         {detailApplication && (
           <ApplicationDetailPanel
             application={detailApplication}
+            latestRecord={latestRecord?.id === detailApplication.id ? latestRecord : null}
             boards={BOARDS}
             busy={movingIds.has(detailApplication.id)}
             now={now}

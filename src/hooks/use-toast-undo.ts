@@ -3,7 +3,7 @@
 import { Status } from "@prisma/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 
 const TOAST_DURATION_MS = 2400;
 const UNDO_TOAST_DURATION_MS = 5000;
@@ -22,14 +22,14 @@ export type StatusUndo = {
 
 export type ToastUndo =
   // Deletes keep the deleted records, so Undo can show them again before the server confirms.
-  | { kind: "delete"; application: ApplicationRecord; token: string; expiresAt: string }
+  | { kind: "delete"; application: ApplicationSummary; token: string; expiresAt: string }
   // A bulk delete from the table, restored all at once with its batch token.
-  | { kind: "delete-batch"; applications: ApplicationRecord[]; token: string; expiresAt: string }
+  | { kind: "delete-batch"; applications: ApplicationSummary[]; token: string; expiresAt: string }
   | StatusUndo
   // A bulk change from the table: one Undo reverts every application it changed.
   | { kind: "batch"; items: StatusUndo[] };
 
-export type DeleteRecovery = Extract<ToastUndo, { kind: "delete" | "delete-batch" }>;
+type DeleteRecovery = Extract<ToastUndo, { kind: "delete" | "delete-batch" }>;
 
 function isDeleteRecovery(undo: ToastUndo | undefined): undo is DeleteRecovery {
   return undo?.kind === "delete" || undo?.kind === "delete-batch";

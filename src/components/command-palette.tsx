@@ -7,7 +7,7 @@ import { ShortcutKeycaps } from "@/components/shortcut-list";
 import { compareApplications, matchesApplicationSearch } from "@/lib/application-list";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
 import { shortcutKeys, type DashboardShortcut } from "@/lib/keyboard-shortcuts";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 
 export type PaletteCommand = { id: string; label: string; group: "Pages" | "Actions"; keywords?: string; shortcut?: DashboardShortcut; run: () => void };
 type PaletteItem = { id: string; label: string; detail?: string; dot?: string; shortcut?: DashboardShortcut; group: string; run: () => void };
@@ -15,12 +15,12 @@ type PaletteItem = { id: string; label: string; detail?: string; dot?: string; s
 const APPLICATION_LIMIT = 8;
 
 export function CommandPalette({ applications, boards, commands, isMac, onClose, onOpenApplication }: {
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   boards: BoardConfiguration[];
   commands: PaletteCommand[];
   isMac: boolean;
   onClose: () => void;
-  onOpenApplication: (application: ApplicationRecord) => void;
+  onOpenApplication: (application: ApplicationSummary) => void;
 }) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);

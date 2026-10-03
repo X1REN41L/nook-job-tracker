@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { parseCalendarDateKey } from "@/lib/calendar-date";
 
-export const MAX_EVENT_TEXT_LENGTH = 5_000;
+const MAX_EVENT_TEXT_LENGTH = 5_000;
 const JOB_URL_MESSAGE = "Job URL must use HTTP or HTTPS";
-const RESERVED_APPLICATION_IDS = new Set(["export", "import", "purge"]);
+const RESERVED_APPLICATION_IDS = new Set(["export", "import", "purge", "bulk-delete", "bulk-restore"]);
 
 const isTrimmed = (value: string) => value.trim() === value;
 
@@ -130,20 +130,20 @@ export const applicationEditSchema = applicationInputSchema.omit({ status: true 
   revision: applicationRevisionSchema,
 }).strict();
 
-export const applicationStatusSchema = z.object({
+const applicationStatusSchema = z.object({
   revision: applicationRevisionSchema,
   status: z.enum(Status),
   archived: z.boolean().optional(),
   interviewDatePromptDismissed: z.boolean().optional(),
 }).strict();
 
-export const applicationArchiveSchema = z.object({
+const applicationArchiveSchema = z.object({
   revision: applicationRevisionSchema,
   archived: z.boolean(),
 }).strict();
 
 // Setting a follow-up replaces its note; clearing the date clears the note too.
-export const applicationFollowUpSchema = z.object({
+const applicationFollowUpSchema = z.object({
   revision: applicationRevisionSchema,
   followUpDate: optionalFollowUpDateSchema,
   followUpNote: optionalText(200),
@@ -191,5 +191,3 @@ export const noteInputSchema = z.object({
 }).strict();
 
 export const storedTimeSchema = z.string().regex(TIME_PATTERN, "Times must be HH:MM").nullable();
-
-export type ApplicationInput = z.input<typeof applicationInputSchema>;

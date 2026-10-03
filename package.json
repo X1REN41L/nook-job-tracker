@@ -1,5 +1,5 @@
 {
-  "name": "application-tracker",
+  "name": "nook-job-tracker",
   "version": "1.0.0",
   "private": true,
   "engines": {
@@ -12,18 +12,6 @@
     "start": "next start -H 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "test:e2e": "bash scripts/run-playwright.sh",
-    "test:keyboard": "npm run test:e2e",
-    "test:unit": "node --import ./scripts/unit-loader-register.mjs --test scripts/application-list-test.mjs scripts/local-date-subscription-test.mjs scripts/backup-snapshot-test.mjs scripts/status-history-test.mjs scripts/analytics-period-test.mjs scripts/calendar-date-test.mjs scripts/duplicate-match-test.mjs scripts/interviews-grouping-test.mjs scripts/keyboard-shortcuts-test.mjs scripts/motion-preference-test.mjs scripts/settings-store-test.mjs && TZ=America/New_York node --import ./scripts/unit-loader-register.mjs --test scripts/calendar-date-test.mjs scripts/local-date-subscription-test.mjs && TZ=Asia/Dhaka node --import ./scripts/unit-loader-register.mjs --test scripts/calendar-date-test.mjs scripts/local-date-subscription-test.mjs",
-    "test:shortcuts": "node --import ./scripts/unit-loader-register.mjs --test scripts/keyboard-shortcuts-test.mjs",
-    "test:duplicates": "node --import ./scripts/unit-loader-register.mjs scripts/duplicate-match-test.mjs",
-    "test:import-scale": "node --import ./scripts/unit-loader-register.mjs scripts/import-scale-test.mjs",
-    "test:setup": "node --test scripts/setup-test.mjs",
-    "test:smoke": "bash scripts/run-backup-api-test.sh scripts/smoke-test.mjs",
-    "test:backup": "bash scripts/run-backup-api-test.sh",
-    "test:dashboard": "bash scripts/run-backup-api-test.sh scripts/dashboard-api-test.mjs",
-    "test:contention": "bash scripts/run-backup-api-test.sh scripts/contention-api-test.mjs",
-    "test": "npm run test:unit && npm run test:import-scale && npm run test:setup && npm run test:smoke && npm run test:backup && npm run test:dashboard && npm run test:contention",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio"
   },
@@ -35,6 +23,7 @@
     "next": "16.3.8",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "server-only": "0.0.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

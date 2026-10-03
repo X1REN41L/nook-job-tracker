@@ -4,17 +4,17 @@ import { BACKUP_FILE_TOO_LARGE_ERROR, MAX_BACKUP_FILE_BYTES } from "@/lib/backup
 import type { BackupSnapshot } from "@/lib/backup-snapshot";
 import { normalizeDuplicateText, type DuplicateMatch } from "@/lib/duplicate-match";
 import { ImportDuplicateIndex } from "@/lib/import-duplicate-index";
-import type { ApplicationRecord, JobFormState } from "@/types/application";
+import type { ApplicationSummary, JobFormState } from "@/types/application";
 
 type RecordSnapshot = BackupSnapshot["applications"][number];
-type CompanyGroup = ImportDuplicateIndex<ApplicationRecord>;
+type CompanyGroup = ImportDuplicateIndex<ApplicationSummary>;
 type PendingImport = { records: RecordSnapshot[]; index: number; groups: Map<string, CompanyGroup>; ids: Set<string>; settings: BackupSnapshot["settings"] };
 const yieldToUI = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 export function useApplicationBackup({ applications, insertApplications, onDuplicate, showToast }: {
-  applications: ApplicationRecord[];
-  insertApplications: (backup: BackupSnapshot) => Promise<{ created: ApplicationRecord[]; skippedIds: string[] }>;
-  onDuplicate: (candidate: JobFormState, match: DuplicateMatch<ApplicationRecord>) => void;
+  applications: ApplicationSummary[];
+  insertApplications: (backup: BackupSnapshot) => Promise<{ created: ApplicationSummary[]; skippedIds: string[] }>;
+  onDuplicate: (candidate: JobFormState, match: DuplicateMatch<ApplicationSummary>) => void;
   showToast: (message: string) => void;
 }) {
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
@@ -54,7 +54,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
     const groups = new Map<string, CompanyGroup>();
     for (const item of applications) {
       const key = normalizeDuplicateText(item.company);
-      const group = groups.get(key) ?? new ImportDuplicateIndex<ApplicationRecord>();
+      const group = groups.get(key) ?? new ImportDuplicateIndex<ApplicationSummary>();
       group.add(item);
       groups.set(key, group);
     }
@@ -71,7 +71,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
       while (next.index < next.records.length) {
         const record = next.records[next.index];
         const key = normalizeDuplicateText(record.company);
-        const group = next.groups.get(key) ?? new ImportDuplicateIndex<ApplicationRecord>();
+        const group = next.groups.get(key) ?? new ImportDuplicateIndex<ApplicationSummary>();
         const candidate: JobFormState = {
           company: record.company, role: record.role, status: record.status, source: record.source ?? "",
           appliedDate: record.appliedDate.slice(0, 10), notes: record.notes ?? "", jobUrl: record.jobUrl ?? "",
@@ -86,7 +86,7 @@ export function useApplicationBackup({ applications, insertApplications, onDupli
           return;
         }
         if (!next.ids.has(record.id)) {
-          group.add({ ...record, revision: 0, interviews: [], contacts: [] } as unknown as ApplicationRecord);
+          group.add({ ...record, revision: 0, interviews: [] } as unknown as ApplicationSummary);
           next.groups.set(key, group);
           next.ids.add(record.id);
         }

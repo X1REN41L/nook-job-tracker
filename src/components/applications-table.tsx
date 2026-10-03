@@ -14,7 +14,7 @@ import { revealDelay, revealDelayMs } from "@/lib/motion-mode";
 import { safeLink } from "@/lib/safe-link";
 import { useOpeningReveal } from "@/hooks/use-opening-reveal";
 import { useWeekStartDay } from "@/hooks/use-week-start-day";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 
 const controlFrameClass = "h-9 rounded-nook-sm border border-line bg-paper text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-60";
 const controlClass = `${controlFrameClass} px-3`;
@@ -34,7 +34,7 @@ const OPENING_ROW_LIMIT = 14;
 const OPENING_ROW_TIMING = { base: 60, step: 35, limit: OPENING_ROW_LIMIT };
 
 export function ApplicationsTable({ applications, boards, initialFilters, today, staleDays, movingIds, bulkBusy, searchInputRef, onOpen, onBulkStatus, onBulkArchive, onBulkDelete }: {
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   boards: BoardConfiguration[];
   initialFilters: ApplicationFilters;
   today: string;
@@ -42,11 +42,11 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
   movingIds: ReadonlySet<string>;
   bulkBusy: boolean;
   searchInputRef: RefObject<HTMLInputElement | null>;
-  onOpen: (application: ApplicationRecord) => void;
-  onBulkStatus: (applications: ApplicationRecord[], status: Status) => Promise<void>;
-  onBulkArchive: (applications: ApplicationRecord[], archived: boolean) => Promise<void>;
+  onOpen: (application: ApplicationSummary) => void;
+  onBulkStatus: (applications: ApplicationSummary[], status: Status) => Promise<void>;
+  onBulkArchive: (applications: ApplicationSummary[], archived: boolean) => Promise<void>;
   /** Asks to confirm, then deletes; the trigger gets focus back if the delete is cancelled. */
-  onBulkDelete: (applications: ApplicationRecord[], trigger: HTMLElement) => void;
+  onBulkDelete: (applications: ApplicationSummary[], trigger: HTMLElement) => void;
 }) {
   const [filters, setFilters] = useState(initialFilters);
   const [sort, setSort] = useState<TableSort>({ key: "appliedDate", direction: "desc" });

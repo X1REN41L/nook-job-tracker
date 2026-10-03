@@ -6,7 +6,7 @@ import { formatCalendarDate } from "@/lib/application-date";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
 import type { DuplicateMatch } from "@/lib/duplicate-match";
 import { STATUS_META } from "@/lib/status-meta";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 import { Dialog } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
 
@@ -14,7 +14,7 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
   boards: BoardConfiguration[];
   editing: boolean;
   fromImport?: boolean;
-  match: DuplicateMatch<ApplicationRecord>;
+  match: DuplicateMatch<ApplicationSummary>;
   saving: boolean;
   onAddAnyway: () => void;
   onDismiss: () => void;

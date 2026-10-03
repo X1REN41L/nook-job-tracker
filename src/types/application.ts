@@ -10,12 +10,15 @@ export type ContactRecord = {
   linkedinUrl: string | null; notes: string | null; createdAt: string;
 };
 
-export type ApplicationRecord = {
+/** What every page loads for each application. The details panel loads the full record for one application. */
+export type ApplicationSummary = {
   id: string; company: string; role: string; status: Status; archived: boolean; revision: number;
   source: string | null; appliedDate: string; interviewDatePromptDismissed: boolean; followUpDate: string | null; followUpNote: string | null;
-  notes: string | null; jobUrl: string | null; interviews: InterviewRecord[]; contacts: ContactRecord[];
-  lastUpdated: string; createdAt: string;
+  jobUrl: string | null; interviews: InterviewRecord[]; lastUpdated: string; createdAt: string;
 };
+
+/** An application as API responses return it. */
+export type ApplicationRecord = ApplicationSummary & { notes: string | null; contacts: ContactRecord[] };
 
 export type JobFormState = {
   company: string;

@@ -9,12 +9,12 @@ import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, 
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { ARCHIVED_DROP_ID, SIDEBAR_EDGE_DROP_ID } from "@/hooks/use-board-drag";
 import { formatCalendarDate } from "@/lib/application-date";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
 type ApplicationSidebarProps = {
   boards: BoardConfiguration[];
-  archivedItems: ApplicationRecord[];
+  archivedItems: ApplicationSummary[];
   /** Null until the browser's clock is known. */
   upcomingInterviewCount: number | null;
   collapsed: boolean;
@@ -35,9 +35,9 @@ type ApplicationSidebarProps = {
   onOpenArchive: () => void;
   onOpenSettings: () => void;
   onToggleArchived: () => void;
-  onOpen: (application: ApplicationRecord) => void;
-  onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
-  onRestore: (application: ApplicationRecord) => Promise<void>;
+  onOpen: (application: ApplicationSummary) => void;
+  onRequestDelete: (application: ApplicationSummary, trigger: HTMLElement) => void;
+  onRestore: (application: ApplicationSummary) => Promise<void>;
 };
 
 const navRowClass = "box-border flex h-9 w-full min-w-0 shrink-0 cursor-pointer items-center rounded-nook-sm text-left text-sm motion-interactive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
@@ -288,15 +288,15 @@ export function ApplicationSidebar({
 }
 
 function ArchivedSection({ applications, boards, className, expanded, movingIds, staleDays, onOpen, onRequestDelete, onRestore, onToggle }: {
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   boards: BoardConfiguration[];
   className: string;
   expanded: boolean;
   movingIds: ReadonlySet<string>;
   staleDays: ReadonlyMap<string, number>;
-  onOpen: (application: ApplicationRecord) => void;
-  onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
-  onRestore: (application: ApplicationRecord) => Promise<void>;
+  onOpen: (application: ApplicationSummary) => void;
+  onRequestDelete: (application: ApplicationSummary, trigger: HTMLElement) => void;
+  onRestore: (application: ApplicationSummary) => Promise<void>;
   onToggle: () => void;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: ARCHIVED_DROP_ID });
@@ -361,13 +361,13 @@ function ArchivedSection({ applications, boards, className, expanded, movingIds,
 }
 
 function ArchivedRow({ application, boards, disabled, staleDays, onOpen, onRequestDelete, onRestore }: {
-  application: ApplicationRecord;
+  application: ApplicationSummary;
   boards: BoardConfiguration[];
   disabled: boolean;
   staleDays: number | undefined;
-  onOpen: (application: ApplicationRecord) => void;
-  onRequestDelete: (application: ApplicationRecord, trigger: HTMLElement) => void;
-  onRestore: (application: ApplicationRecord) => Promise<void>;
+  onOpen: (application: ApplicationSummary) => void;
+  onRequestDelete: (application: ApplicationSummary, trigger: HTMLElement) => void;
+  onRestore: (application: ApplicationSummary) => Promise<void>;
 }) {
   const { listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: application.id,

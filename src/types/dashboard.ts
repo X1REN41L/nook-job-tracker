@@ -17,7 +17,7 @@ export type RateMetric = {
   historyCoverage: HistoryCoverage;
 };
 
-export type StaleSeverity = "MEDIUM" | "HIGH" | "CRITICAL";
+type StaleSeverity = "MEDIUM" | "HIGH" | "CRITICAL";
 
 export type StaleApplication = {
   id: string;

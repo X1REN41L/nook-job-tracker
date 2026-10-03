@@ -17,18 +17,18 @@ import { cssTimeToMs, revealDelay } from "@/lib/motion-mode";
 import { featuredInterview, formatInterviewTime, INTERVIEW_TYPE_LABELS } from "@/lib/interviews";
 import { safeLink } from "@/lib/safe-link";
 import { useTimeFormat } from "@/hooks/use-time-format";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 
 type CardContext = {
   today: string;
   /** Local "YYYY-MM-DDTHH:MM"; empty before hydration. */
   now: string;
   staleDays: ReadonlyMap<string, number>;
-  onOpen: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationSummary) => void;
 };
 
 export function KanbanBoard({ applications, boards, movingIds, emptyText, today, now, staleDays, onOpen }: {
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   boards: BoardConfiguration[];
   movingIds: ReadonlySet<string>;
   /** Replaces each column's empty-state text, e.g. while filters hide every card. */
@@ -37,6 +37,12 @@ export function KanbanBoard({ applications, boards, movingIds, emptyText, today,
   const laneRef = useScrollbarActivity<HTMLDivElement>();
   const boardRef = useRef<HTMLDivElement>(null);
   const beforeUpdate = useRef(new Map<string, { top: number; column: string }>());
+  const columns = new Map(boards.map((board) => [board.status, [] as ApplicationSummary[]]));
+  for (const application of applications) {
+    if (!application.archived) columns.get(application.status)?.push(application);
+  }
+  // Cards are measured only when one is added, removed, or moved, not on every render of the dashboard.
+  const layoutKey = boards.map((board) => `${board.status}:${columns.get(board.status)?.map(({ id }) => id).join(",")}`).join("|");
 
   useLayoutEffect(() => {
     const board = boardRef.current;
@@ -68,15 +74,14 @@ export function KanbanBoard({ applications, boards, movingIds, emptyText, today,
       });
       beforeUpdate.current = positions;
     };
-  }, [applications, boards]);
+  }, [layoutKey]);
 
   return (
     <div ref={laneRef} className="board-lane scrollbar-styled overflow-x-auto overflow-y-hidden">
       <div ref={boardRef} className="board-columns flex h-full min-h-0 items-stretch gap-4" aria-label="Application status board">
-        {boards.map((board, index) => {
-          const items = applications.filter((application) => !application.archived && application.status === board.status);
-          return <KanbanColumn key={board.status} order={index} board={board} applications={items} movingIds={movingIds} emptyText={emptyText ?? board.emptyText} card={{ today, now, staleDays, onOpen }} />;
-        })}
+        {boards.map((board, index) => (
+          <KanbanColumn key={board.status} order={index} board={board} applications={columns.get(board.status) ?? []} movingIds={movingIds} emptyText={emptyText ?? board.emptyText} card={{ today, now, staleDays, onOpen }} />
+        ))}
       </div>
     </div>
   );
@@ -85,7 +90,7 @@ export function KanbanBoard({ applications, boards, movingIds, emptyText, today,
 function KanbanColumn({ board, order, applications, movingIds, emptyText, card }: {
   board: BoardConfiguration;
   order: number;
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   movingIds: ReadonlySet<string>;
   emptyText: string;
   card: CardContext;
@@ -115,7 +120,7 @@ function KanbanColumn({ board, order, applications, movingIds, emptyText, card }
 }
 
 function KanbanCard({ application, disabled, today, now, staleDays, onOpen }: {
-  application: ApplicationRecord;
+  application: ApplicationSummary;
   disabled: boolean;
 } & CardContext) {
   const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, isDragging } = useDraggable({
@@ -221,7 +226,7 @@ function KanbanCard({ application, disabled, today, now, staleDays, onOpen }: {
   );
 }
 
-export function KanbanCardOverlay({ application }: { application: ApplicationRecord }) {
+export function KanbanCardOverlay({ application }: { application: ApplicationSummary }) {
   return (
     <div className="card w-[272px] border-forest p-3.5 shadow-nook-lift">
       <p className="font-serif text-[15px] font-semibold">{application.role}</p>

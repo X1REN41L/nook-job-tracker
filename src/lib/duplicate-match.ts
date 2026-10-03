@@ -1,4 +1,4 @@
-export type DuplicateCandidate = {
+type DuplicateCandidate = {
   company: string;
   role: string;
 };

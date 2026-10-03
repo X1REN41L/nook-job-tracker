@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { RequestJsonError } from "@/lib/api";
 import { MAX_BACKUP_FILE_BYTES } from "@/lib/backup-limits";
 
-export const MAX_MUTATION_BODY_BYTES = MAX_BACKUP_FILE_BYTES;
+const MAX_MUTATION_BODY_BYTES = MAX_BACKUP_FILE_BYTES;
 
 type MutationRequestResult =
   | { ok: true; body: Uint8Array }

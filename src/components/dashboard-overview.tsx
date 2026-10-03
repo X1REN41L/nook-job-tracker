@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
+import { LoadErrorNotice } from "@/components/load-error-notice";
 import type { DashboardOverviewData as OverviewData, StaleApplication } from "@/types/dashboard";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 import { currentBrowserTimeZone, currentLocalMinute, formatCalendarDate } from "@/lib/application-date";
 import { applicationTableHref } from "@/lib/application-list";
 import { revealDelay } from "@/lib/motion-mode";
@@ -66,10 +67,10 @@ const PREVIEW_ROWS = 3;
 function NeedsAttentionRow({ item, application, reveal, archiveDisabled, onOpen, onArchive }: {
   item: StaleApplication;
   reveal: CSSProperties;
-  application: ApplicationRecord | undefined;
+  application: ApplicationSummary | undefined;
   archiveDisabled: boolean;
-  onOpen: (application: ApplicationRecord) => void;
-  onArchive: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationSummary) => void;
+  onArchive: (application: ApplicationSummary) => void;
 }) {
   return (
     <li className="attention-row motion-reveal relative min-w-0" style={reveal}>
@@ -104,10 +105,10 @@ function NeedsAttentionRow({ item, application, reveal, archiveDisabled, onOpen,
 function FollowUpRow({ item, application, reveal, busy, onOpen, onDone }: {
   item: OverviewData["followUps"][number];
   reveal: CSSProperties;
-  application: ApplicationRecord | undefined;
+  application: ApplicationSummary | undefined;
   busy: boolean;
-  onOpen: (application: ApplicationRecord) => void;
-  onDone: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationSummary) => void;
+  onDone: (application: ApplicationSummary) => void;
 }) {
   return (
     <li className="attention-row motion-reveal relative min-w-0" style={reveal}>
@@ -146,14 +147,14 @@ function NeedsAttention({ preview, followUps, rowRevealBase, loading, error, tod
   followUps: OverviewData["followUps"];
   /** Delay before the first row rises; see `ROW_REVEAL_START_MS`. */
   rowRevealBase: number;
-  onFollowUpDone: (application: ApplicationRecord) => void;
+  onFollowUpDone: (application: ApplicationSummary) => void;
   loading: boolean;
   error: boolean;
   today: string;
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   movingIds: ReadonlySet<string>;
-  onOpen: (application: ApplicationRecord) => void;
-  onArchive: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationSummary) => void;
+  onArchive: (application: ApplicationSummary) => void;
 }) {
   const applicationById = new Map(applications.map((application) => [application.id, application]));
   // A reminder cleared or an application archived here disappears at once.
@@ -197,8 +198,8 @@ function UpcomingInterviewsPreview({ items, now, rowRevealBase, loading, error, 
   rowRevealBase: number;
   loading: boolean;
   error: boolean;
-  applications: ApplicationRecord[];
-  onOpen: (application: ApplicationRecord) => void;
+  applications: ApplicationSummary[];
+  onOpen: (application: ApplicationSummary) => void;
 }) {
   const timeFormat = useTimeFormat();
   const applicationById = new Map(applications.map((application) => [application.id, application]));
@@ -245,15 +246,18 @@ export function DashboardOverview({ today, now, refreshKey, applications, moving
   /** Local "YYYY-MM-DDTHH:MM"; empty before hydration. */
   now: string;
   refreshKey: unknown;
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   movingIds: ReadonlySet<string>;
-  onOpen: (application: ApplicationRecord) => void;
-  onArchive: (application: ApplicationRecord) => void;
-  onFollowUpDone: (application: ApplicationRecord) => void;
+  onOpen: (application: ApplicationSummary) => void;
+  onArchive: (application: ApplicationSummary) => void;
+  onFollowUpDone: (application: ApplicationSummary) => void;
 }) {
   const staleApplicationThreshold = useSettings().staleApplicationThreshold;
   const [result, setResult] = useState<{ today: string; threshold: number; data: OverviewData; rowRevealBase: number } | null>(null);
-  const [error, setError] = useState(false);
+  const resultKey = `${today}|${staleApplicationThreshold}`;
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const openedAt = useRef(0);
 
   useEffect(() => { openedAt.current = performance.now(); }, []);
@@ -275,24 +279,34 @@ export function DashboardOverview({ today, now, refreshKey, applications, moving
         // Rows keep their place just behind the cards however long loading takes; late data doesn't wait again.
         const rowRevealBase = Math.max(0, Math.round(ROW_REVEAL_START_MS - (performance.now() - openedAt.current)));
         setResult({ today, threshold: staleApplicationThreshold, data: overview, rowRevealBase });
-        setError(false);
+        setFailedKey(null);
+        setRetrying(false);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         console.error("Could not load Overview", reason);
-        setResult(null);
-        setError(true);
+        // A failed refresh keeps the last data loaded for the same date and threshold, marked as not refreshed.
+        setFailedKey(resultKey);
+        setRetrying(false);
       });
     return () => controller.abort();
-  }, [today, refreshKey, staleApplicationThreshold, finishedToday]);
+  }, [today, refreshKey, staleApplicationThreshold, finishedToday, resultKey, attempt]);
 
   const data = result?.today === today && result.threshold === staleApplicationThreshold ? result.data : null;
-  const loading = !data && !error;
+  const failed = failedKey === resultKey;
+  const error = failed && !data;
+  const loading = !data && !failed;
 
   return (
     <section className="w-full min-w-0 pb-10" aria-labelledby="overview-heading">
       <h1 className="font-serif text-[clamp(1.875rem,calc(1.65rem_+_0.15vw),2.125rem)] font-semibold leading-tight tracking-tight" id="overview-heading">Overview</h1>
-      {error && <p className="mt-4 rounded-nook-sm border border-rose bg-rose-tint px-4 py-3 text-sm text-ink" role="alert">Overview could not be loaded. Please try again later.</p>}
+      {failed && (
+        <LoadErrorNotice
+          message={data ? "Overview could not be refreshed. It shows the last figures loaded." : "Overview could not be loaded."}
+          onRetry={() => { setRetrying(true); setAttempt((count) => count + 1); }}
+          retrying={retrying}
+        />
+      )}
       {loading && <p className="sr-only" role="status">Loading Overview</p>}
       <div className="mt-7">
         <OverviewMetrics data={data} />

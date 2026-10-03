@@ -10,38 +10,56 @@ import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { isEditableShortcutTarget } from "@/lib/keyboard-shortcuts";
 import { staleAgeLabel } from "@/lib/stale-label";
 import { STATUS_META } from "@/lib/status-meta";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationRecord, ApplicationSummary } from "@/types/application";
 import type { StaleApplication } from "@/types/dashboard";
 
-function useApplicationHistory(application: ApplicationRecord) {
+/**
+ * Loads the full record (notes and contacts) and the timeline for the open application, again after each saved
+ * change. Until it loads, a full record a save returned stands in; whichever is newer is shown.
+ */
+function useApplicationDetail(application: ApplicationSummary, latestRecord: ApplicationRecord | null) {
   const key = `${application.id}:${application.revision}`;
-  const [result, setResult] = useState<{ key: string; events: HistoryEvent[] } | null>(null);
+  const [result, setResult] = useState<{ key: string; record: ApplicationRecord; events: HistoryEvent[] } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     fetch(applicationApiPath(application.id), { signal: controller.signal })
       .then((response) => {
-        if (!response.ok) throw new Error("History request failed");
-        return response.json() as Promise<{ events: HistoryEvent[] }>;
+        if (!response.ok) throw new Error("Application request failed");
+        return response.json() as Promise<{ application: ApplicationRecord; events: HistoryEvent[] }>;
       })
       .then((body) => {
-        setResult({ key, events: body.events });
+        setResult({ key, record: body.application, events: body.events });
         setFailedKey(null);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
-        console.error("Could not load application history", reason);
+        console.error("Could not load the application details", reason);
         setFailedKey(key);
       });
     return () => controller.abort();
-  }, [application.id, key]);
+  }, [application.id, key, attempt]);
 
-  return { events: result?.key === key ? result.events : null, error: failedKey === key };
+  const loaded = result?.record.id === application.id ? result.record : null;
+  const record = [loaded, latestRecord].reduce<ApplicationRecord | null>((newest, candidate) =>
+    candidate && (!newest || candidate.revision > newest.revision) ? candidate : newest, null);
+  return {
+    record,
+    events: result?.key === key ? result.events : null,
+    error: failedKey === key,
+    retry: () => {
+      setFailedKey(null);
+      setAttempt((count) => count + 1);
+    },
+  };
 }
 
-export function ApplicationDetailPanel({ application, boards, today, now, stale, busy, error: actionError, sourceSuggestions, returnFocusRef, onClose, onChangeStatus, onArchive, onDelete, onSave }: {
-  application: ApplicationRecord;
+export function ApplicationDetailPanel({ application, latestRecord, boards, today, now, stale, busy, error: actionError, sourceSuggestions, returnFocusRef, onClose, onChangeStatus, onArchive, onDelete, onSave }: {
+  application: ApplicationSummary;
+  /** The latest full record a save returned for this application, if any. */
+  latestRecord: ApplicationRecord | null;
   boards: BoardConfiguration[];
   today: string;
   /** Local "YYYY-MM-DDTHH:MM"; empty before hydration. */
@@ -61,7 +79,7 @@ export function ApplicationDetailPanel({ application, boards, today, now, stale,
   const closeRef = useRef<HTMLButtonElement>(null);
   const statusId = useId();
   const [editingDetails, setEditingDetails] = useState(false);
-  const { events, error } = useApplicationHistory(application);
+  const { record, events, error, retry } = useApplicationDetail(application, latestRecord);
 
   // E opens Edit details, like the button, unless you are typing in a field.
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -122,11 +140,11 @@ export function ApplicationDetailPanel({ application, boards, today, now, stale,
           {stale && (
             <p className="mb-5 rounded-nook-sm border border-clay/40 bg-clay-tint px-3 py-2 text-sm text-ink">{application.archived ? "Stale" : "Needs attention"} · {staleAgeLabel(stale)}</p>
           )}
-          <DetailsSection application={application} editing={editingDetails} onDone={() => setEditingDetails(false)} onSave={onSave} sourceSuggestions={sourceSuggestions} today={today} />
+          <DetailsSection application={application} editing={editingDetails} onDone={() => setEditingDetails(false)} onSave={onSave} record={record} sourceSuggestions={sourceSuggestions} today={today} />
           <FollowUpSection application={application} onSave={onSave} today={today} />
           <InterviewsSection application={application} now={now} onSave={onSave} today={today} />
-          <ContactsSection application={application} onSave={onSave} />
-          <TimelineSection boards={boards} events={events} loadError={error} onSave={onSave} status={application.status} />
+          <ContactsSection contacts={record?.contacts ?? null} loadError={error && !record} onRetry={retry} onSave={onSave} />
+          <TimelineSection boards={boards} events={events} loadError={error} onRetry={retry} onSave={onSave} status={application.status} />
         </div>
 
         {actionError && <p className="shrink-0 border-t border-line bg-rose-tint px-6 py-2.5 text-sm text-ink" role="alert">{actionError}</p>}

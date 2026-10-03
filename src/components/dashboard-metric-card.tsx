@@ -16,7 +16,7 @@ export function formatDashboardPercentage(value: number) {
   return `${Number.isFinite(value) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value) : "0"}%`;
 }
 
-export function formatDashboardCount(value: number) {
+function formatDashboardCount(value: number) {
   return String(Math.round(value));
 }
 

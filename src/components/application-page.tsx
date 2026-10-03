@@ -1,6 +1,6 @@
 import { ApplicationDashboard } from "@/components/application-dashboard";
 import { prisma } from "@/lib/prisma";
-import { applicationInclude, serializeApplication } from "@/lib/application-record";
+import { applicationSummaryQuery, serializeApplicationSummary } from "@/lib/application-record";
 import type { ApplicationFilters } from "@/lib/application-list";
 import type { ApplicationPageName, DashboardSection } from "@/types/navigation";
 
@@ -10,13 +10,13 @@ export async function ApplicationPage({ page, dashboardSection, tableFilters }: 
   tableFilters?: ApplicationFilters;
 }) {
   const applications = await prisma.application.findMany({
-    include: applicationInclude,
+    ...applicationSummaryQuery,
     orderBy: [{ appliedDate: "desc" }, { createdAt: "desc" }],
   });
 
   return (
     <ApplicationDashboard
-      initialApplications={applications.map(serializeApplication)}
+      initialApplications={applications.map(serializeApplicationSummary)}
       page={page}
       dashboardSection={dashboardSection}
       tableFilters={tableFilters}

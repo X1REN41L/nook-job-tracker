@@ -58,7 +58,7 @@ const rawEventSnapshotSchema = z.object({
   fromStatus: z.enum(Status).nullable(), toStatus: z.enum(Status).nullable(),
   createdAt: timestamp,
 }).strict();
-export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, context) => {
+const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, context) => {
   if (event.type !== EventType.STATUS_CHANGE) {
     if (event.fromStatus !== null || event.toStatus !== null) {
       context.addIssue({ code: "custom", message: "Only status change events can include status fields" });
@@ -103,16 +103,16 @@ export const eventSnapshotSchema = rawEventSnapshotSchema.transform((event, cont
 
   return event;
 });
-export const interviewSnapshotSchema = z.object({
+const interviewSnapshotSchema = z.object({
   id: recordIdSchema, date: storedCalendarDateSchema, time: storedTimeSchema, type: z.enum(InterviewType),
   interviewers: storedOptionalText(200), notes: storedOptionalText(2_000), createdAt: timestamp,
 }).strict();
-export const contactSnapshotSchema = z.object({
+const contactSnapshotSchema = z.object({
   id: recordIdSchema, name: storedRequiredText(120), role: storedOptionalText(120),
   email: storedOptionalText(254).refine((value) => value === null || z.email().safeParse(value).success, "Enter a valid email address"),
   linkedinUrl: storedHttpUrlSchema, notes: storedOptionalText(2_000), createdAt: timestamp,
 }).strict();
-export const applicationSnapshotSchema = z.object({
+const applicationSnapshotSchema = z.object({
   id: applicationIdSchema, company: storedRequiredText(120), role: storedRequiredText(120),
   status: z.enum(Status), archived: z.boolean(), source: storedOptionalText(120), appliedDate: storedCalendarDateSchema,
   interviewDatePromptDismissed: z.boolean(), followUpDate: storedCalendarDateSchema.nullable(), followUpNote: storedOptionalText(200),

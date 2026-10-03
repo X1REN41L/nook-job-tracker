@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { DashboardMetricCard, formatDashboardPercentage } from "@/components/dashboard-metric-card";
+import { LoadErrorNotice } from "@/components/load-error-notice";
 import { analyticsBucketRange, analyticsCohortLabel, analyticsPeriodRange, type AnalyticsPeriod, type AnalyticsRange } from "@/lib/analytics-period";
 import { applicationTableHref } from "@/lib/application-list";
 import { revealDelay, revealDelayMs } from "@/lib/motion-mode";
@@ -234,6 +235,8 @@ export function DashboardAnalytics({ today, firstMonth, refreshKey }: {
   const selectionKey = `${today}|${period}|${period === "CUSTOM_MONTH" ? month : ""}|${period === "CUSTOM_YEAR" ? year : ""}|${firstDay}`;
   const [result, setResult] = useState<{ key: string; data: AnalyticsData; barDelayBase: number } | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [retrying, setRetrying] = useState(false);
   const openedAt = useRef(0);
 
   useEffect(() => { openedAt.current = performance.now(); }, []);
@@ -254,15 +257,18 @@ export function DashboardAnalytics({ today, firstMonth, refreshKey }: {
         const barDelayBase = Math.max(0, Math.round(revealDelayMs(CHARTS_REVEAL_ORDER) - (performance.now() - openedAt.current)));
         setResult({ key: selectionKey, data, barDelayBase });
         setFailedKey(null);
+        setRetrying(false);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
         console.error("Could not load Analytics", reason);
         setFailedKey(selectionKey);
+        setRetrying(false);
       });
     return () => controller.abort();
-  }, [today, period, month, year, firstDay, selectionKey, refreshKey]);
+  }, [today, period, month, year, firstDay, selectionKey, refreshKey, attempt]);
 
+  // Only figures loaded for the selected period are shown; a failed refresh of that period keeps them, marked as not refreshed.
   const data = result?.key === selectionKey ? result.data : null;
   const error = failedKey === selectionKey;
   const loading = !data && !error;
@@ -284,7 +290,13 @@ export function DashboardAnalytics({ today, firstMonth, refreshKey }: {
         <h1 className="font-serif text-[clamp(1.875rem,calc(1.65rem_+_0.15vw),2.125rem)] font-semibold leading-tight tracking-tight" id="analytics-heading">Analytics{range ? ` — ${analyticsCohortLabel(range, period, today.slice(0, 4))}` : ""}</h1>
         {today && <AnalyticsPeriodSelector kind={kind} month={month} months={monthOptions(firstMonth, currentMonth)} onKindChange={setKind} onMonthChange={setPickedMonth} onYearChange={setPickedYear} year={year} years={yearOptions(firstMonth, currentYear)} />}
       </div>
-      {error && <p className="mt-4 rounded-nook-sm border border-rose bg-rose-tint px-4 py-3 text-sm text-ink" role="alert">Analytics could not be loaded. Please try another period or return later.</p>}
+      {error && (
+        <LoadErrorNotice
+          message={data ? "Analytics could not be refreshed. It shows the last figures loaded for this period." : "Analytics could not be loaded for this period."}
+          onRetry={() => { setRetrying(true); setAttempt((count) => count + 1); }}
+          retrying={retrying}
+        />
+      )}
       {loading && <p className="sr-only" role="status">Loading Analytics</p>}
       <div className="mt-7 grid min-w-0 grid-cols-1 gap-3 @min-[520px]:grid-cols-2 @min-[850px]:grid-cols-4">
         <DashboardMetricCard label="Applications" order={0} value={data?.applications ?? "—"} detail={data ? periodLabel(data) : " "} href={data ? rangeHref(data.range) : undefined} />

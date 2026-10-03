@@ -5,12 +5,12 @@ import { useRef } from "react";
 import { Dialog } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
 import { INTERVIEW_TYPE_LABELS, INTERVIEW_TYPES } from "@/lib/interviews";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 import type { InterviewType } from "@prisma/client";
 
 /** Asked when an application moves to Interview; the answer becomes its first interview round. */
 export function InterviewDateDialog({ application, error, onAddDate, onChangeDate, onChangeType, onClose, onSkip, saving, value, type }: {
-  application: ApplicationRecord;
+  application: ApplicationSummary;
   error: string;
   onAddDate: () => void;
   onChangeDate: (value: string) => void;

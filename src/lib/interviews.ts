@@ -4,7 +4,7 @@ import { hourCycleOption } from "@/lib/application-date";
 import { addCalendarDays, startOfCalendarWeek } from "@/lib/calendar-date";
 import type { TimeFormat } from "@/lib/settings-values";
 import { isInProgressApplication } from "@/lib/status-values";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 
 export const INTERVIEW_TYPES = ["PHONE", "TECHNICAL", "ONSITE", "OTHER"] as const satisfies readonly InterviewType[];
 export const INTERVIEW_TYPE_LABELS: Record<InterviewType, string> = { PHONE: "Phone", TECHNICAL: "Technical", ONSITE: "Onsite", OTHER: "Other" };
@@ -23,7 +23,7 @@ export type InterviewListItem = {
   inProgress: boolean;
 };
 
-export type InterviewGroup = {
+type InterviewGroup = {
   key: string;
   label: string;
   interviews: InterviewListItem[];
@@ -43,7 +43,7 @@ export function compareInterviews(left: Schedulable, right: Schedulable) {
 }
 
 // Rounds have no end time, so a timed round counts as upcoming until this long after it starts.
-export const INTERVIEW_UPCOMING_MINUTES = 60;
+const INTERVIEW_UPCOMING_MINUTES = 60;
 
 function minutesOf(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
@@ -73,7 +73,7 @@ export function featuredInterview<T extends Schedulable>(interviews: T[], now: s
   return sorted.find((interview) => isUpcomingInterview(interview, now)) ?? sorted.at(-1);
 }
 
-export function hasUpcomingInterview(application: Pick<ApplicationRecord, "interviews">, now: string) {
+export function hasUpcomingInterview(application: Pick<ApplicationSummary, "interviews">, now: string) {
   return application.interviews.some((interview) => isUpcomingInterview(interview, now));
 }
 
@@ -114,7 +114,7 @@ export function groupUpcomingInterviews(interviews: InterviewListItem[], now: st
 }
 
 /** One list item per interview round. */
-export function getInterviewListItems(applications: ApplicationRecord[]): InterviewListItem[] {
+export function getInterviewListItems(applications: ApplicationSummary[]): InterviewListItem[] {
   return applications.flatMap((application) => application.interviews.map((interview) => ({
     id: interview.id,
     applicationId: application.id,
@@ -130,7 +130,7 @@ export function getInterviewListItems(applications: ApplicationRecord[]): Interv
 }
 
 /** Counts upcoming rounds for applications still in progress, matching the Overview card. */
-export function getUpcomingInterviewCount(applications: ApplicationRecord[], now: string) {
+export function getUpcomingInterviewCount(applications: ApplicationSummary[], now: string) {
   return applications.filter(isInProgressApplication).reduce((count, application) =>
     count + application.interviews.filter((interview) => isUpcomingInterview(interview, now)).length, 0);
 }

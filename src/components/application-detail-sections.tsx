@@ -11,7 +11,7 @@ import { safeLink } from "@/lib/safe-link";
 import { isCreationEvent } from "@/lib/status-history";
 import type { TimeFormat } from "@/lib/settings-values";
 import { useTimeFormat } from "@/hooks/use-time-format";
-import type { ApplicationDetails, ApplicationRecord, ContactRecord, InterviewRecord } from "@/types/application";
+import type { ApplicationDetails, ApplicationRecord, ApplicationSummary, ContactRecord, InterviewRecord } from "@/types/application";
 
 export type ApplicationChange =
   | { kind: "details"; fields: ApplicationDetails }
@@ -53,6 +53,15 @@ function ErrorText({ message }: { message: string }) {
   return message ? <p className="mt-2 text-sm text-rose" role="alert">{message}</p> : null;
 }
 
+function LoadError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  return (
+    <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink-soft">
+      The {what} could not be loaded.
+      <button className={linkButton} onClick={onRetry} type="button">Try again</button>
+    </p>
+  );
+}
+
 /** A Delete button that asks for a second click before it removes anything. */
 function DeleteButton({ label, disabled, onDelete, warning }: { label: string; disabled: boolean; onDelete: () => void; warning?: string }) {
   const [confirming, setConfirming] = useState(false);
@@ -68,20 +77,20 @@ function DeleteButton({ label, disabled, onDelete, warning }: { label: string; d
   );
 }
 
-function FormActions({ saving, submitLabel, onCancel }: { saving: boolean; submitLabel: string; onCancel: () => void }) {
+function FormActions({ saving, submitLabel, onCancel, disabled = false }: { saving: boolean; submitLabel: string; onCancel: () => void; disabled?: boolean }) {
   return (
     <div className="flex justify-end gap-2">
       <button className={`btn-ghost px-3 py-1.5 text-sm ${focusRing}`} disabled={saving} onClick={onCancel} type="button">Cancel</button>
-      <button className={`btn-primary px-3 py-1.5 text-sm ${focusRing}`} disabled={saving} type="submit">{saving ? "Saving…" : submitLabel}</button>
+      <button className={`btn-primary px-3 py-1.5 text-sm ${focusRing}`} disabled={saving || disabled} type="submit">{saving ? "Saving…" : submitLabel}</button>
     </div>
   );
 }
 
 /** The editable fields of an application, as the details form holds them. */
-function detailsOf(application: ApplicationRecord): ApplicationDetails {
+function detailsOf(application: ApplicationSummary): Omit<ApplicationDetails, "notes"> {
   return {
     company: application.company, role: application.role, source: application.source ?? "",
-    appliedDate: application.appliedDate.slice(0, 10), notes: application.notes ?? "", jobUrl: application.jobUrl ?? "",
+    appliedDate: application.appliedDate.slice(0, 10), jobUrl: application.jobUrl ?? "",
   };
 }
 
@@ -95,8 +104,10 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** Applied date, source, and job link, or (while `editing`) a form for those plus company and role. */
-export function DetailsSection({ application, today, editing, sourceSuggestions, onDone, onSave }: {
-  application: ApplicationRecord;
+export function DetailsSection({ application, record, today, editing, sourceSuggestions, onDone, onSave }: {
+  application: ApplicationSummary;
+  /** The full record, or null while it loads. */
+  record: ApplicationRecord | null;
   today: string;
   editing: boolean;
   sourceSuggestions: string[];
@@ -104,7 +115,7 @@ export function DetailsSection({ application, today, editing, sourceSuggestions,
   onSave: SaveChange;
 }) {
   const postingUrl = safeLink(application.jobUrl);
-  if (editing) return <DetailsForm application={application} onDone={onDone} onSave={onSave} sourceSuggestions={sourceSuggestions} />;
+  if (editing) return <DetailsForm application={application} onDone={onDone} onSave={onSave} record={record} sourceSuggestions={sourceSuggestions} />;
 
   return (
     <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm">
@@ -120,8 +131,9 @@ export function DetailsSection({ application, today, editing, sourceSuggestions,
 }
 
 /** Mounted each time editing opens, so it starts from the saved details. */
-function DetailsForm({ application, sourceSuggestions, onDone, onSave }: {
-  application: ApplicationRecord;
+function DetailsForm({ application, record, sourceSuggestions, onDone, onSave }: {
+  application: ApplicationSummary;
+  record: ApplicationRecord | null;
   sourceSuggestions: string[];
   onDone: () => void;
   onSave: SaveChange;
@@ -130,14 +142,15 @@ function DetailsForm({ application, sourceSuggestions, onDone, onSave }: {
   const [fields, setFields] = useState(() => detailsOf(application));
   const companyRef = useRef<HTMLInputElement>(null);
   const id = useId();
-  const set = <K extends keyof ApplicationDetails>(key: K, value: ApplicationDetails[K]) => setFields((current) => ({ ...current, [key]: value }));
+  const set = <K extends keyof typeof fields>(key: K, value: (typeof fields)[K]) => setFields((current) => ({ ...current, [key]: value }));
 
   useEffect(() => { companyRef.current?.focus(); }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    // Details editing leaves the saved summary as it is.
-    if (await run({ kind: "details", fields: { ...fields, notes: application.notes ?? "" } })) onDone();
+    // Details editing leaves the saved summary as it is; saving waits for the full record that holds it.
+    if (!record) return;
+    if (await run({ kind: "details", fields: { ...fields, notes: record.notes ?? "" } })) onDone();
   }
 
   return (
@@ -153,12 +166,12 @@ function DetailsForm({ application, sourceSuggestions, onDone, onSave }: {
       </div>
       <label className={fieldLabel} htmlFor={`${id}-url`}>Job link <span className="font-normal">(optional)</span><input className="input mt-1.5 text-sm" id={`${id}-url`} maxLength={2000} onChange={(event) => set("jobUrl", event.target.value)} placeholder="https://…" type="url" value={fields.jobUrl} /></label>
       <ErrorText message={error} />
-      <FormActions onCancel={onDone} saving={saving} submitLabel="Save details" />
+      <FormActions disabled={!record} onCancel={onDone} saving={saving} submitLabel="Save details" />
     </form>
   );
 }
 
-export function FollowUpSection({ application, today, onSave }: { application: ApplicationRecord; today: string; onSave: SaveChange }) {
+export function FollowUpSection({ application, today, onSave }: { application: ApplicationSummary; today: string; onSave: SaveChange }) {
   const { saving, error, run } = useSave(onSave);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ date: "", note: "" });
@@ -238,7 +251,7 @@ const interviewFields = (interview: InterviewRecord): InterviewFields => ({
   date: interview.date.slice(0, 10), time: interview.time ?? "", type: interview.type, interviewers: interview.interviewers ?? "", notes: interview.notes ?? "",
 });
 
-export function InterviewsSection({ application, today, now, onSave }: { application: ApplicationRecord; today: string; now: string; onSave: SaveChange }) {
+export function InterviewsSection({ application, today, now, onSave }: { application: ApplicationSummary; today: string; now: string; onSave: SaveChange }) {
   const { saving, error, run } = useSave(onSave);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const headingId = useId();
@@ -321,7 +334,8 @@ const contactFields = (contact: ContactRecord): ContactFields => ({
   name: contact.name, role: contact.role ?? "", email: contact.email ?? "", linkedinUrl: contact.linkedinUrl ?? "", notes: contact.notes ?? "",
 });
 
-export function ContactsSection({ application, onSave }: { application: ApplicationRecord; onSave: SaveChange }) {
+/** `contacts` is null while the full record loads. */
+export function ContactsSection({ contacts, loadError, onRetry, onSave }: { contacts: ContactRecord[] | null; loadError: boolean; onRetry: () => void; onSave: SaveChange }) {
   const { saving, error, run } = useSave(onSave);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const headingId = useId();
@@ -341,9 +355,13 @@ export function ContactsSection({ application, onSave }: { application: Applicat
       {editing === "new" && (
         <ContactForm initial={{ name: "", role: "", email: "", linkedinUrl: "", notes: "" }} onCancel={() => setEditing(null)} onSubmit={(fields) => void save(fields)} saving={saving} submitLabel="Add contact" />
       )}
-      {application.contacts.length === 0 && editing !== "new" && <p className="mt-2 text-sm text-ink-soft">No contacts yet.</p>}
+      {loadError ? (
+        <LoadError onRetry={onRetry} what="contacts" />
+      ) : !contacts ? (
+        <p className="mt-2 text-sm text-ink-soft" role="status">Loading contacts…</p>
+      ) : contacts.length === 0 && editing !== "new" && <p className="mt-2 text-sm text-ink-soft">No contacts yet.</p>}
       <ul className="mt-2 divide-y divide-line/70">
-        {application.contacts.map((contact) => {
+        {contacts?.map((contact) => {
           const linkedin = safeLink(contact.linkedinUrl);
           return (
             <li className="py-2.5" key={contact.id}>
@@ -404,10 +422,11 @@ function FollowUpEventEntry({ event, timeFormat, deleteButton }: { event: Histor
  * moves the application back to its previous status. Follow-up entries are recorded when a follow-up is set,
  * changed, or marked done, and deleting one leaves the current reminder as it is.
  */
-export function TimelineSection({ boards, events, loadError, onSave, status }: {
+export function TimelineSection({ boards, events, loadError, onRetry, onSave, status }: {
   boards: BoardConfiguration[];
   events: HistoryEvent[] | null;
   loadError: boolean;
+  onRetry: () => void;
   onSave: SaveChange;
   status: Status;
 }) {
@@ -442,7 +461,7 @@ export function TimelineSection({ boards, events, loadError, onSave, status }: {
       </form>
       <ErrorText message={error} />
       {loadError ? (
-        <p className="mt-3 text-sm text-ink-soft">The timeline could not be loaded.</p>
+        <LoadError onRetry={onRetry} what="timeline" />
       ) : !events ? (
         <p className="mt-3 text-sm text-ink-soft" role="status">Loading timeline…</p>
       ) : events.length === 0 ? (

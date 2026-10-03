@@ -5,11 +5,11 @@ import type { RefObject } from "react";
 
 import { Dialog } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
-import type { ApplicationRecord } from "@/types/application";
+import type { ApplicationSummary } from "@/types/application";
 
 export function DeleteDialog({ applications, deleting, onCancel, onConfirm, returnFocusRef }: {
   /** One application, or several selected in the table. */
-  applications: ApplicationRecord[];
+  applications: ApplicationSummary[];
   deleting: boolean;
   onCancel: () => void;
   onConfirm: () => void;

@@ -2,9 +2,9 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { ZodError, type ZodIssue } from "zod";
 
-export type ValidationIssue = { path: string; message: string };
+type ValidationIssue = { path: string; message: string };
 
-export function formatValidationIssues(error: ZodError): ValidationIssue[] {
+function formatValidationIssues(error: ZodError): ValidationIssue[] {
   return collectValidationIssues(error.issues).map(({ path, message }) => ({ path, message }));
 }
 
@@ -36,7 +36,7 @@ export function apiError(error: unknown) {
 
 export class RequestJsonError extends Error {}
 
-export class RequestValidationError extends Error {
+class RequestValidationError extends Error {
   constructor(readonly validation: ZodError) {
     super("Invalid request data");
   }
