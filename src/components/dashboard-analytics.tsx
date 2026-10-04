@@ -194,7 +194,7 @@ function StatusBreakdown({ counts, range, barDelayBase }: { counts: AnalyticsDat
               {counts[status] > 0
                 ? <Link className="min-w-0 rounded-nook-sm font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" href={rangeHref(range, status)}>{boardLabel(BOARDS, status)}</Link>
                 : <span className="min-w-0 font-medium text-ink">{boardLabel(BOARDS, status)}</span>}
-              <span className="shrink-0 tabular-nums text-ink" aria-label={`${counts[status]} applications`}>{counts[status]}</span>
+              <span className="shrink-0 tabular-nums text-ink">{counts[status]}</span>
             </div>
             <div aria-hidden="true" className="mt-1.5 h-2 rounded-full bg-cream-2">
               <div className={`motion-bar-grow-x h-full rounded-full ${boardDot(BOARDS, status)}`} style={{ width: `${maxCount ? (counts[status] / maxCount) * 90 : 0}%`, animationDelay: `${barDelayBase + index * BAR_STAGGER_MS}ms` }} />

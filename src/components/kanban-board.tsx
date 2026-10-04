@@ -78,7 +78,7 @@ export function KanbanBoard({ applications, boards, movingIds, emptyText, today,
 
   return (
     <div ref={laneRef} className="board-lane scrollbar-styled overflow-x-auto overflow-y-hidden">
-      <div ref={boardRef} className="board-columns flex h-full min-h-0 items-stretch gap-4" aria-label="Application status board">
+      <div ref={boardRef} className="board-columns flex h-full min-h-0 items-stretch gap-4" role="group" aria-label="Application status board">
         {boards.map((board, index) => (
           <KanbanColumn key={board.status} order={index} board={board} applications={columns.get(board.status) ?? []} movingIds={movingIds} emptyText={emptyText ?? board.emptyText} card={{ today, now, staleDays, onOpen }} />
         ))}

@@ -33,7 +33,7 @@ function OverviewMetrics({ data }: { data: OverviewData | null }) {
   );
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-label="Overview metrics">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" role="group" aria-label="Overview metrics">
       <DashboardMetricCard label="Total applications" order={0} value={data?.totalApplications ?? "—"} detail="All time" href={applicationTableHref({ archived: "all" })} />
       <DashboardMetricCard label="Active pipeline" order={1} value={data?.activePipeline ?? "—"} detail="Currently active" href={applicationTableHref({ status: "active" })} />
       <DashboardMetricCard label="Upcoming interviews" order={2} value={data?.upcomingInterviews.count ?? "—"} href="/interviews" />
