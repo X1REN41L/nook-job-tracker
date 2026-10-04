@@ -100,7 +100,7 @@ function KanbanColumn({ board, order, applications, movingIds, emptyText, card }
   return (
     <section ref={setNodeRef} data-board-status={board.status} style={revealDelay(order, { base: 40, step: 50 })} className={`motion-surface motion-reveal kanban-column flex h-full min-h-0 flex-col rounded-nook-lg border p-3 ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
       <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1.5 pt-1">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><span className={`status-dot ${board.dot}`} />{board.label}</h3>
+        <h2 className="flex items-center gap-2 text-sm font-semibold"><span className={`status-dot ${board.dot}`} />{board.label}</h2>
         <span className="rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-medium text-ink-soft">{applications.length}</span>
       </div>
       <div ref={scrollRef} className="kanban-column-scroll scrollbar-styled min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain pr-2">
@@ -157,7 +157,7 @@ function KanbanCard({ application, disabled, today, now, staleDays, onOpen }: {
           else listeners?.onKeyDown?.(event);
         }}
       />
-      <h4 className="line-clamp-2 break-words font-serif text-[15px] font-semibold">{application.role}</h4>
+      <h3 className="line-clamp-2 break-words font-serif text-[15px] font-semibold">{application.role}</h3>
       <p className={`mb-2 mt-0.5 text-[13px] text-ink-soft ${postingUrl ? "flex items-center gap-1" : "truncate"}`}>
         {postingUrl ? <span className="min-w-0 truncate">{application.company}</span> : application.company}
         {postingUrl && (
