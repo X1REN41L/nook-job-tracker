@@ -1,0 +1,234 @@
+
+
+import { expect, gotoReady, readSettings, resetSettings, test, sameOriginMutationHeaders } from "./api-helpers";
+
+test("search is inert off the Job Board and application actions ignore Interviews", async ({ page, request }) => {
+  const response = await request.post("/api/applications", {
+    headers: sameOriginMutationHeaders,
+    data: {
+      company: "Shortcut scope fixture",
+      role: "Tester",
+      status: "APPLIED",
+      appliedDate: "2026-09-22",
+      source: "Playwright",
+      notes: "",
+      jobUrl: "",
+    },
+  });
+  expect(response.status()).toBe(201);
+  const { application } = await response.json();
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+
+  for (const route of ["/interviews", "/dashboard"]) {
+    await resetSettings(request, { sidebarCollapsed: true });
+    await gotoReady(page, route);
+    await page.keyboard.press("/");
+    expect((await readSettings(request)).sidebarCollapsed).toBe(true);
+    if (route === "/interviews") {
+      await expect(page.getByRole("searchbox", { name: "Search company or role" })).toBeFocused();
+    } else {
+      expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("INPUT");
+    }
+    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+    await page.keyboard.press("e");
+    await page.keyboard.press("Delete");
+    await page.keyboard.press("Backspace");
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  }
+
+  const record = await request.get(`/api/applications/${application.id}`);
+  expect(record.ok()).toBe(true);
+  expect((await record.json()).application.archived).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("Escape closes the interview date prompt without marking it skipped", async ({ page, request }) => {
+  const response = await request.post("/api/applications", {
+    headers: sameOriginMutationHeaders,
+    data: {
+      company: "Shortcut date fixture",
+      role: "Tester",
+      status: "APPLIED",
+      appliedDate: "2026-09-22",
+      source: "Playwright",
+      notes: "",
+      jobUrl: "",
+    },
+  });
+  expect(response.status()).toBe(201);
+  const { application } = await response.json();
+  await page.goto("/jobs");
+  await page.locator(`[data-kanban-card-id="${application.id}"]`).press("Enter");
+  await page.getByRole("dialog", { name: application.role }).getByLabel("Status", { exact: true }).selectOption("INTERVIEW");
+  const datePrompt = page.getByRole("dialog", { name: "Add interview date" });
+  await expect(datePrompt).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(datePrompt).toHaveCount(0);
+  const record = await request.get(`/api/applications/${application.id}`);
+  expect((await record.json()).application.interviewDatePromptDismissed).toBe(false);
+});
+
+test("general shortcuts work across routes while page actions remain scoped", async ({ page, request }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+  const modifier = process.platform === "darwin" ? "Meta" : "Control";
+
+  for (const route of ["/jobs", "/interviews", "/dashboard"]) {
+    await page.goto(route);
+    await page.keyboard.press("Alt+n");
+    await expect(page.getByRole("dialog", { name: "Add a job" })).toHaveCount(0);
+    await page.keyboard.press("n");
+    await expect(page.getByRole("dialog", { name: "Add a job" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Add a job" })).toHaveCount(0);
+
+    await page.keyboard.press("/");
+    if (route === "/jobs" || route === "/interviews") await expect(page.getByRole("searchbox", { name: "Search company or role" })).toBeFocused();
+    if (route === "/dashboard") expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("INPUT");
+    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+
+    await page.keyboard.press("?");
+    const shortcuts = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+    await expect(shortcuts).toBeVisible();
+    await expect(shortcuts.locator("li", { hasText: "Undo" }).locator("kbd .sr-only")).toHaveText(modifier === "Meta" ? "⌃Z" : "Ctrl+Z");
+    await expect(shortcuts.locator("li", { hasText: "Settings" }).locator("kbd .sr-only")).toHaveText(modifier === "Meta" ? "⌘⇧," : "Ctrl+Shift+,");
+    await expect(shortcuts.getByRole("region", { name: "Job Board" }).locator("li", { hasText: "Archive card" }).locator("kbd .sr-only")).toHaveText("E");
+    await expect(shortcuts.getByRole("region", { name: "Go to" }).locator("li", { hasText: "Job Board" }).locator("kbd .sr-only")).toHaveText("G then J");
+    await page.keyboard.press("Escape");
+    await expect(shortcuts).toHaveCount(0);
+
+    await page.keyboard.press("e");
+    await page.keyboard.press("Delete");
+    await page.keyboard.press("Backspace");
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await page.keyboard.press(`${modifier}+z`);
+    await expect(page.locator(".nook-toast-wrap")).toHaveAttribute("aria-hidden", "true");
+
+    const before = (await readSettings(request)).sidebarCollapsed;
+    await page.keyboard.press("Control+Slash");
+    await expect.poll(async () => (await readSettings(request)).sidebarCollapsed).toBe(!before);
+
+    await page.keyboard.press(`${modifier}+Shift+,`);
+    const settings = page.getByRole("dialog", { name: "Settings" });
+    await expect(settings).toBeVisible();
+    const collapsed = (await readSettings(request)).sidebarCollapsed;
+    for (const key of ["n", "/", "?", "e", "Delete", "Backspace", "Control+Slash", `${modifier}+z`, "g", "j", "ArrowDown"]) {
+      await page.keyboard.press(key);
+    }
+    await expect(settings).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Add a job" })).toHaveCount(0);
+    expect((await readSettings(request)).sidebarCollapsed).toBe(collapsed);
+    expect(new URL(page.url()).pathname).toBe(route);
+    await page.keyboard.press("Escape");
+    await expect(settings).toHaveCount(0);
+  }
+  expect(errors).toEqual([]);
+});
+
+test("keyboard-only navigation, card focus, archive, delete, and undo", async ({ page, request }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+  async function create(company: string, status: string) {
+    const response = await request.post("/api/applications", {
+      headers: sameOriginMutationHeaders,
+      data: { company, role: "Keyboard flow", status, appliedDate: "2026-09-26", source: "Playwright", notes: "", jobUrl: "" },
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()).application as { id: string };
+  }
+  const applied = await create("Keyboard applied", "APPLIED");
+  const assessment = await create("Keyboard assessment", "ONLINE_ASSESSMENT");
+
+  await page.goto("/dashboard");
+  await page.keyboard.press("g");
+  await page.waitForTimeout(1100);
+  await page.keyboard.press("j");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("j");
+  await expect(page).toHaveURL(/\/jobs$/);
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator(`[data-kanban-card-id="${applied.id}"]`)).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(`[data-kanban-card-id="${assessment.id}"]`)).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator(`[data-kanban-card-id="${applied.id}"]`)).toBeFocused();
+
+  await page.keyboard.press("e");
+  await expect(page.locator(`[data-kanban-card-id="${applied.id}"]`)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(`[data-kanban-card-id="${applied.id}"]`)).toBeVisible();
+  await expect(page.locator(`[data-kanban-card-id="${applied.id}"]`)).toBeFocused();
+  await page.keyboard.press("Delete");
+  const deleteDialog = page.getByRole("alertdialog", { name: "Delete application?" });
+  await expect(deleteDialog).toBeVisible();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await expect(deleteDialog).toHaveCount(0);
+  await expect(page.locator(`[data-kanban-card-id="${applied.id}"]`)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(`[data-kanban-card-id="${applied.id}"]`)).toBeVisible();
+
+  await page.keyboard.press("g");
+  await page.keyboard.press("d");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("a");
+  await expect(page).toHaveURL(/\/dashboard\/analytics$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("t");
+  await expect(page).toHaveURL(/\/table$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("d");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.keyboard.press("g");
+  await page.keyboard.press("o");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("e");
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await page.keyboard.press("Backspace");
+  await expect(page.getByRole("alertdialog", { name: "Delete application?" })).toHaveCount(0);
+
+  await page.keyboard.press("g");
+  await page.keyboard.press("i");
+  await expect(page).toHaveURL(/\/interviews$/);
+  await page.keyboard.press("/");
+  const search = page.getByRole("searchbox", { name: "Search company or role" });
+  await expect(search).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Upcoming" })).toHaveAttribute("aria-selected", "true");
+  await search.evaluate((element) => (element as HTMLElement).blur());
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Past" })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("tab", { name: "Upcoming" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Upcoming" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Past" })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("tab", { name: "Upcoming" })).toHaveAttribute("aria-selected", "true");
+  expect(errors).toEqual([]);
+});
+
+test("← → switch Interviews tabs without focusing them, but not while typing", async ({ page }) => {
+  await page.goto("/interviews");
+  const upcoming = page.getByRole("tab", { name: "Upcoming" });
+  const past = page.getByRole("tab", { name: "Past" });
+  await expect(upcoming).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(past).toHaveAttribute("aria-selected", "true");
+  expect(await page.evaluate(() => document.activeElement?.getAttribute("role"))).not.toBe("tab");
+  await page.keyboard.press("ArrowLeft");
+  await expect(upcoming).toHaveAttribute("aria-selected", "true");
+
+  const search = page.getByRole("searchbox", { name: "Search company or role" });
+  await search.fill("abc");
+  await page.keyboard.press("ArrowRight");
+  await expect(upcoming).toHaveAttribute("aria-selected", "true");
+});

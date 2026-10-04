@@ -12,6 +12,11 @@
     "start": "next start -H 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
+    "test": "npm run test:nonbrowser",
+    "test:unit": "node scripts/local-test.mjs unit",
+    "test:api": "node scripts/local-test.mjs api",
+    "test:nonbrowser": "node scripts/local-test.mjs nonbrowser",
+    "test:e2e": "node scripts/local-test.mjs e2e",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio"
   },

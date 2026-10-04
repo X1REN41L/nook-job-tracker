@@ -1,0 +1,66 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { analyzeStatusHistory, nextStatusEventTime, planStatusEventDeletion, statusTransitionDetail } from "../src/lib/status-history.ts";
+
+const at = (value) => new Date(value);
+const event = (id, fromStatus, toStatus, createdAt) => ({ id, type: "STATUS_CHANGE", fromStatus, toStatus, detail: statusTransitionDetail(fromStatus, toStatus), createdAt });
+
+test("new status timestamps advance past future and equal latest events", () => {
+  const now = at("2026-09-01T00:00:00.000Z");
+  assert.equal(nextStatusEventTime(null, now).getTime(), now.getTime());
+  assert.equal(nextStatusEventTime(at("2026-08-31T00:00:00.000Z"), now).getTime(), now.getTime());
+  assert.equal(nextStatusEventTime(now, now).getTime(), now.getTime() + 1);
+  assert.equal(nextStatusEventTime(at("2099-01-01T00:00:00.000Z"), now).toISOString(), "2099-01-01T00:00:00.001Z");
+});
+
+test("analysis sorts status events and identifies the latest event", () => {
+  const first = event("a", null, "APPLIED", "2026-09-01T00:00:00.000Z");
+  const second = event("b", "APPLIED", "INTERVIEW", "2026-09-01T00:00:00.001Z");
+  const result = analyzeStatusHistory("INTERVIEW", [second, { id: "note", type: "NOTE", createdAt: first.createdAt }, first]);
+  assert.equal(result.complete, true);
+  assert.equal(result.latestStatusEvent.id, "b");
+  assert.deepEqual([...result.knownStatuses].sort(), ["APPLIED", "INTERVIEW"]);
+  assert.equal(analyzeStatusHistory("APPLIED", [first]).latestStatusEvent.id, "a");
+});
+
+test("equal-time and incomplete histories do not claim a complete ordered trail", () => {
+  const time = "2026-09-01T00:00:00.000Z";
+  const first = event("a", null, "APPLIED", time);
+  const second = event("b", "APPLIED", "INTERVIEW", time);
+  assert.equal(analyzeStatusHistory("INTERVIEW", [first, second]).complete, false);
+  assert.equal(analyzeStatusHistory("APPLIED", [first, second]).complete, false);
+  assert.equal(analyzeStatusHistory("INTERVIEW", [{ ...first, toStatus: null }]).complete, false);
+});
+
+test("removed undo move restores the prior milestone trail", () => {
+  const first = event("a", null, "APPLIED", "2026-01-01T00:00:00.000Z");
+  const moved = event("b", "APPLIED", "OFFER", "2026-09-01T00:00:00.000Z");
+  assert.equal(analyzeStatusHistory("OFFER", [first, moved]).knownStatuses.has("OFFER"), true);
+  const undone = analyzeStatusHistory("APPLIED", [first]);
+  assert.equal(undone.complete, true);
+  assert.equal(undone.knownStatuses.has("OFFER"), false);
+  assert.equal(undone.latestStatusEvent.id, "a");
+});
+
+test("deleting a status change reconnects the history around it", () => {
+  const added = event("a", null, "APPLIED", "2026-09-01T00:00:00.000Z");
+  const assessed = event("b", "APPLIED", "ONLINE_ASSESSMENT", "2026-09-02T00:00:00.000Z");
+  const interviewed = event("c", "ONLINE_ASSESSMENT", "INTERVIEW", "2026-09-03T00:00:00.000Z");
+  const history = [interviewed, added, assessed];
+
+  assert.deepEqual(planStatusEventDeletion("INTERVIEW", history, "b"), {
+    deleteIds: ["b"], update: { id: "c", fromStatus: "APPLIED", detail: statusTransitionDetail("APPLIED", "INTERVIEW") }, status: "INTERVIEW",
+  }, "The next change now starts where the removed one began");
+  assert.deepEqual(planStatusEventDeletion("INTERVIEW", history, "c"), { deleteIds: ["c"], update: null, status: "ONLINE_ASSESSMENT" }, "Removing the latest change moves the status back");
+  assert.equal(planStatusEventDeletion("INTERVIEW", history, "a"), "locked", "The entry the application was added with stays");
+  assert.equal(planStatusEventDeletion("INTERVIEW", history, "missing"), null);
+  assert.equal(planStatusEventDeletion("INTERVIEW", [{ ...added, id: "note", type: "NOTE_ADDED" }], "note"), null, "Notes are not status changes");
+
+  const back = event("d", "ONLINE_ASSESSMENT", "APPLIED", "2026-09-04T00:00:00.000Z");
+  assert.deepEqual(planStatusEventDeletion("APPLIED", [added, assessed, back], "b"), { deleteIds: ["b", "d"], update: null, status: "APPLIED" }, "A change that would become a no-op is removed too");
+  assert.equal(planStatusEventDeletion("APPLIED", [added], "a"), "locked", "An application's only entry stays");
+  const legacyFirst = event("e", "APPLIED", "ONLINE_ASSESSMENT", "2026-09-02T00:00:00.000Z");
+  assert.deepEqual(planStatusEventDeletion("ONLINE_ASSESSMENT", [legacyFirst], "e"), { deleteIds: ["e"], update: null, status: "APPLIED" }, "A first entry that is a move, not the creation, can be removed");
+  const result = analyzeStatusHistory("INTERVIEW", [added, { ...interviewed, fromStatus: "APPLIED", detail: statusTransitionDetail("APPLIED", "INTERVIEW") }]);
+  assert.equal(result.complete, true, "The reconnected history still matches the saved status");
+});
