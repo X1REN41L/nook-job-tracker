@@ -130,7 +130,12 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
             ))}
           </nav>
 
-          <div className="scrollbar-styled min-h-0 overflow-y-auto p-5 sm:p-6">
+          <div
+            aria-labelledby={category === "shortcuts" ? "settings-shortcuts-title" : undefined}
+            className="scrollbar-styled min-h-0 overflow-y-auto p-5 sm:p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-forest"
+            role={category === "shortcuts" ? "region" : undefined}
+            tabIndex={category === "shortcuts" ? 0 : undefined}
+          >
             {category === "general" && (
               <div>
                 <h3 className="font-serif text-lg font-semibold">General</h3>
@@ -179,7 +184,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
 
             {category === "shortcuts" && (
               <div>
-                <h3 className="font-serif text-lg font-semibold">Keyboard shortcuts</h3>
+                <h3 className="font-serif text-lg font-semibold" id="settings-shortcuts-title">Keyboard shortcuts</h3>
                 <ShortcutList className="mt-4" isMac={isMac} />
               </div>
             )}
