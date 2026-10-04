@@ -119,7 +119,7 @@ function FollowUpRow({ item, application, reveal, busy, onOpen, onDone }: {
         onClick={() => { if (application) onOpen(application); }}
         type="button"
       >
-        <span className="block text-xs font-semibold tracking-wide text-clay">FOLLOW UP</span>
+        <span className="block text-xs font-semibold tracking-wide text-follow-up-label">FOLLOW UP</span>
         {/* The title leaves room for Done, which sits at the top right. */}
         <span className="mt-1 block break-words pr-20 text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
         {item.followUpNote && <span className="mt-1 block break-words text-sm text-ink">{item.followUpNote}</span>}

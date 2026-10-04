@@ -172,7 +172,7 @@ function ApplicationsTrend({ range, trend, today, barDelayBase }: { range: Analy
         </div>
         <div aria-hidden="true" className="flex gap-1 px-1 pt-2 sm:gap-2">
           {trend.buckets.map((bucket) => (
-            <span className={`min-w-0 flex-1 text-center text-[11px] leading-tight ${upcoming(bucket) ? "text-ink-soft/45" : "text-ink-soft"}`} key={bucket.startDate}>
+            <span className={`min-w-0 flex-1 text-center text-[11px] leading-tight ${upcoming(bucket) ? "text-trend-upcoming" : "text-ink-soft"}`} key={bucket.startDate}>
               {trend.granularity === "WEEK" ? formatAxisWeek(bucket.startDate, bucket.endDate) : formatMonth(bucket.startDate, "short")}
             </span>
           ))}

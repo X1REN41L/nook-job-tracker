@@ -154,7 +154,7 @@ export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
               <div className="flex flex-col gap-9 sm:gap-12">
                 {groups.map((group, index) => (
                   <section key={group.key} className={revealing ? "motion-reveal" : undefined} style={revealing ? revealDelay(index, GROUP_TIMING) : undefined} aria-labelledby={`${id}-${group.key}-heading`}>
-                    <h3 className={`mb-5 border-b border-line/70 pb-3 font-sans text-xs font-semibold uppercase tracking-[0.12em] ${group.key === "today" ? "text-forest" : group.key === "tomorrow" ? "text-gold" : group.key === "later-this-week" ? "text-clay" : "text-rose"}`} id={`${id}-${group.key}-heading`}>
+                    <h3 className={`mb-5 border-b border-line/70 pb-3 font-sans text-xs font-semibold uppercase tracking-[0.12em] ${group.key === "today" ? "text-forest" : group.key === "tomorrow" ? "text-interview-tomorrow" : group.key === "later-this-week" ? "text-interview-later" : "text-interview-next-week"}`} id={`${id}-${group.key}-heading`}>
                       {group.label}
                     </h3>
                     <div>

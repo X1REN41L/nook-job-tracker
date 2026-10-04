@@ -29,12 +29,18 @@
 
   --color-clay: #C1694F;
   --color-clay-tint: #F5E1D9;
+  --color-follow-up-label: #9B4D37;
+  --color-interview-later: #9B4D37;
 
   --color-gold: #C99A3E;
   --color-gold-tint: #F6ECD6;
+  --color-interview-tomorrow: #866018;
 
   --color-rose: #B15C57;
   --color-rose-tint: #F3E1DE;
+  --color-interview-next-week: #99504B;
+
+  --color-trend-upcoming: #746A5D;
 
   --color-sage: #8A9E6C;
   --color-sage-tint: #EBEEDF;
@@ -95,12 +101,18 @@
 
   --color-clay: #E39872;
   --color-clay-tint: #372820;
+  --color-follow-up-label: #E39872;
+  --color-interview-later: #E39872;
 
   --color-gold: #E0BB6C;
   --color-gold-tint: #362D1C;
+  --color-interview-tomorrow: #E0BB6C;
 
   --color-rose: #E0948C;
   --color-rose-tint: #372423;
+  --color-interview-next-week: #E0948C;
+
+  --color-trend-upcoming: #A09482;
 
   --color-sage: #A9BF8C;
   --color-sage-tint: #2A3324;
