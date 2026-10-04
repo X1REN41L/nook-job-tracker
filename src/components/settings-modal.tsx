@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useSyncExternalStore } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { ChangeEvent, ReactNode, RefObject } from "react";
 import { DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
 
 import { ShortcutList } from "@/components/shortcut-list";
@@ -91,6 +91,14 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
     setImportError("");
     const error = await onImport(file);
     if (error) setImportError(error);
+  }
+
+  function handleImportSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    closeRef.current?.focus();
+    void handleImport(file);
   }
 
   return (
@@ -190,7 +198,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                     <button ref={deleteTriggerRef} className="btn-danger shrink-0 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose disabled:cursor-not-allowed" disabled={deleteDisabled || importProgress !== null || deletingAll} onClick={openDeleteConfirmation} type="button">Delete all data</button>
                   </div>
                 </div>
-                <input ref={importInputRef} accept="application/json,.json" className="sr-only" onChange={(event) => { void handleImport(event.target.files?.[0]); event.target.value = ""; }} tabIndex={-1} type="file" />
+                <input ref={importInputRef} accept="application/json,.json" aria-label="Choose backup file" className="sr-only" onChange={handleImportSelection} tabIndex={-1} type="file" />
                 {importProgress && <p className="mt-3 text-sm text-ink-soft" role="status">Importing {importProgress.current} of {importProgress.total}…</p>}
                 {importError && <p className="mt-3 text-sm text-rose" role="alert">{importError}</p>}
               </div>
