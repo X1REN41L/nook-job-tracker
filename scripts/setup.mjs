@@ -1,4 +1,4 @@
-import { constants, accessSync, existsSync, readFileSync, rmSync, writeFileSync, openSync, closeSync, mkdirSync } from "node:fs";
+import { constants, accessSync, chmodSync, existsSync, readFileSync, rmSync, writeFileSync, openSync, closeSync, mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
@@ -304,14 +304,19 @@ function sqliteReason(error) {
 }
 
 const database = databasePath();
-// Only Nook's default database is application-owned. Existing and configured paths keep their permissions.
-if (!process.env.DATABASE_URL && database === join(root, "prisma", "dev.db") && !existsSync(database)) {
+// Only Nook's default database is application-owned, so it is kept private, including one Prisma created with 0644
+// when Nook started before setup. Configured paths keep their permissions.
+if (!process.env.DATABASE_URL && database === join(root, "prisma", "dev.db")) {
   try {
-    mkdirSync(join(root, "prisma"), { recursive: true, mode: 0o700 });
-    closeSync(openSync(database, "wx", 0o600));
+    if (!existsSync(database)) {
+      mkdirSync(join(root, "prisma"), { recursive: true, mode: 0o700 });
+      closeSync(openSync(database, "wx", 0o600));
+    } else if (process.platform !== "win32") {
+      chmodSync(database, 0o600);
+    }
   } catch (error) {
     if (error.code !== "EEXIST") {
-      console.error("Setup failed: could not create the private local database.");
+      console.error("Setup failed: could not prepare the private local database.");
       process.exit(1);
     }
   }
