@@ -114,6 +114,7 @@ const isLegacyInterviewColumn = (table, column) => table === "Application" && co
 async function readTargetSchema() {
   const result = spawnSync(process.execPath, [prismaPath, "migrate", "diff", "--from-empty", "--to-schema-datamodel", join("prisma", "schema.prisma"), "--script"], {
     cwd: root,
+    env: prismaEnv,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
     maxBuffer: 16 * 1024 * 1024,
@@ -328,6 +329,8 @@ try {
   console.error("Setup failed: Prisma is unavailable. Run npm install first.");
   process.exit(1);
 }
+// Keeps Prisma's "update available" box out of the setup output.
+const prismaEnv = { ...process.env, PRISMA_HIDE_UPDATE_MESSAGE: "1" };
 
 let marker;
 try {
@@ -403,6 +406,7 @@ console.log("Running Prisma db push to create or sync the local database...");
 // data-loss check.
 const result = spawnSync(process.execPath, [prismaPath, "db", "push", ...(dropsLegacyColumn ? ["--accept-data-loss"] : [])], {
   cwd: root,
+  env: prismaEnv,
   stdio: "inherit",
 });
 
@@ -436,4 +440,4 @@ if (marker) {
   console.log("Verified the converted database against the rollback copy, then removed the copy.");
 }
 
-console.log("Setup complete. Run npm run dev to start Nook.");
+console.log("Setup complete. Run npm run build, then npm start, and open http://127.0.0.1:3000.");
