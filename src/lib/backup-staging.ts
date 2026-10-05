@@ -232,9 +232,11 @@ export async function cleanupAbandonedBackupStages() {
     const directory = join(root, name);
     try {
       const info = await lstat(directory);
-      if (!info.isDirectory() || info.uid !== process.getuid?.() || (info.mode & 0o777) !== 0o700) continue;
+      // Windows has no uid and no POSIX mode bits; there the owner marker alone identifies Nook's artifacts.
+      const posix = process.platform !== "win32";
+      if (!info.isDirectory() || (posix && (info.uid !== process.getuid?.() || (info.mode & 0o777) !== 0o700))) continue;
       const marker = await lstat(join(directory, "owner.json"));
-      if (!marker.isFile() || marker.uid !== info.uid || marker.size > 4096 || (marker.mode & 0o777) !== 0o600) continue;
+      if (!marker.isFile() || marker.size > 4096 || (posix && (marker.uid !== info.uid || (marker.mode & 0o777) !== 0o600))) continue;
       const owner = JSON.parse(await readFile(join(directory, "owner.json"), "utf8"));
       if (owner.project !== process.cwd() || !Number.isSafeInteger(owner.pid) || owner.pid <= 0) continue;
       try { process.kill(owner.pid, 0); continue; }
