@@ -45,9 +45,9 @@ function OverviewMetrics({ data }: { data: OverviewData | null }) {
 
 const linkClass = "shrink-0 rounded-nook-sm px-1 py-1 text-sm font-medium text-forest hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 const severityClass = {
-  CRITICAL: "text-rose",
-  HIGH: "text-clay",
-  MEDIUM: "text-gold",
+  CRITICAL: "text-rose-text",
+  HIGH: "text-clay-text",
+  MEDIUM: "text-gold-text",
 } as const;
 
 function PreviewHeading({ id, title, action }: { id: string; title: string; action: ReactNode }) {
@@ -230,8 +230,8 @@ function UpcomingInterviewsPreview({ items, now, rowRevealBase, loading, error, 
                   onClick={() => { if (application) onOpen(application); }}
                   type="button"
                 >
-                  <span className="block text-sm font-medium text-forest">{now && isInterviewInProgress({ date: item.interviewDate, time: item.time }, now) ? "Happening now" : <>{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time, timeFormat)}`}</>}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></span>
-                  <span className="mt-1 block break-words font-serif text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
+                  <span className="block text-xs font-semibold uppercase tracking-wide text-forest">{now && isInterviewInProgress({ date: item.interviewDate, time: item.time }, now) ? "Happening now" : <>{item.daysUntilInterview === 0 ? "Today" : item.daysUntilInterview === 1 ? "Tomorrow" : `In ${item.daysUntilInterview} days`}{item.time && `, ${formatInterviewTime(item.time, timeFormat)}`}</>}<span className="font-normal text-ink-soft"> · {INTERVIEW_TYPE_LABELS[item.type]}</span></span>
+                  <span className="mt-1 block break-words text-sm font-semibold leading-5 text-ink">{item.role} <span className="font-medium text-ink-soft">— {item.company}</span></span>
                 </button>
               </li>
             );

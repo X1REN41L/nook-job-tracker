@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 
-import { Dialog } from "@/components/dialog";
+import { Dialog, DIALOG_BACKDROP_TONE } from "@/components/dialog";
 import { ShortcutKeycaps } from "@/components/shortcut-list";
 import { compareApplications, matchesApplicationSearch } from "@/lib/application-list";
 import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-preferences";
@@ -69,7 +69,7 @@ export function CommandPalette({ applications, boards, commands, isMac, onClose,
 
   return (
     <Dialog
-      backdropClassName="motion-dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-modal-backdrop/40 p-4 pt-[12vh] backdrop-blur-[2px]"
+      backdropClassName={`motion-dialog-backdrop fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh] ${DIALOG_BACKDROP_TONE}`}
       className="motion-dialog-panel flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-nook-lg border border-line bg-paper shadow-nook-lift outline-none"
       initialFocusRef={inputRef}
       labelledBy={`${id}-title`}

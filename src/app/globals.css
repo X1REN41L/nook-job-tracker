@@ -48,18 +48,32 @@
   --color-neutral-dim: #9C9284;
   --color-neutral-dim-tint: #EDE8DF;
 
+  /* Accent shades for text on cream, paper, and tint surfaces. */
+  --color-gold-text: #866018;
+  --color-clay-text: #9B4D37;
+  --color-rose-text: #99504B;
+
   --radius-nook-sm: 10px;
   --radius-nook: 14px;
   --radius-nook-lg: 18px;
 
-  --shadow-nook: 0 1px 2px rgba(43, 38, 32, 0.06), 0 6px 20px rgba(43, 38, 32, 0.07);
-  --shadow-nook-lift: 0 4px 10px rgba(43, 38, 32, 0.1), 0 14px 32px rgba(43, 38, 32, 0.14);
+  /* Tailwind copies shadow values into the utilities, so these point at the
+     --nook-shadow-* variables below, which `.dark` can then override. */
+  --shadow-nook-sm: var(--nook-shadow-sm);
+  --shadow-nook: var(--nook-shadow);
+  --shadow-nook-lift: var(--nook-shadow-lift);
 
   --font-serif: var(--font-fraunces), Georgia, serif;
   --font-sans: var(--font-karla), ui-sans-serif, system-ui, sans-serif;
 }
 
 :root.dark { color-scheme: dark; }
+
+:root {
+  --nook-shadow-sm: 0 1px 2px rgba(43, 38, 32, 0.08);
+  --nook-shadow: 0 1px 2px rgba(43, 38, 32, 0.06), 0 6px 20px rgba(43, 38, 32, 0.07);
+  --nook-shadow-lift: 0 4px 10px rgba(43, 38, 32, 0.1), 0 14px 32px rgba(43, 38, 32, 0.14);
+}
 
 /* The dropdown chevron, drawn in --color-ink-soft; the dark theme redefines it. */
 :root {
@@ -120,8 +134,13 @@
   --color-neutral-dim: #A69C8C;
   --color-neutral-dim-tint: #2E2A22;
 
-  --shadow-nook: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
-  --shadow-nook-lift: 0 4px 10px rgba(0, 0, 0, 0.35), 0 14px 32px rgba(0, 0, 0, 0.4);
+  --color-gold-text: #E0BB6C;
+  --color-clay-text: #E39872;
+  --color-rose-text: #E0948C;
+
+  --nook-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --nook-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
+  --nook-shadow-lift: 0 4px 10px rgba(0, 0, 0, 0.35), 0 14px 32px rgba(0, 0, 0, 0.4);
 }
 
 body {
@@ -641,20 +660,25 @@ body.sidebar-resizing-active * {
   .kanban-card-focus:has(> .kanban-card-action:focus-visible) {
     outline: none;
     border-color: var(--color-forest);
-    box-shadow: 0 0 0 2px var(--color-forest-tint), var(--shadow-nook);
+    box-shadow: 0 0 0 2px var(--color-forest-tint), var(--nook-shadow);
     transition: none;
   }
 
   .btn-primary {
-    @apply rounded-nook-sm bg-forest px-4 py-2 text-sm font-medium text-cream hover:bg-forest-deep disabled:opacity-60;
+    @apply rounded-nook-sm bg-forest px-4 py-2 text-sm font-medium text-cream hover:bg-forest-deep disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest;
   }
 
   .btn-ghost {
-    @apply rounded-nook-sm border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-cream-2 disabled:opacity-60;
+    @apply rounded-nook-sm border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-cream-2 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest;
   }
 
   .btn-danger {
-    @apply rounded-nook-sm border border-rose px-4 py-2 text-sm font-medium text-rose hover:bg-rose-tint disabled:opacity-60;
+    @apply rounded-nook-sm border border-rose px-4 py-2 text-sm font-medium text-rose hover:bg-rose-tint hover:text-rose-text disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose;
+  }
+
+  /* Final destructive confirms. */
+  .btn-danger-solid {
+    @apply rounded-nook-sm bg-rose px-4 py-2 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose focus-visible:ring-offset-2 focus-visible:ring-offset-paper;
   }
 
   .badge {
@@ -666,7 +690,12 @@ body.sidebar-resizing-active * {
   }
 
   .icon-btn {
-    @apply flex h-9 w-9 items-center justify-center rounded-nook-sm border border-line bg-paper text-ink-soft hover:bg-cream-2 hover:text-ink;
+    @apply flex h-9 w-9 items-center justify-center rounded-nook-sm border border-line bg-paper text-ink-soft hover:bg-cream-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest;
+  }
+
+  /* Filter-row inputs and selects; `.input` stays the form-field style. */
+  .control {
+    @apply h-9 rounded-nook-sm border border-line bg-paper px-3 text-sm text-ink placeholder:text-ink-soft disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest;
   }
 
 }
@@ -696,6 +725,7 @@ select:not(.badge):disabled {
 .btn-primary,
 .btn-ghost,
 .btn-danger,
+.btn-danger-solid,
 .icon-btn {
   transition: background-color var(--motion-fast) var(--motion-ease),
     border-color var(--motion-fast) var(--motion-ease),
@@ -816,7 +846,7 @@ select:not(.badge):disabled {
   border: 1px solid var(--color-line);
   padding: 11px 18px;
   border-radius: var(--radius-nook-sm);
-  box-shadow: var(--shadow-nook-lift);
+  box-shadow: var(--nook-shadow-lift);
   font-size: 13.5px;
   max-width: calc(100vw - 32px);
   overflow-wrap: anywhere;

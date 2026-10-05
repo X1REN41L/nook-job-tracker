@@ -4,7 +4,7 @@ import type { Status } from "@prisma/client";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 
 import { ContactsSection, DetailsSection, FollowUpSection, InterviewsSection, TimelineSection, type HistoryEvent, type SaveChange } from "@/components/application-detail-sections";
-import { Dialog } from "@/components/dialog";
+import { Dialog, DIALOG_BACKDROP_TONE } from "@/components/dialog";
 import { fetchApplicationDetail } from "@/lib/application-pages";
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
 import { isEditableShortcutTarget } from "@/lib/keyboard-shortcuts";
@@ -87,7 +87,7 @@ export function ApplicationDetailPanel({ application, latestRecord, boards, toda
 
   return (
     <Dialog
-      backdropClassName="motion-dialog-backdrop fixed inset-0 z-50 flex justify-end bg-modal-backdrop/30"
+      backdropClassName={`motion-dialog-backdrop fixed inset-0 z-50 flex justify-end ${DIALOG_BACKDROP_TONE}`}
       className="motion-dialog-panel flex h-full w-full max-w-md flex-col overflow-hidden border-l border-line bg-paper shadow-nook-lift outline-none"
       initialFocusRef={closeRef}
       labelledBy="application-detail-title"
@@ -121,11 +121,11 @@ export function ApplicationDetailPanel({ application, latestRecord, boards, toda
           <button
             ref={closeRef}
             aria-label="Close"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-soft motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+            className="icon-btn shrink-0"
             onClick={onClose}
             type="button"
           >
-            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -148,7 +148,7 @@ export function ApplicationDetailPanel({ application, latestRecord, boards, toda
           <button className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={busy} onClick={onArchive} type="button">
             {application.archived ? "Restore" : "Archive"}
           </button>
-          <button className="btn-ghost mr-auto text-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose" disabled={busy} onClick={(event) => onDelete(event.currentTarget)} type="button">
+          <button className="btn-danger mr-auto" disabled={busy} onClick={(event) => onDelete(event.currentTarget)} type="button">
             Delete
           </button>
           <button className="btn-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-2 focus-visible:ring-offset-paper" aria-keyshortcuts="E" disabled={busy || editingDetails} onClick={() => setEditingDetails(true)} type="button">

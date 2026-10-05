@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 
-import { Dialog } from "@/components/dialog";
+import { Dialog, DIALOG_BACKDROP_TONE } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
 import { INTERVIEW_TYPE_LABELS, INTERVIEW_TYPES } from "@/lib/interviews";
 import type { ApplicationSummary } from "@/types/application";
@@ -23,7 +23,7 @@ export function InterviewDateDialog({ application, error, onAddDate, onChangeDat
 }) {
   const dateRef = useRef<HTMLInputElement | null>(null);
 
-  return <Dialog backdropClassName="motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/60 p-4 backdrop-blur-sm" className="motion-dialog-panel w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none" closeDisabled={saving} closeOnBackdrop={false} describedBy="interview-date-description" initialFocusRef={dateRef} labelledBy="interview-date-title" onClose={onClose}>
+  return <Dialog backdropClassName={`motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center p-4 ${DIALOG_BACKDROP_TONE}`} className="motion-dialog-panel w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none" closeDisabled={saving} closeOnBackdrop={false} describedBy="interview-date-description" initialFocusRef={dateRef} labelledBy="interview-date-title" onClose={onClose}>
     <h2 className="font-serif text-lg font-semibold" id="interview-date-title">Add interview date</h2>
     <p className="mt-2 text-sm leading-6 text-ink-soft" id="interview-date-description">When is the interview for <span className="font-medium text-ink">{application.role}</span> at <span className="font-medium text-ink">{application.company}</span>?</p>
     <div className="mt-4 grid grid-cols-2 gap-3">

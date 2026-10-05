@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import type { RefObject } from "react";
 
-import { Dialog } from "@/components/dialog";
+import { Dialog, DIALOG_BACKDROP_TONE } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
 import type { ApplicationSummary } from "@/types/application";
 
@@ -19,7 +19,7 @@ export function DeleteDialog({ applications, deleting, onCancel, onConfirm, retu
   const [application] = applications;
   const several = applications.length > 1;
 
-  return <Dialog backdropClassName="motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/60 p-4 backdrop-blur-sm" className="motion-dialog-panel w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none" closeDisabled={deleting} describedBy="delete-description" initialFocusRef={cancelRef} labelledBy="delete-title" onClose={onCancel} returnFocusRef={returnFocusRef} role="alertdialog">
+  return <Dialog backdropClassName={`motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center p-4 ${DIALOG_BACKDROP_TONE}`} className="motion-dialog-panel w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none" closeDisabled={deleting} describedBy="delete-description" initialFocusRef={cancelRef} labelledBy="delete-title" onClose={onCancel} returnFocusRef={returnFocusRef} role="alertdialog">
     <h2 className="font-serif text-lg font-semibold" id="delete-title">{several ? `Delete ${applications.length} applications?` : "Delete application?"}</h2>
     <p className="mt-2 text-sm leading-6 text-ink-soft" id="delete-description">
       {several
@@ -28,7 +28,7 @@ export function DeleteDialog({ applications, deleting, onCancel, onConfirm, retu
     </p>
     <div className="mt-6 flex justify-end gap-3">
       <button ref={cancelRef} className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={deleting} onClick={onCancel} type="button">Cancel</button>
-      <button className="rounded-nook-sm bg-rose px-4 py-2 text-sm font-medium text-cream motion-interactive hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose focus-visible:ring-offset-2 focus-visible:ring-offset-paper disabled:opacity-60" disabled={deleting} onClick={onConfirm} type="button"><StableButtonLabel label="Delete" busyLabel="Deleting…" busy={deleting} /></button>
+      <button className="btn-danger-solid" disabled={deleting} onClick={onConfirm} type="button"><StableButtonLabel label="Delete" busyLabel="Deleting…" busy={deleting} /></button>
     </div>
   </Dialog>;
 }

@@ -16,10 +16,8 @@ import { useOpeningReveal } from "@/hooks/use-opening-reveal";
 import { useWeekStartDay } from "@/hooks/use-week-start-day";
 import type { ApplicationSummary } from "@/types/application";
 
-const controlFrameClass = "h-9 rounded-nook-sm border border-line bg-paper text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-60";
-const controlClass = `${controlFrameClass} px-3`;
 // Date fields use tighter padding so a custom range still fits on the filter row.
-const dateControlClass = `${controlFrameClass} px-2.5`;
+const dateControlClass = "control px-2.5";
 const APPLIED_RANGE_LABELS: Record<AppliedRangePreset, string> = { any: "Any time", week: "This week", month: "This month", "last-3-months": "Last 3 months", year: "This year", custom: "Custom range" };
 const COLUMNS: Array<{ key: TableSortKey; label: string }> = [
   { key: "role", label: "Role" },
@@ -131,20 +129,20 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <input ref={searchInputRef} className="input h-9 pl-9 text-sm" maxLength={120} onChange={(event) => update({ search: event.target.value })} placeholder="Search company or role…" type="search" value={filters.search} />
+          <input ref={searchInputRef} className="control w-full pl-9" maxLength={120} onChange={(event) => update({ search: event.target.value })} placeholder="Search company or role…" type="search" value={filters.search} />
         </label>
-        <select aria-label="Filter by status" className={controlClass} onChange={(event) => update({ status: event.target.value as StatusFilter })} value={filters.status}>
+        <select aria-label="Filter by status" className="control" onChange={(event) => update({ status: event.target.value as StatusFilter })} value={filters.status}>
           <option value="all">{STATUS_FILTER_LABELS.all}</option>
           <option value="active">{STATUS_FILTER_LABELS.active}</option>
           <option value="attention">{ATTENTION_FILTER_LABEL}</option>
           {boards.map((board) => <option key={board.status} value={board.status}>{board.label}</option>)}
         </select>
-        <select aria-label="Archived applications" className={controlClass} onChange={(event) => update({ archived: event.target.value as ArchiveScope })} value={filters.archived}>
+        <select aria-label="Archived applications" className="control" onChange={(event) => update({ archived: event.target.value as ArchiveScope })} value={filters.archived}>
           <option value="active">Not archived</option>
           <option value="archived">Archived only</option>
           <option value="all">Include archived</option>
         </select>
-        <select aria-label="Applied date range" className={controlClass} onChange={(event) => selectRangePreset(event.target.value as AppliedRangePreset)} value={rangePreset}>
+        <select aria-label="Applied date range" className="control" onChange={(event) => selectRangePreset(event.target.value as AppliedRangePreset)} value={rangePreset}>
           {(Object.keys(APPLIED_RANGE_LABELS) as AppliedRangePreset[]).map((preset) => <option key={preset} value={preset}>{APPLIED_RANGE_LABELS[preset]}</option>)}
         </select>
         {/* The date fields and Clear filters wrap as one group, so a narrow row
@@ -172,7 +170,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
           <span className="text-sm font-medium">{selectedRows.length} selected</span>
           <select
             aria-label="Change status of selected applications"
-            className={controlClass}
+            className="control"
             disabled={busy}
             onChange={(event) => {
               const status = event.target.value as Status;
@@ -186,7 +184,7 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
           <button className="btn-ghost h-9 px-3 py-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={busy} onClick={() => void runBulk(() => onBulkArchive(selectedRows, archiveTarget))} type="button">
             {archiveTarget ? "Archive" : "Restore"}
           </button>
-          <button className="btn-ghost h-9 px-3 py-0 text-rose focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose" disabled={busy} onClick={(event) => onBulkDelete(selectedRows, event.currentTarget)} type="button">
+          <button className="btn-danger h-9 px-3 py-0" disabled={busy} onClick={(event) => onBulkDelete(selectedRows, event.currentTarget)} type="button">
             Delete
           </button>
           <button className="ml-auto rounded-nook-sm px-2 py-1 text-sm font-medium text-ink-soft hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" onClick={() => setSelected(new Set())} type="button">
@@ -267,9 +265,13 @@ export function ApplicationsTable({ applications, boards, initialFilters, today,
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><span className={`status-dot ${boardDot(boards, application.status)}`} />{boardLabel(boards, application.status)}</span>
                         {application.archived && <span className="whitespace-nowrap text-xs text-ink-soft">Archived</span>}
-                        {stale !== undefined && <span className="whitespace-nowrap rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium" title="No status update for a while">Stale · {stale}d</span>}
+                        {stale !== undefined && <span className="whitespace-nowrap rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium leading-4 text-ink" title="No status update for a while">Stale · {stale}d</span>}
                         {followUpDue && application.followUpDate && (
-                          <span className="whitespace-nowrap rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium" title={application.followUpNote ?? `Follow up on ${formatCalendarDate(application.followUpDate)}`}>
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium leading-4 text-clay-text" title={application.followUpNote ?? `Follow up on ${formatCalendarDate(application.followUpDate)}`}>
+                            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <circle cx="12" cy="12" r="9" />
+                              <polyline points="12 7 12 12 15 14" />
+                            </svg>
                             Follow up due · {formatCalendarDate(application.followUpDate)}
                           </span>
                         )}

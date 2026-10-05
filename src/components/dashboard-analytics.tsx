@@ -49,7 +49,6 @@ const STATUSES = ["APPLIED", "ONLINE_ASSESSMENT", "INTERVIEW", "OFFER", "REJECTE
 // Analytics counts archived applications too, so its links include them.
 const rangeHref = (range: AnalyticsRange, status?: (typeof STATUSES)[number]) =>
   applicationTableHref({ archived: "all", appliedFrom: range.startDate, appliedTo: range.endDate, status });
-const controlClass = "h-10 rounded-nook-sm border border-line bg-paper px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 
 function formatMonth(dateKey: string, length: "short" | "long") {
   return new Intl.DateTimeFormat(undefined, { month: length, timeZone: "UTC" }).format(new Date(`${dateKey}T00:00:00Z`));
@@ -97,16 +96,16 @@ function AnalyticsPeriodSelector({ kind, month, year, months, years, onKindChang
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <select aria-label="Analytics period" className={controlClass} onChange={(event) => onKindChange(event.target.value as PeriodKind)} value={kind}>
+      <select aria-label="Analytics period" className="control" onChange={(event) => onKindChange(event.target.value as PeriodKind)} value={kind}>
         {PERIOD_KINDS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
       {kind === "MONTH" && (
-        <select aria-label="Month" className={controlClass} onChange={(event) => onMonthChange(event.target.value)} value={month}>
+        <select aria-label="Month" className="control" onChange={(event) => onMonthChange(event.target.value)} value={month}>
           {months.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
       )}
       {kind === "YEAR" && (
-        <select aria-label="Year" className={controlClass} onChange={(event) => onYearChange(event.target.value)} value={year}>
+        <select aria-label="Year" className="control" onChange={(event) => onYearChange(event.target.value)} value={year}>
           {years.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
       )}

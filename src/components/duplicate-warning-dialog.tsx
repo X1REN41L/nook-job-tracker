@@ -7,7 +7,7 @@ import { boardDot, boardLabel, type BoardConfiguration } from "@/lib/board-prefe
 import type { DuplicateMatch } from "@/lib/duplicate-match";
 import { STATUS_META } from "@/lib/status-meta";
 import type { ApplicationSummary } from "@/types/application";
-import { Dialog } from "@/components/dialog";
+import { Dialog, DIALOG_BACKDROP_TONE } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
 
 export function DuplicateWarningDialog({ boards, editing, fromImport = false, match, saving, onAddAnyway, onDismiss, onViewExisting }: {
@@ -26,7 +26,7 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
 
   return (
     <Dialog
-      backdropClassName="motion-dialog-backdrop fixed inset-0 z-[70] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]"
+      backdropClassName={`motion-dialog-backdrop fixed inset-0 z-[70] flex items-center justify-center p-4 ${DIALOG_BACKDROP_TONE}`}
       className="motion-dialog-panel w-full max-w-md rounded-nook-lg border border-line bg-paper p-6 text-ink shadow-nook-lift outline-none"
       closeDisabled={saving}
       describedBy="duplicate-description"
@@ -37,16 +37,16 @@ export function DuplicateWarningDialog({ boards, editing, fromImport = false, ma
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-gold">Worth a quick look</p>
-          <h2 className="font-serif text-xl font-semibold" id="duplicate-title">Possible duplicate</h2>
+          <h2 className="font-serif text-lg font-semibold" id="duplicate-title">Possible duplicate</h2>
         </div>
         <button
           aria-label="Back to job form"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink-soft motion-interactive hover:bg-cream-2"
+          className="icon-btn shrink-0"
           disabled={saving}
           onClick={onDismiss}
           type="button"
         >
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>

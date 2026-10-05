@@ -6,7 +6,7 @@ import { DatabaseBackup, Keyboard, SlidersHorizontal } from "lucide-react";
 
 import { ShortcutList } from "@/components/shortcut-list";
 import { DeleteAllDataDialog } from "@/components/delete-all-data-dialog";
-import { Dialog } from "@/components/dialog";
+import { Dialog, DIALOG_BACKDROP_TONE } from "@/components/dialog";
 import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-modal-shell";
 import { useSettings } from "@/hooks/use-settings";
 import { useSettingsUpdate } from "@/hooks/use-settings-update";
@@ -21,13 +21,14 @@ const SETTINGS_CATEGORIES = [
   { id: "backup", label: "Backup & restore", Icon: DatabaseBackup },
 ] satisfies Array<{ id: SettingsCategory; label: string; Icon: typeof SlidersHorizontal }>;
 // One fixed width, wide enough for the longest option, keeps the dropdowns' edges in line.
-const settingsSelectClass = "w-44 rounded-nook-sm border border-line bg-cream px-2 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
+const settingsSelectClass = "h-9 w-44 rounded-nook-sm border border-line bg-cream px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 const segmentedGroupClass = "flex shrink-0 rounded-nook-sm border border-line bg-cream p-0.5";
 const subscribeToMount = () => () => {};
 
 // Every segment is the same height, so icon and text controls line up.
 function segmentClass(selected: boolean) {
-  return `flex h-8 items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${selected ? "bg-paper text-forest shadow-sm" : "text-ink-soft hover:text-ink"}`;
+  // 8px is concentric inside the 10px group with 2px padding.
+  return `flex h-8 items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest ${selected ? "bg-paper text-forest shadow-nook-sm" : "text-ink-soft hover:text-ink"}`;
 }
 
 export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll, deleteDisabled, importProgress, returnFocusRef, showToast }: {
@@ -103,7 +104,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
 
   return (
     <>
-      <Dialog backdropClassName="motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]" className={MODAL_SHELL_CLASS} closeDisabled={deleteConfirmationOpen} initialFocusRef={closeRef} labelledBy="settings-title" onClose={onClose} returnFocusRef={returnFocusRef}>
+      <Dialog backdropClassName={`motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center p-4 ${DIALOG_BACKDROP_TONE}`} className={MODAL_SHELL_CLASS} closeDisabled={deleteConfirmationOpen} initialFocusRef={closeRef} labelledBy="settings-title" onClose={onClose} returnFocusRef={returnFocusRef}>
         <div className={MODAL_HEADER_CLASS}>
           <h2 className="font-serif text-xl font-semibold" id="settings-title">Settings</h2>
           <button ref={closeRef} aria-label="Close settings" className="icon-btn shrink-0" disabled={deleteConfirmationOpen} onClick={onClose} type="button">
@@ -200,7 +201,7 @@ export function SettingsModal({ isMac, onClose, onExport, onImport, onDeleteAll,
                   <h4 className="font-serif text-base font-semibold text-rose">Delete all data</h4>
                   <div className="mt-2 flex items-center justify-between gap-3">
                     <p className="text-xs text-ink-soft">Permanently remove all applications and their history. Your settings will be kept.</p>
-                    <button ref={deleteTriggerRef} className="btn-danger shrink-0 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose disabled:cursor-not-allowed" disabled={deleteDisabled || importProgress !== null || deletingAll} onClick={openDeleteConfirmation} type="button">Delete all data</button>
+                    <button ref={deleteTriggerRef} className="btn-danger shrink-0 px-3 disabled:cursor-not-allowed" disabled={deleteDisabled || importProgress !== null || deletingAll} onClick={openDeleteConfirmation} type="button">Delete all data</button>
                   </div>
                 </div>
                 <input ref={importInputRef} accept="application/json,.json" aria-label="Choose backup file" className="sr-only" onChange={handleImportSelection} tabIndex={-1} type="file" />
@@ -245,7 +246,7 @@ function BackupAction({ description, disabled = false, label, onClick, title }: 
         <p className="text-sm font-semibold">{title}</p>
         {description && <p className="mt-0.5 text-xs text-ink-soft">{description}</p>}
       </div>
-      <button className="shrink-0 rounded-nook-sm border border-line bg-cream px-3 py-2 text-sm font-medium text-ink motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:cursor-not-allowed disabled:opacity-50" disabled={disabled} onClick={onClick} type="button">{label}</button>
+      <button className="btn-ghost shrink-0 px-3 disabled:cursor-not-allowed" disabled={disabled} onClick={onClick} type="button">{label}</button>
     </div>
   );
 }

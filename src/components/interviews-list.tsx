@@ -125,13 +125,13 @@ export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
         </div>
         <label className="relative block w-full sm:max-w-xs">
           <span className="sr-only">Search company or role</span>
-          <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
             ref={searchInputRef}
-            className="input pl-9 text-sm"
+            className="control w-full pl-9"
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search company or role…"
             type="search"
@@ -174,7 +174,7 @@ export function InterviewsList({ interviews, now, searchInputRef, onOpen }: {
               {clockKnown && past.length > 0 && (
                 <button
                   aria-label={`Sort past interviews: ${pastSort === "recent" ? "most recent first" : "oldest first"}`}
-                  className="rounded-nook-sm bg-paper px-3 py-2 text-sm font-semibold text-ink-soft shadow-nook motion-interactive hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+                  className="btn-ghost px-3 text-ink-soft hover:text-ink"
                   onClick={() => setPastSort((current) => current === "recent" ? "oldest" : "recent")}
                   type="button"
                 >

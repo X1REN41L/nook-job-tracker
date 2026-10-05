@@ -1001,8 +1001,8 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
   return (
     <div className="select-none-ui flex h-screen flex-col overflow-hidden bg-cream text-ink">
       {page === "job-board" && (
-        <button aria-label="Add job" className="btn-primary fixed bottom-6 right-6 z-50 flex origin-bottom-right scale-[1.2] items-center gap-2 shadow-lg" onClick={openAddModal} type="button">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+        <button aria-label="Add job" className="btn-primary fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-2.5 text-base shadow-nook-lift" onClick={openAddModal} type="button">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
@@ -1012,7 +1012,7 @@ export function ApplicationDashboard({ initialApplications, page, dashboardSecti
 
       {/* While the application view is open, it shows the error itself. */}
       {error && !isModalOpen && !detailApplication && (
-        <p className="mx-7 mt-4 rounded-nook border border-rose bg-rose-tint p-3 text-sm text-ink" role="alert">
+        <p className="mx-7 mt-4 rounded-nook-sm border border-rose bg-rose-tint px-4 py-3 text-sm text-ink" role="alert">
           {error}
         </p>
       )}

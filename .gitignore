@@ -59,22 +59,14 @@ prisma/setup-rollback.json
 .vscode/
 .idea/
 
-# local audit and agent files
+# local audit, agent and handoff files
 /audit/
-/STATUS.md
+/HANDOFF.md
 /AGENTS.md
 /CLAUDE.md
-# supported browser tests; other test files stay local
-/tests/*
-!/tests/e2e/
-/tests/e2e/*
-!/tests/e2e/*.spec.ts
-!/tests/e2e/api-helpers.ts
-# supported test runners and test cases; sample-data.mjs stays local
+# tests, test configs and helper scripts stay local; only setup ships
+/tests/
+/eslint.config.mjs
+/playwright.config.ts
 /scripts/*
 !/scripts/setup.mjs
-!/scripts/*-test.mjs
-!/scripts/unit-loader.mjs
-!/scripts/unit-loader-register.mjs
-!/scripts/run-backup-api-test.sh
-!/scripts/run-playwright.sh

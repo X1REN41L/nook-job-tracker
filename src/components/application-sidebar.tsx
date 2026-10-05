@@ -221,7 +221,7 @@ export function ApplicationSidebar({
                 {upcomingInterviewCount !== null && (
                   <span
                     aria-hidden="true"
-                    className="sidebar-reveal ml-auto mr-2 min-w-5 rounded-full border border-line bg-cream px-1.5 py-0.5 text-center text-[11px] font-medium leading-none text-ink-soft"
+                    className="sidebar-reveal ml-auto mr-2 min-w-5 rounded-full border border-line bg-cream px-2 py-0.5 text-xs font-medium leading-4 text-center text-ink-soft"
                     data-testid="upcoming-interview-count"
                   >
                     {upcomingInterviewCount}
@@ -316,7 +316,7 @@ function ArchivedSection({ applications, boards, className, expanded, movingIds,
           type="button"
         >
           <span className="font-serif text-sm font-semibold">Archived</span>
-          <span className="rounded-full border border-line bg-cream px-2 py-0.5 text-xs font-medium text-ink-soft">
+          <span className="rounded-full border border-line bg-cream px-2 py-0.5 text-xs font-medium leading-4 text-ink-soft">
             {applications.length}
           </span>
           <svg
@@ -400,12 +400,12 @@ function ArchivedRow({ application, boards, disabled, staleDays, onOpen, onReque
         </span>
         <span className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-ink-soft motion-interactive group-focus-within/archived:opacity-0 group-hover/archived:opacity-0">
           {formatCalendarDate(application.appliedDate)}
-          {staleDays !== undefined && <span className="rounded-full bg-clay-tint px-1.5 text-[10.5px] font-medium leading-4 text-ink" title="No status update for a while">Stale · {staleDays}d</span>}
+          {staleDays !== undefined && <span className="rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium leading-4 text-ink" title="No status update for a while">Stale · {staleDays}d</span>}
         </span>
       </button>
       <div className="absolute inset-y-1 right-1.5 flex items-center gap-1 rounded-nook-sm bg-cream-2 pl-2 opacity-0 motion-interactive group-focus-within/archived:opacity-100 group-hover/archived:opacity-100">
         <button
-          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-forest motion-interactive hover:text-forest-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-50"
+          className="rounded-nook-sm px-1.5 py-0.5 text-[11px] font-medium text-forest motion-interactive hover:text-forest-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest disabled:opacity-50"
           disabled={disabled}
           onClick={() => void onRestore(application)}
           type="button"
@@ -414,7 +414,7 @@ function ArchivedRow({ application, boards, disabled, staleDays, onOpen, onReque
         </button>
         <button
           aria-label={`Delete ${application.role} at ${application.company}`}
-          className="rounded px-1.5 py-0.5 text-[11px] font-medium text-rose motion-interactive hover:bg-rose-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose disabled:opacity-50"
+          className="rounded-nook-sm px-1.5 py-0.5 text-[11px] font-medium text-rose motion-interactive hover:bg-rose-tint hover:text-rose-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose disabled:opacity-50"
           disabled={disabled}
           onClick={(event) => onRequestDelete(application, event.currentTarget)}
           type="button"

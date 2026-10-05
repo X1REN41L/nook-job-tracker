@@ -11,7 +11,6 @@ export function isBoardFiltered(filters: BoardFilters) {
   return filters.status !== "all" || filters.search.trim() !== "";
 }
 
-const controlClass = "h-9 rounded-nook-sm border border-line bg-paper px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest";
 
 export function BoardToolbar({ filters, shownCount, totalCount, activeCount, headingRef, searchInputRef, onChange }: {
   filters: BoardFilters;
@@ -43,9 +42,9 @@ export function BoardToolbar({ filters, shownCount, totalCount, activeCount, hea
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <input ref={searchInputRef} className="input h-9 pl-9 text-sm" maxLength={120} onChange={(event) => onChange({ ...filters, search: event.target.value })} placeholder="Search company or role…" type="search" value={filters.search} />
+          <input ref={searchInputRef} className="control w-full pl-9" maxLength={120} onChange={(event) => onChange({ ...filters, search: event.target.value })} placeholder="Search company or role…" type="search" value={filters.search} />
         </label>
-        <select aria-label="Filter by status" className={controlClass} onChange={(event) => onChange({ ...filters, status: event.target.value as BoardStatusFilter })} value={filters.status}>
+        <select aria-label="Filter by status" className="control" onChange={(event) => onChange({ ...filters, status: event.target.value as BoardStatusFilter })} value={filters.status}>
           {(Object.keys(BOARD_STATUS_FILTER_LABELS) as BoardStatusFilter[]).map((filter) => <option key={filter} value={filter}>{BOARD_STATUS_FILTER_LABELS[filter]}</option>)}
         </select>
       </div>

@@ -5,7 +5,7 @@ import { useRef } from "react";
 import { Status } from "@prisma/client";
 
 import { boardDot, type BoardConfiguration } from "@/lib/board-preferences";
-import { Dialog } from "@/components/dialog";
+import { Dialog, DIALOG_BACKDROP_TONE } from "@/components/dialog";
 import { StableButtonLabel } from "@/components/stable-button-label";
 import type { JobFormState } from "@/types/application";
 
@@ -34,7 +34,7 @@ export function JobModal({
 
   return (
     <Dialog
-      backdropClassName="motion-dialog-backdrop fixed inset-0 z-50 flex items-start justify-center bg-modal-backdrop/40 p-4 py-[6vh] backdrop-blur-[2px]"
+      backdropClassName={`motion-dialog-backdrop fixed inset-0 z-50 flex items-start justify-center p-4 py-[6vh] ${DIALOG_BACKDROP_TONE}`}
       busy={saving}
       className="motion-dialog-panel flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-nook-lg border border-line bg-paper shadow-nook-lift outline-none"
       closeDisabled={saving}
@@ -43,17 +43,17 @@ export function JobModal({
       onClose={onClose}
     >
       <div className="flex shrink-0 items-center justify-between border-b border-line px-6 py-4">
-        <h2 className="font-serif text-lg font-semibold" id="job-modal-title">
+        <h2 className="font-serif text-xl font-semibold" id="job-modal-title">
           Add a job
         </h2>
         <button
           aria-label="Close"
           disabled={saving}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft motion-interactive hover:bg-cream-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest"
+          className="icon-btn shrink-0"
           onClick={onClose}
           type="button"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
@@ -152,7 +152,7 @@ export function JobModal({
           )}
         </div>
 
-        <div className="flex shrink-0 gap-3 border-t border-line px-6 py-4">
+        <div className="flex shrink-0 justify-end gap-3 border-t border-line px-6 py-4">
           <button className="btn-ghost focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest" disabled={saving} onClick={onClose} type="button">
             Cancel
           </button>

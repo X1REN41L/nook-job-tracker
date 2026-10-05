@@ -11,6 +11,7 @@ import { safeLink } from "@/lib/safe-link";
 import { isCreationEvent } from "@/lib/status-history";
 import type { TimeFormat } from "@/lib/settings-values";
 import { useTimeFormat } from "@/hooks/use-time-format";
+import { StableButtonLabel } from "@/components/stable-button-label";
 import type { ApplicationDetails, ApplicationRecord, ApplicationSummary, ContactRecord, InterviewRecord } from "@/types/application";
 
 export type ApplicationChange =
@@ -66,7 +67,7 @@ function LoadError({ what, onRetry }: { what: string; onRetry: () => void }) {
 function DeleteButton({ label, disabled, onDelete, warning }: { label: string; disabled: boolean; onDelete: () => void; warning?: string }) {
   const [confirming, setConfirming] = useState(false);
   if (!confirming) {
-    return <button aria-label={`Delete ${label}`} className={`${smallButton} text-rose hover:bg-rose-tint`} disabled={disabled} onClick={() => setConfirming(true)} type="button">Delete</button>;
+    return <button aria-label={`Delete ${label}`} className={`${smallButton} text-rose hover:bg-rose-tint hover:text-rose-text`} disabled={disabled} onClick={() => setConfirming(true)} type="button">Delete</button>;
   }
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
@@ -81,7 +82,7 @@ function FormActions({ saving, submitLabel, onCancel, disabled = false }: { savi
   return (
     <div className="flex justify-end gap-2">
       <button className={`btn-ghost px-3 py-1.5 text-sm ${focusRing}`} disabled={saving} onClick={onCancel} type="button">Cancel</button>
-      <button className={`btn-primary px-3 py-1.5 text-sm ${focusRing}`} disabled={saving || disabled} type="submit">{saving ? "Saving…" : submitLabel}</button>
+      <button className={`btn-primary px-3 py-1.5 text-sm ${focusRing}`} disabled={saving || disabled} type="submit"><StableButtonLabel label={submitLabel} busyLabel="Saving…" busy={saving} /></button>
     </div>
   );
 }
@@ -189,7 +190,7 @@ export function FollowUpSection({ application, today, onSave }: { application: A
     <section aria-labelledby={`${inputId}-heading`} className="mt-7">
       <SectionHeading id={`${inputId}-heading`} title="Follow-up" />
       {editing ? (
-        <form className="mt-2 grid gap-3" onSubmit={submit}>
+        <form className="mt-2 grid gap-3 rounded-nook-sm border border-line bg-cream p-3" onSubmit={submit}>
           <div className="flex flex-wrap items-end gap-2">
             <label className={fieldLabel} htmlFor={inputId}>
               Follow up on
@@ -205,7 +206,7 @@ export function FollowUpSection({ application, today, onSave }: { application: A
       ) : (
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           {date ? (
-            <span className={due ? "font-medium text-clay" : ""}>{due ? "Due" : "Follow up on"} {formatCalendarDate(date)}</span>
+            <span className={due ? "font-medium text-clay-text" : ""}>{due ? "Due" : "Follow up on"} {formatCalendarDate(date)}</span>
           ) : <span className="text-ink-soft">No reminder set.</span>}
           <button className={linkButton} disabled={saving} onClick={() => { setDraft({ date: date ?? today, note: note ?? "" }); setEditing(true); }} type="button">{date ? "Change" : "Set reminder"}</button>
           {date && <button className={linkButton} disabled={saving} onClick={() => void run({ kind: "follow-up", followUpDate: null })} type="button">Mark done</button>}
@@ -456,7 +457,7 @@ export function TimelineSection({ boards, events, loadError, onRetry, onSave, st
         <label className="sr-only" htmlFor={`${headingId}-note`}>New note</label>
         <textarea className="scrollbar-styled input min-h-16 resize-y text-sm" id={`${headingId}-note`} maxLength={5_000} onChange={(event) => setDraft(event.target.value)} placeholder="Add a dated note: a call, an email, a next step…" value={draft} />
         <div className="mt-2 flex justify-end">
-          <button className={`btn-primary px-3 py-1.5 text-sm ${focusRing}`} disabled={saving || !draft.trim()} type="submit">{saving && !editing ? "Saving…" : "Add note"}</button>
+          <button className={`btn-primary px-3 py-1.5 text-sm ${focusRing}`} disabled={saving || !draft.trim()} type="submit"><StableButtonLabel label="Add note" busyLabel="Saving…" busy={saving && !editing} /></button>
         </div>
       </form>
       <ErrorText message={error} />

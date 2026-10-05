@@ -101,7 +101,7 @@ function KanbanColumn({ board, order, applications, movingIds, emptyText, card }
     <section ref={setNodeRef} data-board-status={board.status} style={revealDelay(order, { base: 40, step: 50 })} className={`motion-surface motion-reveal kanban-column flex h-full min-h-0 flex-col rounded-nook-lg border p-3 ${isOver ? "border-forest bg-forest-tint" : "border-line bg-cream-2"}`}>
       <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2 px-1.5 pt-1">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><span className={`status-dot ${board.dot}`} />{board.label}</h2>
-        <span className="rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-medium text-ink-soft">{applications.length}</span>
+        <span className="rounded-full border border-line bg-paper px-2 py-0.5 text-xs font-medium leading-4 text-ink-soft">{applications.length}</span>
       </div>
       <div ref={scrollRef} className="kanban-column-scroll scrollbar-styled min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain pr-2">
         <div className="flex flex-col gap-2.5">
@@ -203,7 +203,7 @@ function KanbanCard({ application, disabled, today, now, staleDays, onOpen }: {
           </div>
         )}
         {application.followUpDate && (
-          <div className={`mt-1.5 flex items-center gap-1.5 text-[11.5px] ${followUpDue ? "font-medium text-clay" : "text-ink-soft"}`}>
+          <div className={`mt-1.5 flex items-center gap-1.5 text-[11.5px] ${followUpDue ? "font-medium text-clay-text" : "text-ink-soft"}`}>
             <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="12" cy="12" r="9" />
               <polyline points="12 7 12 12 15 14" />
@@ -217,7 +217,7 @@ function KanbanCard({ application, disabled, today, now, staleDays, onOpen }: {
               <span className="min-w-0 max-w-full truncate rounded-full border border-line bg-cream px-2 py-0.5 text-ink-soft"><span className="sr-only">Source: </span>{application.source.trim()}</span>
             )}
             {stale !== undefined && (
-              <span className="shrink-0 rounded-full bg-clay-tint px-2 py-0.5 font-medium text-ink" title="No status update for a while">Stale · {stale}d</span>
+              <span className="shrink-0 rounded-full bg-clay-tint px-2 py-0.5 text-[11px] font-medium leading-4 text-ink" title="No status update for a while">Stale · {stale}d</span>
             )}
           </div>
         )}

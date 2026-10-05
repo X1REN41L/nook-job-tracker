@@ -5,6 +5,9 @@ import { useRef, type ReactNode, type RefObject } from "react";
 import { usePresence } from "@/components/motion-presence";
 import { useDialogStack } from "@/hooks/use-dialog-stack";
 
+/** Backdrop tone every dialog shares; each dialog adds its own z-index, layout, and padding. */
+export const DIALOG_BACKDROP_TONE = "bg-modal-backdrop/40 backdrop-blur-[2px]";
+
 /** Modal dialog shell: backdrop, labelled panel, and the shared dialog-stack focus and Escape handling. */
 export function Dialog({
   role = "dialog",

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { ShortcutList } from "@/components/shortcut-list";
-import { Dialog } from "@/components/dialog";
+import { Dialog, DIALOG_BACKDROP_TONE } from "@/components/dialog";
 import { MODAL_HEADER_CLASS, MODAL_SHELL_CLASS } from "@/components/settings-modal-shell";
 
 export function ShortcutOverlay({ isMac, onClose, returnFocusRef }: {
@@ -27,7 +27,7 @@ export function ShortcutOverlay({ isMac, onClose, returnFocusRef }: {
   }, []);
 
   return (
-    <Dialog backdropClassName="motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center bg-modal-backdrop/40 p-4 backdrop-blur-[2px]" className={MODAL_SHELL_CLASS} initialFocusRef={closeRef} labelledBy="shortcut-dialog-title" onClose={onClose} returnFocusRef={returnFocusRef}>
+    <Dialog backdropClassName={`motion-dialog-backdrop fixed inset-0 z-[60] flex items-center justify-center p-4 ${DIALOG_BACKDROP_TONE}`} className={MODAL_SHELL_CLASS} initialFocusRef={closeRef} labelledBy="shortcut-dialog-title" onClose={onClose} returnFocusRef={returnFocusRef}>
       <div className={MODAL_HEADER_CLASS}>
         <div>
           <h2 className="font-serif text-xl font-semibold" id="shortcut-dialog-title">Keyboard shortcuts</h2>
