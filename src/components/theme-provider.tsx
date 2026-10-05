@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { z } from "zod";
 import { useSettings, SettingsInitialStateContext } from "@/hooks/use-settings";
 import { applyTheme } from "@/lib/apply-theme";
 import { getSettingsState, initializeSettings, refreshSettings, type SettingsState } from "@/lib/settings-store";
+
+// Zod probes `new Function` to pick its JIT parser, which the CSP reports as a violation even though Zod catches it.
+if (typeof window !== "undefined") z.config({ jitless: true });
 
 export function ThemeProvider({ children, initialState }: { children: ReactNode; initialState: SettingsState }) {
   if (typeof window !== "undefined") initializeSettings(initialState);
