@@ -15,6 +15,20 @@ const pendingInterviewsPath = join(root, "prisma", "interview-dates-to-copy.json
 // verified against that copy, so every retry of an interrupted conversion is checked against the original data.
 const rollbackMarkerPath = join(root, "prisma", "setup-rollback.json");
 
+// Checked before anything is written: setup needs node:sqlite and the app needs the Node version in package.json.
+const requiredNode = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).engines?.node ?? "";
+const minimumNode = /^>=\s*(\d+)\.(\d+)\.(\d+)$/.exec(requiredNode.trim())?.slice(1).map(Number);
+if (!minimumNode) {
+  console.error(`Setup failed: package.json engines.node must be ">=X.Y.Z", found "${requiredNode}".`);
+  process.exit(1);
+}
+const currentNode = process.versions.node.split(".").map(Number);
+const nodeDifference = minimumNode.map((part, index) => currentNode[index] - part).find((difference) => difference !== 0) ?? 0;
+if (nodeDifference < 0) {
+  console.error(`Setup failed: Node ${requiredNode} is required, but this is Node ${process.versions.node}. Install a newer Node and run setup again.`);
+  process.exit(1);
+}
+
 try {
   accessSync(examplePath, constants.R_OK);
 } catch {
