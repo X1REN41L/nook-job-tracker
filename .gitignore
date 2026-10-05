@@ -63,7 +63,6 @@ prisma/setup-rollback.json
 /audit/
 /HANDOFF.md
 /AGENTS.md
-/CLAUDE.md
 # tests, test configs and helper scripts stay local; only setup ships
 /tests/
 /eslint.config.mjs
