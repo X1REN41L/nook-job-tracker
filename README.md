@@ -16,8 +16,6 @@ Nook is a desktop web app that runs on your machine and nowhere else.
 - **No accounts, no cloud, no hosting.** There is nothing to sign up for, and the app makes no outside network requests while you use it.
 - **Only reachable from your own computer.** Nook listens on `127.0.0.1`, so other devices on your network can't connect, and requests using any other host name are refused.
 
-Installing and building does download packages from npm. Next.js also collects anonymous CLI usage telemetry by default; turn it off with `npx next telemetry --disable`.
-
 ## Features
 
 - **Dashboard**: totals, interview and offer rates, follow-ups that need attention, and upcoming interviews at a glance.
@@ -40,15 +38,11 @@ Installing and building does download packages from npm. Next.js also collects a
 | ![Interviews grouped into today, tomorrow, later this week, and next week](docs/screenshots/interviews.png) **Interviews**: upcoming rounds, grouped by when they happen. | ![Analytics with an applications trend chart and status breakdown](docs/screenshots/analytics.png) **Analytics**: how your search is going over time. |
 | ![Table filtered to applications that need attention](docs/screenshots/stale.png) **Needs attention**: stale applications and overdue follow-ups. | ![Settings dialog open on Backup and restore](docs/screenshots/settings.png) **Settings**: export, import, and preferences. |
 
-The screenshots use made-up sample data.
-
 ## Requirements
 
 - [Node.js](https://nodejs.org/) 24.21.0 or newer (npm comes with it)
 - Git
 - A desktop browser
-
-Nook is tested on macOS. It should also work on Linux and Windows, but those haven't been tested on real machines yet.
 
 ## Install and run
 
@@ -67,18 +61,6 @@ Then open <http://127.0.0.1:3000>.
 
 To stop Nook, press <kbd>Ctrl</kbd> <kbd>C</kbd> in the terminal. Next time, just run `npm start` from the project folder.
 
-## Updating
-
-```sh
-git pull
-npm ci
-npm run setup
-npm run build
-npm start
-```
-
-`npm run setup` brings your existing database up to date and keeps your data.
-
 ## Your data
 
 Your data is stored in `prisma/dev.db`. The location is set by `DATABASE_URL` in `.env`, relative to the `prisma/` folder.
@@ -88,9 +70,8 @@ To back up or move your data, open **Settings → Backup & restore**:
 - **Export** saves everything (applications, their history, and your settings) as one JSON file.
 - **Import** adds the applications from a backup and replaces your settings. You can review possible duplicates before anything is saved.
 
-You can also copy `prisma/dev.db` while Nook is stopped.
-
-## Development (optional)
+<details>
+<summary><strong>Development (optional)</strong></summary>
 
 To run Nook with live reloading while you change the code:
 
@@ -102,12 +83,17 @@ It serves the same address, <http://127.0.0.1:3000>. To browse the database dire
 
 Nook is built with Next.js 16, React 19, TypeScript, Tailwind CSS 4, Prisma 6, and SQLite.
 
-## Troubleshooting
+</details>
+
+<details>
+<summary><strong>Troubleshooting</strong></summary>
 
 - **`Setup failed: Node … is required`**: install Node.js 24.21.0 or newer, then run `npm ci` and `npm run setup` again.
 - **The page says "Nook could not be loaded"**: the database hasn't been set up. Stop Nook, run `npm run setup`, then start it again. The terminal shows the same hint.
 - **Port 3000 is already in use**: stop the other app, or start Nook on another port with `npm start -- -p 3001` and open <http://127.0.0.1:3001>.
 - **403 Forbidden**: Nook only answers at `127.0.0.1` or `localhost`. Use <http://127.0.0.1:3000> instead of a network IP or custom host name.
+
+</details>
 
 ## License
 
